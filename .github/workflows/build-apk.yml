@@ -41,9 +41,9 @@ jobs:
       - name: Puente y skill compilan
         run: |
           python -m py_compile homelab/clock-bridge/bridge.py
-          python -m py_compile homelab/hermes-skill/mi-smart-clock/scripts/clock.py
+          python -m py_compile hermes-skill/mi-smart-clock/scripts/clock.py
       - name: Tests de la skill de Hermes
-        working-directory: homelab/hermes-skill
+        working-directory: hermes-skill
         run: |
           pip install -q pytest httpx
           pytest -q

@@ -45,4 +45,7 @@ android {
 // en los 1 GB de RAM del MT8167. JUnit es solo para tests, no entra en el APK.
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    // El android.jar de los unit tests trae org.json como stub que lanza excepción;
+    // añadimos la implementación real para poder testear la serialización JSON.
+    testImplementation("org.json:json:20240303")
 }
