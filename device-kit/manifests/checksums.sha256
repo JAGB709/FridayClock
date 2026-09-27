@@ -1,0 +1,11 @@
+# Checksums de ficheros que colocas en vendor/ (opción A del boot y conversión).
+# Vienen del repo AyraHikari/xiaomi-x04g-lx04 (commit e0d1864, 2026-09).
+# 00_preflight.sh los verifica si existen. Copia aquí los ficheros y descomenta.
+#
+# Para verificar a mano:  (cd device-kit && sha256sum -c manifests/checksums.sha256)
+#
+cadd9bc1308fa03f60d63a89d439a0e191319061b4c29f5f1a4389a9b3110a26  vendor/boot_global_magisk.bin
+a42e735fc40b433a13b930d10eb1168228ddccd46ea7793652b10d93c56d199d  vendor/gpt_x04g.bin
+69453def1f91a38f6e08d286ce9d88f7002e8cbc6f053b577a6a05aaa191133b  vendor/gpt_lx04.bin
+84f621317857a28f5566919c3e0770004ecba4f1583a12477b129a2fee3aa530  vendor/preloader_mico_x04g.bin
+9bd9bfdf0104225b16719bc91e2eba7031ee1f0973b48cda239eebdf05e3fe65  vendor/boot1_for_microx04g.bin

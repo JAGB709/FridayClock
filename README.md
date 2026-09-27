@@ -1,11 +1,11 @@
-# Jarvis Clock
+# Friday — Mi Smart Clock
 
 Convierte el **Xiaomi Mi Smart Clock (X04G, MT8167, 1 GB RAM)** en un
 despertador y asistente de voz propio, **sin Google**, cuyo cerebro es
 **Hermes Agent** en tu homelab.
 
 ```
-            Mi Smart Clock (app Jarvis Clock)                          Homelab (Tailscale)
+            Mi Smart Clock (app Friday)                          Homelab (Tailscale)
  ┌──────────────────────────────────────────────┐        ┌──────────────────────────────────────┐
  │ Carátula · modo noche · alarmas (AlarmManager)│        │ clock-bridge (:8765)                 │
  │ Órdenes offline: alarmas, temporizadores,     │  wav   │   /v1/stt    → faster-whisper (local)│
@@ -82,12 +82,12 @@ Requisitos: el reloj con una GSI limpia sin Google y `adb` operativo.
 
 ```bash
 ./gradlew assembleRelease          # APK optimizado (firmado con la clave debug)
-adb install -r app/build/outputs/apk/release/app-release.apk
+adb install -r app-android/build/outputs/apk/release/app-android-release.apk
 ```
 
 Tras instalar:
 
-1. Pulsa Home y elige **Jarvis Clock** como launcher → "Siempre". También puedes
+1. Pulsa Home y elige **Friday** como launcher → "Siempre". También puedes
    ir a Ajustes → *Elegir launcher predeterminado*.
 2. Acepta los permisos de **micrófono** y **notificaciones**.
 3. En Android 12, si la carátula lo pide, concede **Alarmas y recordatorios**.
@@ -183,7 +183,7 @@ curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
 ## Estructura
 
 ```
-app/src/main/java/com/jarvis/clock/
+app-android/src/main/java/com/jarvis/clock/
   MainActivity.kt        launcher: carátula, modo noche, panel del asistente, /display
   ClockService.kt        servicio en primer plano con el servidor HTTP
   Prefs.kt               ajustes (token, puente, ciudad, noche, alarma…)
@@ -203,3 +203,24 @@ homelab/hermes-skill/    skill de Hermes para controlar el reloj
   puente con el audio del reloj en streaming, o un modelo pequeño en el propio reloj.
 - Botones físicos del reloj: gesto en los de volumen para abrir el micro.
 - Reproducir radio o podcasts al despertar (Music Assistant o Jellyfin vía Hermes).
+
+
+## Estructura del repositorio
+
+```
+app-android/     App del reloj (Kotlin, sin dependencias de runtime)
+hermes-skill/    Skill y tools de Hermes para controlar el reloj + tests
+homelab/         clock-bridge: Whisper (STT) -> Hermes -> Piper (TTS)
+device-kit/      Scripts para rootear/liberar el reloj (DRY_RUN por defecto)
+docs/            research-notes.md, decisions.md y voz-friday.md
+RUNBOOK.md       Fase 4: pasos con el reloj delante
+PLAN.md          El plan completo
+```
+
+## Documentación
+
+- **Rootear y quitar Google:** [`RUNBOOK.md`](RUNBOOK.md) + scripts en `device-kit/`.
+- **Ponerle voz a Friday (paso a paso):** [`docs/voz-friday.md`](docs/voz-friday.md).
+- **Por qué cada decisión:** [`docs/decisions.md`](docs/decisions.md) y
+  [`docs/research-notes.md`](docs/research-notes.md).
+- **Cerebro (Hermes):** [`hermes-skill/README.md`](hermes-skill/README.md).

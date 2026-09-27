@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Utilidades comunes para el device-kit. Se hace `source` desde cada script.
+# Reglas: DRY_RUN=1 por defecto (no escribe nada), logging, y confirmación
+# escrita para lo destructivo.
+
+set -euo pipefail
+
+# Raíz del device-kit (este fichero vive en device-kit/lib/).
+KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKUP_DIR="${BACKUP_DIR:-$KIT_DIR/backups}"
+LOG_DIR="${LOG_DIR:-$KIT_DIR/logs}"
+VENDOR_DIR="$KIT_DIR/vendor"
+mkdir -p "$LOG_DIR"
+
+# DRY_RUN=1 (por defecto): solo imprime lo que haría. DRY_RUN=0 ejecuta de verdad.
+DRY_RUN="${DRY_RUN:-1}"
+
+# mtkclient: variable MTK apunta al mtk.py. Por defecto vendor/mtkclient/mtk.py.
+MTK_PY="${MTK_PY:-$VENDOR_DIR/mtkclient/mtk.py}"
+# En Windows hace falta --noreconnect; se puede forzar con NORECONNECT=1.
+NORECONNECT="${NORECONNECT:-0}"
+
+_ts()   { date '+%Y-%m-%d %H:%M:%S'; }
+LOGFILE="$LOG_DIR/$(date '+%Y%m%d-%H%M%S')-$(basename "${0:-kit}" .sh).log"
+
+log()   { echo "[$(_ts)] $*" | tee -a "$LOGFILE"; }
+info()  { log "INFO  $*"; }
+warn()  { log "WARN  $*" >&2; }
+err()   { log "ERROR $*" >&2; }
+die()   { err "$*"; exit 1; }
+
+banner() {
+  echo "==================================================================" | tee -a "$LOGFILE"
+  echo " $*" | tee -a "$LOGFILE"
+  echo " modo: $([ "$DRY_RUN" = 0 ] && echo 'EJECUCIÓN REAL' || echo 'DRY-RUN (no escribe nada)')" | tee -a "$LOGFILE"
+  echo "==================================================================" | tee -a "$LOGFILE"
+}
+
+# Ejecuta un comando, o solo lo imprime en dry-run.
+run() {
+  if [ "$DRY_RUN" = 0 ]; then
+    log "\$ $*"
+    "$@" 2>&1 | tee -a "$LOGFILE"
+    return "${PIPESTATUS[0]}"
+  else
+    log "(dry-run) \$ $*"
+  fi
+}
+
+# mtkclient con los flags correctos según SO.
+mtk() {
+  local args=("$@")
+  [ "$NORECONNECT" = 1 ] && args+=("--noreconnect")
+  run python3 "$MTK_PY" "${args[@]}"
+}
+
+# Confirmación destructiva: hay que teclear una palabra concreta.
+confirm_word() {
+  local word="$1" ; shift
+  local prompt="${*:-Esta acción es IRREVERSIBLE}"
+  if [ "${ASSUME_YES:-0}" = 1 ]; then
+    warn "ASSUME_YES=1: se omite la confirmación de '$word'"
+    return 0
+  fi
+  echo ""
+  echo ">>> $prompt"
+  echo ">>> Para continuar escribe exactamente: $word"
+  read -r -p ">>> " answer
+  [ "$answer" = "$word" ] || die "Confirmación incorrecta (esperaba '$word'). Aborto."
+}
+
+require_cmd() { command -v "$1" >/dev/null 2>&1 || die "Falta el comando '$1'. Ejecuta setup_host.sh."; }
+
+require_backup() {
+  local latest
+  latest="$(ls -1d "$BACKUP_DIR"/*/ 2>/dev/null | tail -1 || true)"
+  [ -n "$latest" ] || die "No hay backup en $BACKUP_DIR. Ejecuta 01_backup_full.sh ANTES."
+  [ -f "$latest/VERIFIED" ] || die "El backup $latest no está verificado (falta VERIFIED). Aborto."
+  echo "${latest%/}"
+}
+
+# Particiones únicas del dispositivo: NUNCA escribir desde otro aparato.
+UNIQUE_PARTITIONS="proinfo nvram nvdata persist seccfg frp"
+is_unique_partition() {
+  local p="$1"
+  for u in $UNIQUE_PARTITIONS; do [ "$p" = "$u" ] && return 0; done
+  return 1
+}
