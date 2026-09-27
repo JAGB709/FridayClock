@@ -89,6 +89,9 @@ def main():
     b = sub.add_parser("brightness")
     b.add_argument("level", type=int, help="1-100")
 
+    bt = sub.add_parser("bluetooth", help="modo altavoz: enciende BT y hazlo visible para emparejar el móvil")
+    bt.add_argument("action", nargs="?", default="speaker", choices=["speaker", "on", "off", "status"])
+
     sub.add_parser("briefing", help="buenos días: hora, tiempo y resumen por voz")
     sub.add_parser("listen", help="abrir el micro del reloj")
 
@@ -128,6 +131,8 @@ def main():
         return call("POST", "/volume", {"level": x.level})
     if x.cmd == "brightness":
         return call("POST", "/brightness", {"level": x.level})
+    if x.cmd == "bluetooth":
+        return call("POST", "/bluetooth", {"action": x.action})
     if x.cmd == "briefing":
         return call("POST", "/briefing", {})
     if x.cmd == "listen":

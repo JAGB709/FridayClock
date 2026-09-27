@@ -15,6 +15,18 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+
+    <!-- Bluetooth: modo altavoz (el reloj recibe el audio del móvil por A2DP). -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <!-- Android 12+ (por si se corre en un ROM más nuevo); en Android 10 bastan las de arriba. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <!-- Android 13+: permiso de alarmas exactas concedido automáticamente a apps despertador. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <!-- Android 12: hay que concederlo a mano en Ajustes > Alarmas y recordatorios. -->
@@ -71,6 +83,11 @@
             android:name=".ui.AlarmsActivity"
             android:exported="false"
             android:label="Alarmas" />
+
+        <activity
+            android:name=".ui.BluetoothActivity"
+            android:exported="false"
+            android:label="Altavoz Bluetooth" />
 
         <activity
             android:name=".ui.SettingsActivity"

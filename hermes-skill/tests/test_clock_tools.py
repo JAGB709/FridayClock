@@ -86,3 +86,14 @@ def test_missing_config():
         for k, v in old.items():
             if v is not None:
                 os.environ[k] = v
+
+
+def test_bluetooth_speaker(clock):
+    r = clock.clock_bluetooth("speaker")
+    assert r["ok"] is True
+    assert r["bt"]["enabled"] is True and r["bt"]["discoverable"] is True
+
+
+def test_bluetooth_off(clock):
+    r = clock.clock_bluetooth("off")
+    assert r["ok"] is True and r["bt"]["enabled"] is False

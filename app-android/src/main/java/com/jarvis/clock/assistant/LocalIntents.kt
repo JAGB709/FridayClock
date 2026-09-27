@@ -22,6 +22,7 @@ object LocalIntents {
         object Weather : Intent()
         data class Volume(val percent: Int?, val delta: Int) : Intent()
         object StopTalking : Intent()
+        data class Bluetooth(val on: Boolean, val speaker: Boolean) : Intent()
     }
 
     fun parse(raw: String): Intent? {
@@ -68,6 +69,16 @@ object LocalIntents {
                     ?.replaceFirstChar { it.uppercase() } ?: "Alarma"
                 return Intent.SetAlarm(tm.first, tm.second, parseDays(t), label)
             }
+        }
+
+        if (Regex("\\bbluetooth\\b|\\bmodo altavoz\\b|\\bhaz de altavoz\\b").containsMatchIn(t)) {
+            val off = Regex("\\b(apaga|apagar|desactiva|desconecta|quita)\\b").containsMatchIn(t)
+            if (off && !Regex("\\bmodo altavoz\\b").containsMatchIn(t)) return Intent.Bluetooth(on = false, speaker = false)
+            // "activa el bluetooth", "conecta el movil", "modo altavoz" -> encender + visible
+            return Intent.Bluetooth(on = true, speaker = true)
+        }
+        if (Regex("\\b(empareja|emparejar|conecta(r)? (el )?(movil|telefono|mi movil))\\b").containsMatchIn(t)) {
+            return Intent.Bluetooth(on = true, speaker = true)
         }
 
         if (Regex("\\bque hora (es|son)\\b|\\bdime la hora\\b|^la hora$").containsMatchIn(t)) return Intent.Time

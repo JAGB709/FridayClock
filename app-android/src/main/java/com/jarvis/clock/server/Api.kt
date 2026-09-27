@@ -51,6 +51,7 @@ class Api(private val ctx: Context) {
             "POST" to "/listen" -> { Assistant.get(ctx).listen(); Response.ok() }
             "POST" to "/briefing" -> { Assistant.get(ctx).briefing(); Response.ok() }
             "POST" to "/volume" -> Response.ok(JSONObject().put("volume", Actions.setVolume(ctx, r.json().optInt("level", 50), 0)))
+            "POST" to "/bluetooth" -> Response.ok(Actions.bluetooth(ctx, r.json()))
             "POST" to "/brightness" -> {
                 Events.post(Events.Event.Brightness(r.json().optInt("level", 50).coerceIn(1, 100)))
                 Response.ok()
@@ -93,6 +94,7 @@ class Api(private val ctx: Context) {
         AlarmRingService.currentLabel?.let { put("ringing_label", it) }
         put("assistant_state", Assistant.get(ctx).state.name.lowercase())
         put("backend_configured", Prefs.backendUrl.isNotEmpty())
+        put("bluetooth", com.jarvis.clock.bt.BluetoothControl.status(ctx))
         AlarmScheduler.nextAlarm(ctx)?.let { (a, at) -> put("next_alarm", a.toJson().put("at", at)) }
         put("alarms", alarms())
     }

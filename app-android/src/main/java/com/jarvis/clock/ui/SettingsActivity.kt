@@ -80,6 +80,9 @@ class SettingsActivity : Activity() {
         number("Brillo de noche (%)", Prefs.nightBrightness) { Prefs.nightBrightness = it }
         number("Brillo de día (%)", Prefs.dayBrightness) { Prefs.dayBrightness = it }
 
+        section("Altavoz Bluetooth")
+        button("Modo altavoz Bluetooth (conectar el móvil)") { startActivity(Intent(this, BluetoothActivity::class.java)) }
+
         section("Sistema")
         button("Elegir launcher predeterminado") { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
         button("Ajustes de Android") { startActivity(Intent(Settings.ACTION_SETTINGS)) }

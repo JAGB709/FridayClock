@@ -59,9 +59,25 @@ class IntentTest {
         assertEquals(15, (LocalIntents.parse("sube el volumen") as Intent.Volume).delta)
     }
 
+    @Test fun `activar bluetooth`() {
+        val i = LocalIntents.parse("Friday activa el bluetooth") as Intent.Bluetooth
+        assert(i.on && i.speaker)
+    }
+
+    @Test fun `modo altavoz`() {
+        val i = LocalIntents.parse("pon el modo altavoz") as Intent.Bluetooth
+        assert(i.on)
+    }
+
+    @Test fun `apagar bluetooth`() {
+        val i = LocalIntents.parse("apaga el bluetooth") as Intent.Bluetooth
+        assert(!i.on)
+    }
+
     @Test fun `parseTime valida rango`() {
         assertEquals(7 to 30, Actions.parseTime("07:30"))
         assertNull(Actions.parseTime("25:00"))
         assertNull(Actions.parseTime("basura"))
     }
 }
+

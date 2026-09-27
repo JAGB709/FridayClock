@@ -58,6 +58,11 @@ class Handler(BaseHTTPRequestHandler):
             a = {"id": aid, "kind": "timer", "label": body.get("label", "Temporizador")}
             ALARMS.append(a)
             return self._send(200, {"ok": True, "alarm": a})
+        if self.path == "/bluetooth":
+            act = body.get("action", "speaker")
+            bt = {"available": True, "enabled": act != "off", "discoverable": act in ("speaker", "pair"),
+                  "phone_connected": False, "paired": []}
+            return self._send(200, {"ok": True, "bt": bt, "message": "ok"})
         if self.path in ("/speak", "/display", "/volume", "/brightness", "/listen", "/briefing"):
             return self._send(200, {"ok": True})
         self._send(404, {"ok": False, "error": "no existe"})

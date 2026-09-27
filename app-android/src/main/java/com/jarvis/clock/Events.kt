@@ -22,6 +22,7 @@ object Events {
         data class AlarmRinging(val alarmId: Int, val label: String) : Event()
         object AlarmStopped : Event()
         data class Brightness(val percent: Int) : Event()
+        data class BluetoothDiscoverable(val seconds: Int) : Event()
     }
 
     enum class State { IDLE, LISTENING, THINKING, SPEAKING, HEARD, ERROR }

@@ -20,6 +20,7 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
 - El usuario pide alarmas, despertarse, temporizadores o recordatorios con hora.
 - Hay que avisar al usuario en casa: decir algo en voz alta o mostrarlo en la pantalla.
 - Preguntan qué alarmas tiene o si el reloj está sonando.
+- "Activa el bluetooth" / "modo altavoz": pon el reloj a recibir el audio del móvil.
 - Rutinas programadas (p.ej. un cron que muestra la agenda al despertar).
 
 ## Procedure
@@ -35,7 +36,11 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
 5. Pantalla: `show "Reunión a las 10" --seconds 30`;
    HTML: `show "<h1 style='color:white'>Hola</h1>" --type html`;
    imagen: `show https://.../img.png --type image`; limpiar: `show-clear`
-6. Otros: `volume 40`, `brightness 20`, `briefing` (buenos días hablado), `listen` (abre el micro).
+6. Altavoz Bluetooth: `bluetooth speaker` enciende el BT del reloj y lo hace visible
+   para que el usuario empareje su móvil y suene por el reloj; `bluetooth off` lo apaga;
+   `bluetooth status` informa. Tras `speaker`, dile al usuario que busque "Friday" en el
+   Bluetooth de su móvil y acepte el emparejamiento.
+7. Otros: `volume 40`, `brightness 20`, `briefing` (buenos días hablado), `listen` (abre el micro).
 7. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
    es epoch ms del próximo disparo).
 

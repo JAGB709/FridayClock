@@ -256,6 +256,15 @@ class Assistant private constructor(ctx: Context) {
         LocalIntents.Intent.Weather -> Weather.get()?.spoken(Prefs.city) ?: "No puedo consultar el tiempo ahora mismo."
         is LocalIntents.Intent.Volume -> "Volumen al ${Actions.setVolume(app, i.percent ?: 0, i.delta)} por ciento."
         LocalIntents.Intent.StopTalking -> ""
+        is LocalIntents.Intent.Bluetooth -> {
+            if (!i.on) {
+                Actions.bluetooth(app, org.json.JSONObject().put("action", "off"))
+                "Bluetooth apagado."
+            } else {
+                val r = Actions.bluetooth(app, org.json.JSONObject().put("action", "speaker"))
+                r.optString("message", "Bluetooth activado. Empareja el reloj desde tu móvil.")
+            }
+        }
     }
 
     private fun alarmsSummary(): String {

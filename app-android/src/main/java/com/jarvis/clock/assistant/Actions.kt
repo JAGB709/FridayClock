@@ -7,6 +7,7 @@ import com.jarvis.clock.alarm.Alarm
 import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.alarm.AlarmStore
+import com.jarvis.clock.bt.BluetoothControl
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
@@ -64,7 +65,23 @@ object Actions {
         "clear_display" -> { Events.post(Events.Event.DisplayClear); ok() }
         "set_volume" -> ok().put("volume", setVolume(ctx, a.optInt("level", 50), 0))
         "set_brightness" -> { Events.post(Events.Event.Brightness(a.optInt("level", 50).coerceIn(1, 100))); ok() }
+        "bluetooth" -> bluetooth(ctx, a)
         else -> JSONObject().put("ok", false).put("error", "acción desconocida: ${a.optString("type")}")
+    }
+
+    /** Control del Bluetooth (modo altavoz). action: on|off|speaker|status. */
+    fun bluetooth(ctx: Context, a: JSONObject): JSONObject = when (a.optString("action", "speaker")) {
+        "on" -> ok().put("enabled", BluetoothControl.enable(ctx)).put("bt", BluetoothControl.status(ctx))
+        "off" -> ok().put("enabled", !BluetoothControl.disable(ctx)).put("bt", BluetoothControl.status(ctx))
+        "status" -> ok().put("bt", BluetoothControl.status(ctx))
+        "speaker", "pair", "discoverable" -> {
+            val secs = a.optInt("seconds", 300).coerceIn(30, 3600)
+            val r = BluetoothControl.speakerMode(ctx, secs)
+            if (r.needsUi) Events.post(Events.Event.BluetoothDiscoverable(secs))
+            JSONObject().put("ok", true).put("message", r.message)
+                .put("needs_confirmation", r.needsUi).put("bt", BluetoothControl.status(ctx))
+        }
+        else -> JSONObject().put("ok", false).put("error", "action BT desconocida")
     }
 
     fun cancelTimers(ctx: Context): Int =

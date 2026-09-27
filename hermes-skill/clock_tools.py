@@ -112,7 +112,13 @@ def clock_set_volume(level: int) -> dict:
     return _call("POST", "/volume", {"level": level})
 
 
+def clock_bluetooth(action: str = "speaker") -> dict:
+    """Bluetooth del reloj (modo altavoz). action: 'speaker' (enciende y hace visible
+    para emparejar el movil), 'on', 'off' o 'status'."""
+    return _call("POST", "/bluetooth", {"action": action})
+
+
 TOOLS = [
     clock_status, clock_list_alarms, clock_set_alarm, clock_cancel_alarm,
-    clock_set_timer, clock_say, clock_display, clock_set_volume,
+    clock_set_timer, clock_say, clock_display, clock_set_volume, clock_bluetooth,
 ]
