@@ -20,6 +20,10 @@ class Api(private val ctx: Context) {
 
     fun handle(r: Request): Response {
         if (r.path == "/health") return Response.ok()
+        // Sin token configurado, el servidor no atiende nada (evita el reloj "abierto").
+        if (Prefs.authToken.isEmpty()) {
+            return Response.error(503, "reloj sin token configurado; ponlo en Ajustes o por ADB")
+        }
         if (!authorized(r)) return Response.error(401, "token inválido")
         return when (r.method to r.path) {
             "GET" to "/status" -> Response.ok(status())

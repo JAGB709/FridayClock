@@ -11,6 +11,7 @@ import android.os.IBinder
 import android.util.Log
 import com.jarvis.clock.server.Api
 import com.jarvis.clock.server.HttpServer
+import com.jarvis.clock.server.NetUtil
 
 /** Servicio en primer plano que mantiene vivo el servidor HTTP local. */
 class ClockService : Service() {
@@ -36,16 +37,20 @@ class ClockService : Service() {
         } else {
             startForeground(NOTIF_ID, n)
         }
-        val api = Api(this)
-        server = HttpServer(Prefs.httpPort, api::handle).also { it.start() }
+        server = newServer()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_RESTART_SERVER) {
             server?.stop()
-            server = HttpServer(Prefs.httpPort, Api(this)::handle).also { it.start() }
+            server = newServer()
         }
         return START_STICKY
+    }
+
+    private fun newServer(): HttpServer {
+        val host = if (Prefs.bindTailscaleOnly) NetUtil.tailscaleAddress() else null
+        return HttpServer(Prefs.httpPort, host, Api(this)::handle).also { it.start() }
     }
 
     override fun onDestroy() {

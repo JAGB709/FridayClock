@@ -19,8 +19,7 @@ import com.jarvis.clock.Prefs
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.assistant.Assistant
 import com.jarvis.clock.assistant.Backend
-import java.net.Inet4Address
-import java.net.NetworkInterface
+import com.jarvis.clock.server.NetUtil
 import kotlin.concurrent.thread
 
 /** Ajustes: lo que antes estaba hardcodeado (token, backend, ciudad...) ahora se edita aquí. */
@@ -44,6 +43,9 @@ class SettingsActivity : Activity() {
         section("Servidor del reloj")
         text("Token (X-Auth-Token)", Prefs.authToken) { Prefs.authToken = it }
         number("Puerto HTTP", Prefs.httpPort) { if (it in 1024..65535 && it != Prefs.httpPort) { Prefs.httpPort = it; ClockService.restartServer(this) } }
+        switch("Escuchar solo en Tailscale (recomendado)", Prefs.bindTailscaleOnly) {
+            if (it != Prefs.bindTailscaleOnly) { Prefs.bindTailscaleOnly = it; ClockService.restartServer(this) }
+        }
 
         section("Asistente")
         text("Nombre del asistente", Prefs.assistantName) { Prefs.assistantName = it }
@@ -106,14 +108,7 @@ class SettingsActivity : Activity() {
         }
     }
 
-    private fun ips(): List<String> = runCatching {
-        NetworkInterface.getNetworkInterfaces().toList()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList() }
-            .filterIsInstance<Inet4Address>()
-            .map { it.hostAddress ?: "" }
-            .sortedByDescending { it.startsWith("100.") } // Tailscale primero
-    }.getOrDefault(emptyList())
+    private fun ips(): List<String> = NetUtil.ipv4()
 
     // ------------------------------------------------------------------ helpers de formulario
 

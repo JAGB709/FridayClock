@@ -22,6 +22,11 @@ object Prefs {
         get() = sp.getString(K_TOKEN, "")!!
         set(v) = sp.edit().putString(K_TOKEN, v.trim()).apply()
 
+    /** Enlazar el servidor solo a la IP de Tailscale si existe (si no, a todas con token). */
+    var bindTailscaleOnly: Boolean
+        get() = sp.getBoolean("bind_ts_only", false)
+        set(v) = sp.edit().putBoolean("bind_ts_only", v).apply()
+
     var httpPort: Int
         get() = sp.getInt("http_port", 8080)
         set(v) = sp.edit().putInt("http_port", v).apply()
@@ -36,8 +41,8 @@ object Prefs {
         set(v) = sp.edit().putString("backend_token", v.trim()).apply()
 
     var assistantName: String
-        get() = sp.getString("assistant_name", "Jarvis")!!
-        set(v) = sp.edit().putString("assistant_name", v.trim().ifEmpty { "Jarvis" }).apply()
+        get() = sp.getString("assistant_name", "Friday")!!
+        set(v) = sp.edit().putString("assistant_name", v.trim().ifEmpty { "Friday" }).apply()
 
     var city: String
         get() = sp.getString("city", "Madrid")!!

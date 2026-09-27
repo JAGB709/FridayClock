@@ -96,6 +96,16 @@
             android:name=".alarm.AlarmReceiver"
             android:exported="false" />
 
+        <!-- Configuración por ADB (Fase 4). exported para que `am broadcast` lo alcance;
+             solo actúa si el intent trae componente explícito (-n). -->
+        <receiver
+            android:name=".ConfigReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.jarvis.clock.CONFIGURE" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".alarm.BootReceiver"
             android:exported="true">

@@ -6,3 +6,13 @@ local.properties
 *.iml
 __pycache__/
 .venv/
+
+# python
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# device-kit runtime
+device-kit/backups/
+device-kit/logs/
+logs/

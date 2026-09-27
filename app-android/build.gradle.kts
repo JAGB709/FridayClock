@@ -35,8 +35,14 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
-// Sin dependencias a propósito: nada de AppCompat/Compose/OkHttp. Solo el
-// framework de Android + la stdlib de Kotlin, para que la app ocupe poco en
-// los 1 GB de RAM del MT8167.
+// Sin dependencias de runtime a propósito: nada de AppCompat/Compose/OkHttp.
+// Solo el framework de Android + la stdlib de Kotlin, para que la app ocupe poco
+// en los 1 GB de RAM del MT8167. JUnit es solo para tests, no entra en el APK.
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+}

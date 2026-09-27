@@ -12,5 +12,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "JarvisClock"
-include(":app")
+rootProject.name = "FridayClock"
+include(":app-android")
+project(":app-android").projectDir = file("app-android")

@@ -12,7 +12,7 @@ metadata:
 
 # Mi Smart Clock
 
-Reloj despertador de la mesilla (Xiaomi Mi Smart Clock con la app Jarvis Clock, sin Google).
+Reloj despertador de la mesilla (Xiaomi Mi Smart Clock, app Friday, sin Google).
 Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock.py`
 (ruta relativa a esta skill); cada comando imprime JSON con `"ok": true|false`.
 

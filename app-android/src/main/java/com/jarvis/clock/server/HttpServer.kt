@@ -15,7 +15,11 @@ import java.util.concurrent.Executors
  * Servidor HTTP/1.1 mínimo (sin NanoHTTPD ni dependencias). Suficiente para
  * unas pocas peticiones JSON desde Hermes/Home Assistant por Tailscale.
  */
-class HttpServer(private val port: Int, private val handler: (Request) -> Response) {
+class HttpServer(
+    private val port: Int,
+    private val bindHost: String? = null,
+    private val handler: (Request) -> Response,
+) {
 
     data class Request(
         val method: String,
@@ -45,9 +49,10 @@ class HttpServer(private val port: Int, private val handler: (Request) -> Respon
         running = true
         Thread({
             try {
-                val ss = ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(port)) }
+                val addr = if (bindHost != null) InetSocketAddress(bindHost, port) else InetSocketAddress(port)
+                val ss = ServerSocket().apply { reuseAddress = true; bind(addr) }
                 socket = ss
-                Log.i(TAG, "Escuchando en :$port")
+                Log.i(TAG, "Escuchando en $addr")
                 while (running) {
                     val s = ss.accept()
                     pool.execute { serve(s) }

@@ -1,0 +1,49 @@
+name: Build APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      # Los runners de GitHub ya traen el SDK de Android en $ANDROID_SDK_ROOT;
+      # no usamos setup-android para no depender de su instalador.
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests JVM
+        run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Compilar APKs
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
+      - name: Lint (informativo)
+        continue-on-error: true
+        run: ./gradlew --no-daemon lintDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: friday-apk
+          path: |
+            app-android/build/outputs/apk/debug/app-android-debug.apk
+            app-android/build/outputs/apk/release/app-android-release.apk
+
+  homelab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Puente y skill compilan
+        run: |
+          python -m py_compile homelab/clock-bridge/bridge.py
+          python -m py_compile homelab/hermes-skill/mi-smart-clock/scripts/clock.py
+      - name: Tests de la skill de Hermes
+        working-directory: homelab/hermes-skill
+        run: |
+          pip install -q pytest httpx
+          pytest -q
