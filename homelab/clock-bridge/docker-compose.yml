@@ -1,0 +1,11 @@
+services:
+  clock-bridge:
+    build: .
+    env_file: .env
+    network_mode: host   # para llegar a Hermes en 127.0.0.1:8642 y exponerse por Tailscale
+    volumes:
+      - ./models:/models            # voces de Piper
+      - whisper-cache:/root/.cache  # modelos de Whisper descargados
+    restart: unless-stopped
+volumes:
+  whisper-cache:
