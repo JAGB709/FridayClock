@@ -27,7 +27,11 @@ class Api(private val ctx: Context) {
         }
         if (!authorized(r)) return Response.error(401, "token inválido")
         if (r.method == "DELETE" && r.path.startsWith("/sounds/")) {
-            val name = java.net.URLDecoder.decode(r.path.removePrefix("/sounds/"), "UTF-8")
+            val name = try {
+                java.net.URLDecoder.decode(r.path.removePrefix("/sounds/"), "UTF-8")
+            } catch (e: IllegalArgumentException) {
+                return Response.error(400, "nombre no válido")
+            }
             return if (Sounds.delete(ctx, name)) Response.ok() else Response.error(404, "no existe el sonido $name")
         }
         return when (r.method to r.path) {

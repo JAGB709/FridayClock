@@ -2,7 +2,9 @@ package com.jarvis.clock
 
 import com.jarvis.clock.alarm.Sounds
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -23,6 +25,14 @@ class SoundsTest {
         assertNull(Sounds.sanitizeName("sin_extension"))
         assertNull(Sounds.sanitizeName(".mp3"))
         assertNull(Sounds.sanitizeName("???.wav"))
+    }
+
+    @Test fun `system solo admite uris locales`() {
+        assertTrue(Sounds.isLocalSystemUri("content://media/internal/audio/media/1"))
+        assertTrue(Sounds.isLocalSystemUri("android.resource://x/1"))
+        assertFalse(Sounds.isLocalSystemUri("http://homelab/a.mp3"))
+        assertFalse(Sounds.isLocalSystemUri("content://"))
+        assertFalse(Sounds.isLocalSystemUri(""))
     }
 
     @Test fun `fileFor solo resuelve archivos que existen dentro del directorio`() {

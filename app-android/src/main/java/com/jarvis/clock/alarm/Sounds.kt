@@ -32,6 +32,10 @@ object Sounds {
         return if (stem.isEmpty()) null else "$stem.$ext"
     }
 
+    /** Solo URIs locales (nunca red): content:// o android.resource://. */
+    fun isLocalSystemUri(s: String): Boolean =
+        s.length > 10 && (s.startsWith("content://") || s.startsWith("android.resource://"))
+
     /** Archivo de un id "file:…" si existe en [dir]; null en cualquier otro caso. */
     fun fileFor(dir: File, id: String?): File? {
         if (id == null || !id.startsWith("file:")) return null
@@ -44,7 +48,8 @@ object Sounds {
     /** URI reproducible para [id], o null (=> el que llama usa el tono por defecto). */
     fun uri(ctx: Context, id: String?): Uri? = when {
         id == null -> null
-        id.startsWith("system:") -> runCatching { Uri.parse(id.removePrefix("system:")) }.getOrNull()
+        id.startsWith("system:") -> id.removePrefix("system:").takeIf { isLocalSystemUri(it) }
+            ?.let { runCatching { Uri.parse(it) }.getOrNull() }
         else -> fileFor(dir(ctx), id)?.let { Uri.fromFile(it) }
     }
 
@@ -58,7 +63,7 @@ object Sounds {
                 out.put(JSONObject().put("id", "system:$uri").put("name", c.getString(RingtoneManager.TITLE_COLUMN_INDEX)).put("kind", "system"))
             }
         }.onFailure { Log.w(TAG, "Sin tonos del sistema", it) }
-        dir(ctx).listFiles()?.sortedBy { it.name }?.forEach {
+        dir(ctx).listFiles()?.filter { !it.name.startsWith(".") }?.sortedBy { it.name }?.forEach {
             out.put(JSONObject().put("id", "file:${it.name}").put("name", it.name).put("kind", "file").put("size", it.length()))
         }
         return out
@@ -69,12 +74,19 @@ object Sounds {
         val name = sanitizeName(rawName) ?: throw IllegalArgumentException("nombre no válido: usa mp3, ogg, wav o m4a")
         require(bytes.isNotEmpty()) { "archivo vacío" }
         require(bytes.size <= MAX_BYTES) { "el sonido supera 5 MB" }
-        val f = File(dir(ctx), name)
-        f.writeBytes(bytes)
-        val playable = runCatching { MediaPlayer().apply { setDataSource(f.path); prepare(); release() } }.isSuccess
-        if (!playable) {
-            f.delete()
-            throw IllegalArgumentException("el reloj no puede reproducir ese archivo")
+        val d = dir(ctx)
+        val tmp = File(d, ".$name.tmp")
+        try {
+            tmp.writeBytes(bytes)
+            val playable = runCatching {
+                val mp = MediaPlayer()
+                try { mp.setDataSource(tmp.path); mp.prepare() } finally { mp.release() }
+            }.isSuccess
+            if (!playable) throw IllegalArgumentException("el reloj no puede reproducir ese archivo")
+            val f = File(d, name)
+            if (!tmp.renameTo(f)) throw IllegalArgumentException("no se pudo guardar el sonido")
+        } finally {
+            if (tmp.exists()) tmp.delete()
         }
         return "file:$name"
     }
@@ -85,7 +97,7 @@ object Sounds {
     }
 
     /** Suena 5 s por el canal de alarma. false si hay una alarma sonando. */
-    fun preview(ctx: Context, id: String?): Boolean {
+    @Synchronized fun preview(ctx: Context, id: String?): Boolean {
         if (AlarmRingService.ringing) return false
         stopPreview()
         val uri = uri(ctx, id)
@@ -96,6 +108,7 @@ object Sounds {
             mp.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
             mp.setDataSource(ctx, uri)
             mp.prepare()
+            if (AlarmRingService.ringing) { mp.release(); return false }
             mp.start()
             previewPlayer = mp
             main.postDelayed({ stopPreview() }, 5_000)
@@ -107,7 +120,7 @@ object Sounds {
         }
     }
 
-    fun stopPreview() {
+    @Synchronized fun stopPreview() {
         main.removeCallbacksAndMessages(null)
         previewPlayer?.let { runCatching { it.stop() }; it.release() }
         previewPlayer = null

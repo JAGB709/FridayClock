@@ -146,6 +146,10 @@ class AlarmTest {
         assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"enabled":"true"}""")) }
         assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"briefing":1}""")) }
         assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"sound":"http://x/y.mp3"}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"sound":"system:http://homelab/a.mp3"}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"sound":"file:"}""")) }
+        assertEquals("system:content://media/internal/audio/media/1",
+            a.withPatch(JSONObject("""{"sound":"system:content://media/internal/audio/media/1"}""")).sound)
     }
 
     @Test fun `withOptions ignora hora y nombre`() {

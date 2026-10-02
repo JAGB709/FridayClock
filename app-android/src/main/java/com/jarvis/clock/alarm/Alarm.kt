@@ -205,6 +205,10 @@ data class Alarm(
             if (p.isNull("sound")) return null
             val s = (p.opt("sound") as? String)?.trim().orEmpty()
             require(s.startsWith("system:") || s.startsWith("file:")) { "sound debe empezar por system: o file:" }
+            require(s.substringAfter(':').isNotEmpty()) { "sound vacío tras el prefijo" }
+            require(!s.startsWith("system:") || Sounds.isLocalSystemUri(s.removePrefix("system:"))) {
+                "sound system: debe ser un tono del reloj (content://)"
+            }
             return s
         }
     }
