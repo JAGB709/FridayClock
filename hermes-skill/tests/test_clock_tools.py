@@ -97,3 +97,41 @@ def test_bluetooth_speaker(clock):
 def test_bluetooth_off(clock):
     r = clock.clock_bluetooth("off")
     assert r["ok"] is True and r["bt"]["enabled"] is False
+
+
+def test_get_and_set_settings(clock):
+    r = clock.clock_get_settings()
+    assert r["ok"] and r["settings"]["snooze_min"] == 5
+    assert any(f["key"] == "snooze_min" and f["max"] == 60 for f in r["schema"])
+    r = clock.clock_set_settings({"snooze_min": 9, "wake_word": False})
+    assert r["ok"] and r["settings"]["snooze_min"] == 9 and r["settings"]["wake_word"] is False
+
+
+def test_set_settings_invalid_changes_nothing(clock):
+    r = clock.clock_set_settings({"snooze_min": 9, "night_brightness": 0, "auth_token": "x"})
+    assert r["ok"] is False
+    assert set(r["errors"]) == {"night_brightness", "auth_token"}
+    assert clock.clock_get_settings()["settings"]["snooze_min"] == 5
+
+
+def test_update_alarm(clock):
+    a = clock.clock_set_alarm("07:30", label="Trabajo")["alarm"]
+    r = clock.clock_update_alarm(a["id"], {"time": "06:45", "max_volume": 60})
+    assert r["ok"] and r["alarm"]["time"] == "06:45" and r["alarm"]["max_volume"] == 60
+    assert r["alarm"]["label"] == "Trabajo"
+
+
+def test_update_missing_alarm_is_error(clock):
+    r = clock.clock_update_alarm(999, {"label": "x"})
+    assert r["ok"] is False and "no existe" in r["error"]
+
+
+def test_list_sounds(clock):
+    r = clock.clock_list_sounds()
+    assert r["ok"] and any(s["kind"] == "system" for s in r["sounds"])
+
+
+def test_update_alarm_invalid_sound(clock):
+    a = clock.clock_set_alarm("07:30", label="Test")["alarm"]
+    r = clock.clock_update_alarm(a["id"], {"sound": "system:http://x/y.mp3"})
+    assert r["ok"] is False

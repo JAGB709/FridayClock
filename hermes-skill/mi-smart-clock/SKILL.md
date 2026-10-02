@@ -41,7 +41,12 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
    `bluetooth status` informa. Tras `speaker`, dile al usuario que busque "Friday" en el
    Bluetooth de su móvil y acepte el emparejamiento.
 7. Otros: `volume 40`, `brightness 20`, `briefing` (buenos días hablado), `listen` (abre el micro).
-7. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
+8. Ver o cambiar ajustes (posponer, subida de volumen, modo noche, brillo, voz, ciudad):
+   `clock.py settings` · `clock.py settings-set snooze_min=10 night_brightness=5`.
+   Es todo o nada: si un valor no vale, no se cambia ninguno y se devuelve `errors`.
+9. Editar una alarma sin borrarla: `clock.py alarm-update 3 --time 06:45 --max-volume 60`.
+10. Sonidos disponibles para las alarmas: `clock.py sounds`.
+11. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
    es epoch ms del próximo disparo).
 
 ## Pitfalls

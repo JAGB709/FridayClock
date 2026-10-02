@@ -65,6 +65,14 @@ def main():
         e = sub.add_parser(name)
         e.add_argument("id", type=int)
 
+    u = sub.add_parser("alarm-update", help="editar alarma (solo lo indicado)")
+    u.add_argument("id", type=int)
+    u.add_argument("--time")
+    u.add_argument("--label")
+    u.add_argument("--days")
+    u.add_argument("--max-volume", type=int)
+    u.add_argument("--snooze-min", type=int)
+
     sub.add_parser("alarm-stop", help="apagar la alarma que está sonando")
     sub.add_parser("alarm-snooze", help="posponer la alarma que está sonando")
 
@@ -95,6 +103,11 @@ def main():
     sub.add_parser("briefing", help="buenos días: hora, tiempo y resumen por voz")
     sub.add_parser("listen", help="abrir el micro del reloj")
 
+    sub.add_parser("settings", help="ver ajustes y su esquema")
+    st = sub.add_parser("settings-set", help="cambiar ajustes: clave=valor ...")
+    st.add_argument("pairs", nargs="+", help="p.ej. snooze_min=10 wake_word=false city=Sevilla")
+    sub.add_parser("sounds", help="sonidos de alarma disponibles")
+
     x = p.parse_args()
     if x.cmd == "status":
         return call("GET", "/status")
@@ -113,6 +126,26 @@ def main():
         return call("POST", "/alarm", body)
     if x.cmd in ("alarm-enable", "alarm-disable"):
         return call("POST", "/alarm", {"action": x.cmd.split("-")[1], "id": x.id})
+    if x.cmd == "alarm-update":
+        body = {"action": "update", "id": x.id}
+        for k, v in (("time", x.time), ("label", x.label), ("days", x.days),
+                     ("max_volume", x.max_volume), ("snooze_min", x.snooze_min)):
+            if v is not None:
+                body[k] = v
+        return call("POST", "/alarm", body)
+    if x.cmd == "settings":
+        return call("GET", "/settings")
+    if x.cmd == "settings-set":
+        patch = {}
+        for pair in x.pairs:
+            k, _, v = pair.partition("=")
+            try:
+                patch[k] = json.loads(v)      # números, true/false
+            except ValueError:
+                patch[k] = v                  # texto
+        return call("PUT", "/settings", patch)
+    if x.cmd == "sounds":
+        return call("GET", "/sounds")
     if x.cmd == "alarm-stop":
         return call("POST", "/alarm", {"action": "stop"})
     if x.cmd == "alarm-snooze":
