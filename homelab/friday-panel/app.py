@@ -19,6 +19,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import Body, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -65,6 +66,10 @@ def _error(status: int, msg: str) -> JSONResponse:
 def create_app(cfg: Config) -> FastAPI:
     app = FastAPI(title="friday-panel", docs_url=None, redoc_url=None, openapi_url=None)
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        return _error(400, "Petición no válida")
+
     async def clock(method: str, path: str, *, json: dict | None = None,
                     content: bytes | None = None, params: dict | None = None) -> JSONResponse:
         headers = {"X-Auth-Token": cfg.clock_token}
@@ -91,7 +96,7 @@ def create_app(cfg: Config) -> FastAPI:
     async def require_login(request: Request, call_next):
         if cfg.password and request.url.path.startswith("/api/"):
             given = request.cookies.get(COOKIE, "")
-            if not hmac.compare_digest(given, _session_value(cfg.password)):
+            if not hmac.compare_digest(given.encode(), _session_value(cfg.password).encode()):
                 return JSONResponse({"ok": False, "error": "Inicia sesión", "login_required": True}, status_code=401)
         return await call_next(request)
 
@@ -99,7 +104,7 @@ def create_app(cfg: Config) -> FastAPI:
     async def login(body: dict = Body(default_factory=dict)):
         if not cfg.password:
             return {"ok": True}
-        if not hmac.compare_digest(str(body.get("password", "")), cfg.password):
+        if not hmac.compare_digest(str(body.get("password", "")).encode(), cfg.password.encode()):
             return _error(401, "Contraseña incorrecta")
         resp = JSONResponse({"ok": True})
         resp.set_cookie(COOKIE, _session_value(cfg.password), max_age=COOKIE_MAX_AGE, httponly=True, samesite="strict")
@@ -146,7 +151,11 @@ def create_app(cfg: Config) -> FastAPI:
     async def upload_sound(request: Request, name: str):
         if Path(name).suffix.lower() not in SOUND_EXTS:
             return _error(400, "Formato no admitido: usa mp3, ogg, wav o m4a")
-        if int(request.headers.get("content-length") or 0) > MAX_SOUND_BYTES:
+        try:
+            content_length = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            return _error(400, "Content-Length no válido")
+        if content_length > MAX_SOUND_BYTES:
             return _error(413, "El sonido supera 5 MB")
         data = await request.body()
         if not data:

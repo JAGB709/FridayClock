@@ -89,3 +89,31 @@ def test_health_and_static(client):
     assert h == {"ok": True, "clock": True}
     r = client.get("/")
     assert r.status_code == 200 and "Friday" in r.text
+
+
+def test_password_login_with_nonascii_chars(make_client):
+    # I1: contraseña con caracteres no-ASCII (ñ, á, etc.) debe funcionar
+    c = make_client(password="contraseña")
+    r = c.get("/api/status")
+    assert r.status_code == 401 and r.json()["login_required"] is True
+    # Login correcto con contraseña no-ASCII
+    assert c.post("/login", json={"password": "contraseña"}).status_code == 200
+    # Ahora /api/status debe funcionar
+    assert c.get("/api/status").status_code == 200
+    # Password incorrecta sigue siendo 401
+    assert c.post("/login", json={"password": "mal"}).status_code == 401
+
+
+def test_invalid_content_length(client):
+    # m2: Content-Length no válido debe devolver 400, no 500
+    r = client.post("/api/sounds", params={"name": "test.mp3"}, content=b"x",
+                    headers={"Content-Length": "invalid"})
+    assert r.status_code == 400 and "Content-Length" in r.json()["error"]
+
+
+def test_invalid_request_format(client):
+    # m3: Petición con formato inválido debe devolver 400, no 422
+    r = client.put("/api/alarms/abc", json={"label": "test"})
+    assert r.status_code == 400 and r.json()["ok"] is False
+    r = client.post("/api/alarms", json="not a dict")
+    assert r.status_code == 400 and r.json()["ok"] is False
