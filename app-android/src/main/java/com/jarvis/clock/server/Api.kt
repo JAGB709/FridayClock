@@ -57,6 +57,8 @@ class Api(private val ctx: Context) {
                 Response.ok()
             }
             "POST" to "/actions" -> Response.ok(JSONObject().put("results", Actions.executeAll(ctx, r.json().optJSONArray("actions"))))
+            "GET" to "/settings" -> result(Actions.execute(ctx, JSONObject().put("type", "get_settings")))
+            "PUT" to "/settings" -> result(Actions.execute(ctx, JSONObject().put("type", "set_settings").put("settings", r.json())))
             else -> Response.error(404, "no existe ${r.method} ${r.path}")
         }
     }

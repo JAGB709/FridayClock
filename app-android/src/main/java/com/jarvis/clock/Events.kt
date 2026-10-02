@@ -23,6 +23,8 @@ object Events {
         object AlarmStopped : Event()
         data class Brightness(val percent: Int) : Event()
         data class BluetoothDiscoverable(val seconds: Int) : Event()
+        /** Ajustes cambiados por la API: la UI vuelve a aplicar lo que dependa de ellos. */
+        data class SettingsChanged(val keys: Set<String>) : Event()
     }
 
     enum class State { IDLE, LISTENING, THINKING, SPEAKING, HEARD, ERROR }

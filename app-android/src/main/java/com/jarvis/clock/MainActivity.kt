@@ -367,6 +367,11 @@ class MainActivity : Activity() {
             is Event.AlarmRinging -> runCatching { startActivity(AlarmActivity.intent(this, e.label)) }
             Event.AlarmStopped -> refreshNextAlarm()
             is Event.Brightness -> { brightnessOverride = e.percent; applyNightMode() }
+            is Event.SettingsChanged -> {
+                // Un brillo nuevo desde el panel manda sobre un /brightness puntual anterior.
+                if (e.keys.any { it.endsWith("brightness") }) brightnessOverride = null
+                applyNightMode()
+            }
             is Event.BluetoothDiscoverable -> runCatching {
                 startActivity(com.jarvis.clock.bt.BluetoothControl.discoverableIntent(e.seconds))
             }

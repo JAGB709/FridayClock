@@ -3,6 +3,7 @@ package com.jarvis.clock.assistant
 import android.content.Context
 import android.media.AudioManager
 import com.jarvis.clock.Events
+import com.jarvis.clock.SettingsSchema
 import com.jarvis.clock.alarm.Alarm
 import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
@@ -66,6 +67,16 @@ object Actions {
         "set_volume" -> ok().put("volume", setVolume(ctx, a.optInt("level", 50), 0))
         "set_brightness" -> { Events.post(Events.Event.Brightness(a.optInt("level", 50).coerceIn(1, 100))); ok() }
         "bluetooth" -> bluetooth(ctx, a)
+        "get_settings" -> ok().put("settings", SettingsSchema.valuesJson()).put("schema", SettingsSchema.schemaJson())
+        "set_settings" -> when (val v = SettingsSchema.validate(a.optJSONObject("settings") ?: JSONObject())) {
+            is SettingsSchema.Validation.Invalid ->
+                JSONObject().put("ok", false).put("error", "ajustes no válidos").put("errors", JSONObject(v.errors))
+            is SettingsSchema.Validation.Ok -> {
+                SettingsSchema.apply(v.values)
+                if (v.values.isNotEmpty()) Events.post(Events.Event.SettingsChanged(v.values.keys))
+                ok().put("settings", SettingsSchema.valuesJson())
+            }
+        }
         else -> JSONObject().put("ok", false).put("error", "acción desconocida: ${a.optString("type")}")
     }
 
