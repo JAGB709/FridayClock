@@ -82,6 +82,15 @@ class AlarmTest {
         assertEquals(0, Alarm.parseDays(""))
     }
 
+    @Test fun `days no validos en update se rechazan`() {
+        val rep = Alarm(1, 7, 0, Alarm.WEEKDAYS)
+        val e = assertThrows(IllegalArgumentException::class.java) { rep.withPatch(JSONObject("""{"days":"lunes,martes"}""")) }
+        assertTrue(e.message!!.startsWith("days no válido"))
+        assertEquals(0, rep.withPatch(JSONObject("""{"days":[]}""")).days)
+        assertEquals(0, rep.withPatch(JSONObject("""{"days":""}""")).days)
+        assertEquals(1, rep.withPatch(JSONObject("""{"days":["mon"]}""")).days)
+    }
+
     @Test fun `serializacion ida y vuelta`() {
         val a = Alarm(7, 6, 45, Alarm.WEEKDAYS, "Trabajo", true, kind = Alarm.Kind.ALARM)
         val b = Alarm.fromStorage(a.toStorage())

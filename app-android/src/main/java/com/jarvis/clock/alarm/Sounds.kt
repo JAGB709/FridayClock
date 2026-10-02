@@ -57,10 +57,11 @@ object Sounds {
         val out = JSONArray()
         runCatching {
             val rm = RingtoneManager(ctx).apply { setType(RingtoneManager.TYPE_ALARM) }
-            val c = rm.cursor
-            while (c.moveToNext()) {
-                val uri = rm.getRingtoneUri(c.position)
-                out.put(JSONObject().put("id", "system:$uri").put("name", c.getString(RingtoneManager.TITLE_COLUMN_INDEX)).put("kind", "system"))
+            rm.cursor.use { c ->
+                while (c.moveToNext()) {
+                    val uri = rm.getRingtoneUri(c.position)
+                    out.put(JSONObject().put("id", "system:$uri").put("name", c.getString(RingtoneManager.TITLE_COLUMN_INDEX)).put("kind", "system"))
+                }
             }
         }.onFailure { Log.w(TAG, "Sin tonos del sistema", it) }
         dir(ctx).listFiles()?.filter { !it.name.startsWith(".") }?.sortedBy { it.name }?.forEach {

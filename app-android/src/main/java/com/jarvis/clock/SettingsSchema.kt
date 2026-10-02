@@ -96,7 +96,11 @@ object SettingsSchema {
 
     fun apply(values: Map<String, Any>) = values.forEach { (k, v) -> byKey.getValue(k).set(v) }
 
-    fun valuesJson(): JSONObject = JSONObject().apply { fields.forEach { put(it.key, it.get()) } }
+    fun valuesJson(): JSONObject = JSONObject().apply { fields.forEach {
+        val v = it.get()
+        // Los Float de Prefs salen como 1.100000023841858: se redondea a 4 decimales.
+        put(it.key, if (it.type == Type.FLOAT && v is Double) Math.round(v * 10_000) / 10_000.0 else v)
+    } }
 
     fun schemaJson(): JSONArray = JSONArray().apply {
         fields.forEach { f ->

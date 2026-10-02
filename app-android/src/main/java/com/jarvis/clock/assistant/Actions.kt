@@ -37,6 +37,7 @@ object Actions {
             // Se validan las opciones antes de gastar un id.
             val draft = Alarm(0, h, m, Alarm.parseDays(a.opt("days")), a.optString("label", "Alarma").ifBlank { "Alarma" })
                 .withOptions(a)
+                .copy(enabled = a.opt("enabled") as? Boolean ?: true)
             val alarm = draft.copy(id = AlarmStore.newId(ctx))
             AlarmScheduler.save(ctx, alarm)
             ok().put("alarm", alarm.toJson())

@@ -35,6 +35,7 @@ class AlarmRingService : Service() {
     private var player: MediaPlayer? = null
     private var beeper: ToneGenerator? = null
     private var booster: LoudnessEnhancer? = null
+    private var rampTick: Runnable? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var startedAt = 0L
     private var label = ""
@@ -129,16 +130,37 @@ class AlarmRingService : Service() {
         }
     }
 
-    private fun startSound() {
+    /**
+     * Arranca el sonido. [nivel] 0 = sonido propio y luego tono por defecto; 1 = solo tono
+     * por defecto (el propio falló en pleno timbre); 2 = directamente pitidos.
+     */
+    private fun startSound(nivel: Int = 0) {
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
-        // Sonido de la alarma (si lo tiene y existe) y si falla, el tono por defecto.
-        val mp = listOfNotNull(Sounds.uri(this, current?.sound), alarmUri()).firstNotNullOfOrNull { tryPlay(it, attrs) }
+        val propio = if (nivel == 0) Sounds.uri(this, current?.sound) else null
+        val porDefecto = if (nivel <= 1) alarmUri() else null
+        var suenaPropio = false
+        val mp = listOfNotNull(propio, porDefecto).firstNotNullOfOrNull { uri ->
+            tryPlay(uri, attrs)?.also { suenaPropio = uri == propio }
+        }
 
         if (mp != null) {
             player = mp
+            // Si el reproductor falla a mitad (archivo corrupto, HAL), nunca queda en silencio.
+            mp.setOnErrorListener { _, what, extra ->
+                Log.w(TAG, "Error de reproducción en plena alarma ($what/$extra)")
+                if (player === mp && ringing) {
+                    handler.removeCallbacks(rampTick ?: Runnable {})
+                    booster?.release()
+                    booster = null
+                    player = null
+                    runCatching { mp.release() }
+                    startSound(if (suenaPropio) 1 else 2)
+                }
+                true
+            }
             // Loudness sobre el tono (si el HAL no lo soporta, se ignora); sube con la rampa.
             booster = runCatching {
                 LoudnessEnhancer(mp.audioSessionId).apply { setTargetGain((BOOST_START_MB * volumeScale()).toInt()); enabled = true }
@@ -156,6 +178,7 @@ class AlarmRingService : Service() {
     private fun rampVolume() {
         val rampMs = (current?.rampSeconds ?: Prefs.alarmRampSeconds) * 1000L
         val scale = volumeScale()
+        handler.removeCallbacks(rampTick ?: Runnable {})
         val tick = object : Runnable {
             override fun run() {
                 val p = player ?: return
@@ -167,6 +190,7 @@ class AlarmRingService : Service() {
                 if (t < 1f) handler.postDelayed(this, 500)
             }
         }
+        rampTick = tick
         handler.post(tick)
     }
 

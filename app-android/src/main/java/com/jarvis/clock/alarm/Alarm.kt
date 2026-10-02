@@ -110,7 +110,19 @@ data class Alarm(
             require(l.isNotEmpty() && l.length <= 40) { "label debe tener entre 1 y 40 caracteres" }
             a = a.copy(label = l)
         }
-        if (p.has("days")) a = a.copy(days = parseDays(p.opt("days")))
+        if (p.has("days")) {
+            val raw = p.opt("days")
+            val d = parseDays(raw)
+            val pideDias = when (raw) {
+                is String -> raw.trim().lowercase().let { it.isNotEmpty() && it != "once" && it != "none" }
+                is JSONArray -> raw.length() > 0
+                is Number -> true
+                else -> false
+            }
+            // Un valor no reconocido no debe convertir una alarma repetitiva en puntual en silencio.
+            if (pideDias && d == 0) throw IllegalArgumentException("days no válido: usa weekdays, weekend, daily o mon,tue…")
+            a = a.copy(days = d)
+        }
         if (p.has("enabled")) {
             a = a.copy(enabled = p.opt("enabled") as? Boolean ?: throw IllegalArgumentException("enabled debe ser true o false"))
         }
