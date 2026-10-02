@@ -77,7 +77,7 @@ exigen la cookie):
 | `GET /api/settings` | `GET /settings` |
 | `PUT /api/settings` | `PUT /settings` |
 | `GET /api/sounds` | `GET /sounds` |
-| `POST /api/sounds` | `POST /sounds?name=…` (multipart en el panel → cuerpo crudo al reloj) |
+| `POST /api/sounds` | `POST /sounds?name=…` (cuerpo crudo, `?name=`; se reenvía igual al reloj) |
 | `DELETE /api/sounds/{name}` | `DELETE /sounds/{name}` |
 | `POST /api/sounds/preview` | `POST /sounds/preview` |
 | `POST /api/do/{stop,snooze,test,speak,briefing}` | `POST /alarm` stop/snooze, `POST /timer` 10 s, `POST /speak`, `POST /briefing` |
