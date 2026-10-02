@@ -16,3 +16,6 @@ __pycache__/
 device-kit/backups/
 device-kit/logs/
 logs/
+
+# superpowers (scratch de planes)
+.superpowers/
