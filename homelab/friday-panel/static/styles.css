@@ -3,6 +3,7 @@
   --accent: #4fc3f7; --bad: #ef5350; --ok: #66bb6a; --radius: 14px;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, sans-serif; }
 body { padding: 0 16px calc(140px + env(safe-area-inset-bottom)); }
 #top { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 6px; }
@@ -33,6 +34,10 @@ input[type=text], input[type=number], input[type=time], input[type=password], se
 input[type=time] { font-size: 34px; text-align: center; }
 .field.error input, .field.error select { border-color: var(--bad); }
 .field .err { color: var(--bad); font-size: 13px; margin-top: 4px; }
+.opt.error { border-top-color: var(--bad); }
+.opt.error .err { color: var(--bad); font-size: 13px; margin-top: 4px; }
+.switch.error { color: var(--bad); }
+.switch.error .err { color: var(--bad); font-size: 13px; margin-top: 4px; }
 .switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; min-height: 44px; }
 .switch input { width: 48px; height: 28px; accent-color: var(--accent); flex: none; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }

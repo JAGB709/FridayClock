@@ -27,7 +27,8 @@ function h(tag, attrs = {}, ...kids) {
   for (const [k, v] of Object.entries(attrs)) {
     if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
     else if (k === "class") el.className = v;
-    else if (k === "checked" || k === "value" || k === "disabled" || k === "selected") el[k] = v;
+    else if (k === "checked" || k === "disabled" || k === "selected") el[k] = v;
+    else if (k === "value" && v != null) el[k] = v;
     else if (v !== false && v != null) el.setAttribute(k, v === true ? "" : v);
   }
   for (const kid of kids.flat()) {
@@ -43,6 +44,7 @@ async function api(method, path, body, raw) {
   else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
   let res;
   try { res = await fetch(path, opt); } catch {
+    setConn(false, "● Sin conexión con el panel");
     return { ok: false, status: 0, data: { error: "Sin conexión con el panel" } };
   }
   const data = await res.json().catch(() => ({}));
@@ -51,7 +53,7 @@ async function api(method, path, body, raw) {
   return { ok: res.ok && data.ok !== false, status: res.status, data };
 }
 
-const errText = (r) => r.data.error || `Error ${r.status}`;
+const errText = (r) => r.data.login_required ? "Inicia sesión" : (r.data.error || `Error ${r.status}`);
 
 // Si hace falta login, la pantalla de login manda: no la tapamos con un error.
 function showError(r) {
@@ -59,9 +61,9 @@ function showError(r) {
   view.replaceChildren(h("div", { class: "card bad" }, errText(r)));
 }
 
-function setConn(on) {
+function setConn(on, msg) {
   const p = $("#conn");
-  p.textContent = on ? "● Conectado" : "● El reloj no responde";
+  p.textContent = on ? "● Conectado" : (msg || "● El reloj no responde");
   p.className = "pill " + (on ? "on" : "off");
 }
 
@@ -121,7 +123,7 @@ const dirty = () => !!form && (form.isNew || Object.keys(changes()).length > 0);
 function updateSaveBar() { $("#savebar").hidden = !dirty(); }
 
 $("#save").addEventListener("click", async () => {
-  if (!form) return;
+  if (!form || !dirty()) return;
   const b = $("#save");
   b.disabled = true; b.textContent = "Guardando…";
   const r = await form.onSave(form.isNew ? form.current : changes());
@@ -145,7 +147,13 @@ function markErrors() {
     const msg = form && form.errors[el.dataset.key];
     el.classList.toggle("error", !!msg);
     el.querySelector(".err")?.remove();
-    if (msg) el.append(h("div", { class: "err" }, msg));
+    if (msg) {
+      if (el.classList.contains("switch")) {
+        el.after(h("div", { class: "err" }, msg));
+      } else {
+        el.append(h("div", { class: "err" }, msg));
+      }
+    }
   });
 }
 
@@ -198,7 +206,7 @@ async function renderHome() {
   const s = r.data;
   const time = new Date(s.time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
   const next = s.next_alarm ? `${s.next_alarm.time} · ${s.next_alarm.label} (${whenText(s.next_alarm.at)})` : "ninguna";
-  const say = h("input", { type: "text", placeholder: "Decir en el reloj…", maxlength: "300" });
+  const say = h("input", { id: "say", type: "text", placeholder: "Decir en el reloj…", maxlength: "300" });
   view.replaceChildren(
     h("div", { class: "card" }, h("div", { class: "clock" }, time), h("div", { class: "muted" }, "Próxima alarma: ", next)),
     s.ringing ? h("div", { class: "card ring stack" }, h("strong", {}, "🔔 Sonando: ", s.ringing_label || "Alarma"),
@@ -211,7 +219,10 @@ async function renderHome() {
 }
 
 setInterval(() => {
-  if (document.visibilityState === "visible" && route.tab === "home" && !form && !loginShown) renderHome();
+  if (document.visibilityState === "visible" && route.tab === "home" && !form && !loginShown) {
+    const say = $("#say");
+    if (!say || (document.activeElement !== say && !say.value)) renderHome();
+  }
 }, 10_000);
 
 // ------------------------------------------------------------------ Alarmas
@@ -231,12 +242,13 @@ async function renderAlarms() {
       onchange: async (ev) => {
         const r2 = await api("PUT", `/api/alarms/${a.id}`, { enabled: ev.target.checked });
         if (!r2.ok) { ev.target.checked = !ev.target.checked; toast(errText(r2), true); }
-        else toast(ev.target.checked ? "✓ Alarma activada" : "✓ Alarma desactivada");
+        else { toast(ev.target.checked ? "✓ Alarma activada" : "✓ Alarma desactivada"); ev.target.closest(".alarm").classList.toggle("disabled", !ev.target.checked); }
       },
     });
+    const label = h("label", { class: "switch", onclick: (ev) => ev.stopPropagation() }, toggle);
     return h("div", { class: "alarm" + (a.enabled ? "" : " disabled"), onclick: () => go({ tab: "alarms", edit: a.id }) },
       h("div", {}, h("div", { class: "t" }, a.time), h("div", { class: "muted" }, `${a.label} · ${daysText(a.days)}`)),
-      h("label", { class: "switch" }, toggle));
+      label);
   };
 
   view.replaceChildren(
@@ -258,7 +270,7 @@ function optionNumber(key, label, min, max, unit, fallback) {
   const input = h("input", {
     type: "number", min, max, step: "1", inputmode: "numeric",
     value: general ? "" : form.current[key], disabled: general,
-    oninput: (ev) => { if (ev.target.value !== "") setField(key, Number(ev.target.value)); },
+    oninput: (ev) => { setField(key, ev.target.value === "" ? "" : Number(ev.target.value)); },
   });
   const check = h("input", {
     type: "checkbox", checked: general,
@@ -375,7 +387,7 @@ function settingInput(f) {
   const isNum = f.type === "int" || f.type === "float";
   const input = h("input", isNum
     ? { type: "number", min: f.min, max: f.max, step: f.type === "int" ? "1" : "any", inputmode: f.type === "int" ? "numeric" : "decimal", value: v,
-        oninput: (ev) => { if (ev.target.value !== "") setField(f.key, Number(ev.target.value)); } }
+        oninput: (ev) => { setField(f.key, ev.target.value === "" ? "" : Number(ev.target.value)); } }
     : { type: "text", maxlength: f.max_len, value: v, oninput: (ev) => setField(f.key, ev.target.value) });
   const range = isNum ? ` (${f.min}–${f.max})` : "";
   return h("label", { class: "field", "data-key": f.key }, h("span", {}, f.label + range), input);
