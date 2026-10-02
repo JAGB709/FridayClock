@@ -214,7 +214,26 @@ La skill usa el toolset `terminal` de Hermes.
 Para configurar alarmas y ajustes desde el móvil. El token del reloj se queda en el
 homelab. Ver [`homelab/friday-panel/README.md`](homelab/friday-panel/README.md):
 
-    cd homelab/friday-panel && cp .env.example .env   # CLOCK_URL, CLOCK_TOKEN, PANEL_BIND
+Variables de entorno (`.env`):
+
+| Variable | Valor |
+|---|---|
+| `CLOCK_URL` | obligatoria, `http://100.x.y.z:8080` (IP Tailscale del reloj) |
+| `CLOCK_TOKEN` | obligatoria, el token del reloj |
+| `PANEL_BIND` | por defecto `127.0.0.1`; pon la IP de Tailscale del homelab (`tailscale ip -4`) |
+| `PANEL_PORT` | `8770` |
+| `PANEL_PASSWORD` | opcional; si la pones, el panel pide contraseña |
+| `CLOCK_TIMEOUT_S` | `5` |
+
+    cd homelab/friday-panel
+    cat > .env <<'FIN'
+    CLOCK_URL=http://100.x.y.z:8080
+    CLOCK_TOKEN=
+    PANEL_BIND=100.a.b.c
+    PANEL_PORT=8770
+    PANEL_PASSWORD=
+    CLOCK_TIMEOUT_S=5
+    FIN
     docker compose up -d --build
 
 Abre `http://<ip-tailscale-homelab>:8770` en el móvil. Si el reloj está apagado o sin
@@ -375,7 +394,7 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /alarm` | `{"action":"set","time":"07:30","label":"Trabajo","days":"weekdays"}` | crear (`days`: `""`, `daily`, `weekdays`, `weekend`, `["mon","fri"]`) |
 | `POST /alarm` | `{"action":"cancel","id":3}` · `{"time":"07:30"}` · `{"all":true}` | borrar |
 | `POST /alarm` | `{"action":"enable"/"disable","id":3}` · `{"action":"stop"/"snooze"}` | activar, desactivar, apagar o posponer |
-| `POST /alarm` | `{"action":"update","id":3,"time":"06:45","max_volume":60}` | editar solo lo enviado; opciones por alarma: `sound`, `max_volume` (1–100), `ramp_s` (0–600), `snooze_min` (1–60), `briefing`; `null` = ajuste general |
+| `POST /alarm` | `{"action":"update","id":3,"time":"06:45","max_volume":60}` | editar solo lo enviado; opciones por alarma: `sound`, `max_volume` (1–100), `ramp_s` (0–600), `snooze_min` (1–60), `briefing`; `null` = ajuste general; `sound` = `file:<nombre>` o `system:content://…` (tonos del reloj; otras URLs se rechazan). El panel devuelve los errores como `{"ok":false,"error":…}` |
 | `GET /settings` | — | ajustes (despertador, pantalla, voz, ubicación) y su esquema |
 | `PUT /settings` | `{"snooze_min":10,"night_brightness":5}` | cambiar ajustes; todo o nada (`400` con `errors` por clave); se aplican al instante |
 | `GET /sounds` | — | tonos del sistema y sonidos subidos |

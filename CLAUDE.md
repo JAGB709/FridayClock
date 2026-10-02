@@ -22,9 +22,14 @@ cd hermes-skill && pip install pytest httpx && pytest -q
 pytest -q tests/test_clock_tools.py -k <name>               # single test
 ```
 
+Homelab panel (`homelab/friday-panel`, FastAPI + web móvil):
+```bash
+cd homelab/friday-panel && pip install -r requirements.txt pytest && pytest -q   # usa el mock de hermes-skill
+```
+
 Homelab bridge: CI only does `python -m py_compile homelab/clock-bridge/bridge.py`. Run with `docker compose up -d --build` (copy `.env.example` → `.env`) or `python bridge.py`; health at `:8765/health`.
 
-CI (`.github/workflows/build-apk.yml`) runs exactly: Android unit tests + assemble, then py_compile of `bridge.py` and `clock.py`, then the skill's pytest.
+CI (`.github/workflows/build-apk.yml`) runs exactly: Android unit tests + assemble, then py_compile of `bridge.py`, `clock.py` and `homelab/friday-panel/app.py`, then the skill's pytest and the panel's pytest.
 
 ## Architecture
 
