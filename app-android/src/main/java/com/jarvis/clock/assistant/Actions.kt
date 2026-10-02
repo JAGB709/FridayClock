@@ -34,7 +34,11 @@ object Actions {
     fun execute(ctx: Context, a: JSONObject): JSONObject = when (a.optString("type")) {
         "set_alarm" -> {
             val (h, m) = parseTime(a.optString("time")) ?: error("time debe ser HH:MM")
-            val alarm = AlarmScheduler.create(ctx, h, m, Alarm.parseDays(a.opt("days")), a.optString("label", "Alarma"))
+            // Se validan las opciones antes de gastar un id.
+            val draft = Alarm(0, h, m, Alarm.parseDays(a.opt("days")), a.optString("label", "Alarma").ifBlank { "Alarma" })
+                .withOptions(a)
+            val alarm = draft.copy(id = AlarmStore.newId(ctx))
+            AlarmScheduler.save(ctx, alarm)
             ok().put("alarm", alarm.toJson())
         }
         "cancel_alarm", "delete_alarm" -> {
@@ -54,6 +58,13 @@ object Actions {
             val r = AlarmScheduler.setEnabled(ctx, a.getInt("id"), a.optString("type") == "enable_alarm")
                 ?: error("no existe la alarma ${a.optInt("id")}")
             ok().put("alarm", r.toJson())
+        }
+        "update_alarm" -> {
+            val cur = AlarmStore.get(ctx, a.optInt("id", -1)) ?: error("no existe la alarma ${a.optInt("id")}")
+            require(!cur.isAbsolute) { "los temporizadores y las pospuestas no se editan" }
+            val n = cur.withPatch(a)
+            AlarmScheduler.save(ctx, n) // guarda y reprograma con la hora nueva
+            ok().put("alarm", n.toJson())
         }
         "set_timer" -> {
             val secs = a.optLong("seconds").takeIf { it > 0 } ?: error("seconds > 0")

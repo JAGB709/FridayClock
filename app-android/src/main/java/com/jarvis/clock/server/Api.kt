@@ -68,6 +68,7 @@ class Api(private val ctx: Context) {
         if (action == "list") return Response.ok(JSONObject().put("alarms", alarms()))
         val type = when (action) {
             "set" -> "set_alarm"
+            "update" -> "update_alarm"
             "cancel", "delete" -> "cancel_alarm"
             "enable" -> "enable_alarm"
             "disable" -> "disable_alarm"
@@ -75,7 +76,17 @@ class Api(private val ctx: Context) {
             "snooze" -> "snooze_alarm"
             else -> return Response.error(400, "action desconocida: $action")
         }
-        return result(Actions.execute(ctx, JSONObject(j.toString()).put("type", type)))
+        if (action == "update" && AlarmStore.get(ctx, j.optInt("id", -1)) == null) {
+            return Response.error(404, "no existe la alarma ${j.optInt("id")}")
+        }
+        // require()/error() de Actions y Alarm son errores del cliente, no del reloj.
+        return try {
+            result(Actions.execute(ctx, JSONObject(j.toString()).put("type", type)))
+        } catch (e: IllegalArgumentException) {
+            Response.error(400, e.message ?: "petición no válida")
+        } catch (e: IllegalStateException) {
+            Response.error(400, e.message ?: "petición no válida")
+        }
     }
 
     private fun timer(j: JSONObject): Response {
