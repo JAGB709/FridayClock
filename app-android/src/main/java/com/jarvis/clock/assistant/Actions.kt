@@ -97,12 +97,7 @@ object Actions {
         return target
     }
 
-    fun parseTime(s: String): Pair<Int, Int>? {
-        val m = Regex("^(\\d{1,2})[:.h](\\d{2})$").find(s.trim()) ?: return null
-        val h = m.groupValues[1].toInt()
-        val mi = m.groupValues[2].toInt()
-        return if (h in 0..23 && mi in 0..59) h to mi else null
-    }
+    fun parseTime(s: String): Pair<Int, Int>? = Alarm.parseTime(s)
 
     private fun ok() = JSONObject().put("ok", true)
 }
