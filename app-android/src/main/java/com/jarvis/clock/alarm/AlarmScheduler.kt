@@ -28,12 +28,12 @@ object AlarmScheduler {
         return createAbsolute(ctx, at, label.ifBlank { "Temporizador" }, Alarm.Kind.TIMER)
     }
 
-    fun snooze(ctx: Context, label: String, minutes: Int = Prefs.snoozeMinutes): Alarm =
-        createAbsolute(ctx, System.currentTimeMillis() + minutes * 60_000L, label, Alarm.Kind.SNOOZE)
+    fun snooze(ctx: Context, label: String, minutes: Int = Prefs.snoozeMinutes, from: Alarm? = null): Alarm =
+        createAbsolute(ctx, System.currentTimeMillis() + minutes * 60_000L, label, Alarm.Kind.SNOOZE, from)
 
-    private fun createAbsolute(ctx: Context, at: Long, label: String, kind: Alarm.Kind): Alarm {
+    private fun createAbsolute(ctx: Context, at: Long, label: String, kind: Alarm.Kind, options: Alarm? = null): Alarm {
         val cal = java.util.Calendar.getInstance().apply { timeInMillis = at }
-        val a = Alarm(
+        val base = Alarm(
             id = AlarmStore.newId(ctx),
             hour = cal.get(java.util.Calendar.HOUR_OF_DAY),
             minute = cal.get(java.util.Calendar.MINUTE),
@@ -41,6 +41,7 @@ object AlarmScheduler {
             triggerAt = at,
             kind = kind,
         )
+        val a = if (options != null) base.withOptionsOf(options) else base
         save(ctx, a)
         return a
     }

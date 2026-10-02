@@ -7,6 +7,7 @@ import com.jarvis.clock.Prefs
 import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.alarm.AlarmStore
+import com.jarvis.clock.alarm.Sounds
 import com.jarvis.clock.assistant.Actions
 import com.jarvis.clock.assistant.Assistant
 import com.jarvis.clock.server.HttpServer.Request
@@ -25,6 +26,10 @@ class Api(private val ctx: Context) {
             return Response.error(503, "reloj sin token configurado; ponlo en Ajustes o por ADB")
         }
         if (!authorized(r)) return Response.error(401, "token inválido")
+        if (r.method == "DELETE" && r.path.startsWith("/sounds/")) {
+            val name = java.net.URLDecoder.decode(r.path.removePrefix("/sounds/"), "UTF-8")
+            return if (Sounds.delete(ctx, name)) Response.ok() else Response.error(404, "no existe el sonido $name")
+        }
         return when (r.method to r.path) {
             "GET" to "/status" -> Response.ok(status())
             "GET" to "/alarms" -> Response.ok(JSONObject().put("alarms", alarms()))
@@ -59,6 +64,18 @@ class Api(private val ctx: Context) {
             "POST" to "/actions" -> Response.ok(JSONObject().put("results", Actions.executeAll(ctx, r.json().optJSONArray("actions"))))
             "GET" to "/settings" -> result(Actions.execute(ctx, JSONObject().put("type", "get_settings")))
             "PUT" to "/settings" -> result(Actions.execute(ctx, JSONObject().put("type", "set_settings").put("settings", r.json())))
+            "GET" to "/sounds" -> Response.ok(JSONObject().put("sounds", Sounds.list(ctx)))
+            "POST" to "/sounds" -> try {
+                Response.ok(JSONObject().put("id", Sounds.save(ctx, r.query["name"].orEmpty(), r.body)))
+            } catch (e: IllegalArgumentException) {
+                Response.error(400, e.message ?: "sonido no válido")
+            }
+            "POST" to "/sounds/preview" -> try {
+                val id = r.json().optString("id").ifEmpty { null }
+                if (Sounds.preview(ctx, id)) Response.ok() else Response.error(409, "hay una alarma sonando")
+            } catch (e: IllegalArgumentException) {
+                Response.error(400, e.message ?: "no se pudo reproducir")
+            }
             else -> Response.error(404, "no existe ${r.method} ${r.path}")
         }
     }
