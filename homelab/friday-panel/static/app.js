@@ -39,7 +39,7 @@ function h(tag, attrs = {}, ...kids) {
 }
 
 async function api(method, path, body, raw) {
-  const opt = { method, headers: {}, credentials: "same-origin" };
+  const opt = { method, headers: { "X-Friday": "1" }, credentials: "same-origin" };
   if (raw !== undefined) { opt.body = raw; opt.headers["Content-Type"] = "application/octet-stream"; }
   else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
   let res;
@@ -140,7 +140,11 @@ $("#save").addEventListener("click", async () => {
   }
 });
 
-$("#discard").addEventListener("click", () => { form = null; updateSaveBar(); render(route); });
+$("#discard").addEventListener("click", () => {
+  const eraNueva = form && form.isNew;
+  form = null; updateSaveBar();
+  render(eraNueva ? { tab: "alarms" } : route);
+});
 
 function markErrors() {
   document.querySelectorAll("[data-key]").forEach((el) => {
@@ -197,6 +201,7 @@ async function doAction(name, body) {
   const r = await api("POST", `/api/do/${name}`, body);
   toast(r.ok ? "✓ Hecho" : errText(r), !r.ok);
   if (route.tab === "home") renderHome();
+  return r.ok;
 }
 
 async function renderHome() {
@@ -214,7 +219,7 @@ async function renderHome() {
     h("div", { class: "card stack" }, h("h2", {}, "Acciones rápidas"),
       btn("Probar alarma en 10 s", () => doAction("test")),
       btn("Buenos días", () => doAction("briefing"), "ghost"),
-      h("div", { class: "row between" }, say, btn("Decir", () => { doAction("speak", { text: say.value }); say.value = ""; }, "small"))),
+      h("div", { class: "row between" }, say, btn("Decir", async () => { if (await doAction("speak", { text: say.value })) say.value = ""; }, "small"))),
   );
 }
 

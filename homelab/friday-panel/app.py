@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 STATIC = Path(__file__).parent / "static"
 MAX_SOUND_BYTES = 5 * 1024 * 1024
+UPLOAD_TIMEOUT_S = 60.0  # subir un sonido tarda más que una petición normal
 SOUND_EXTS = {".mp3", ".ogg", ".wav", ".m4a"}
 COOKIE = "friday_panel"
 COOKIE_MAX_AGE = 30 * 24 * 3600
@@ -51,6 +52,8 @@ class Config:
         token = os.getenv("CLOCK_TOKEN", "")
         if not url or not token:
             raise SystemExit("Faltan CLOCK_URL o CLOCK_TOKEN en el entorno (.env)")
+        if not url.startswith(("http://", "https://")):
+            raise SystemExit("CLOCK_URL debe empezar por http:// o https:// (p. ej. http://100.x.y.z:8080)")
         return cls(url, token, os.getenv("PANEL_PASSWORD", ""), float(os.getenv("CLOCK_TIMEOUT_S", "5")))
 
 
@@ -71,12 +74,13 @@ def create_app(cfg: Config) -> FastAPI:
         return _error(400, "Petición no válida")
 
     async def clock(method: str, path: str, *, json: dict | None = None,
-                    content: bytes | None = None, params: dict | None = None) -> JSONResponse:
+                    content: bytes | None = None, params: dict | None = None,
+                    timeout: float | None = None) -> JSONResponse:
         headers = {"X-Auth-Token": cfg.clock_token}
         if content is not None:
             headers["Content-Type"] = "application/octet-stream"
         try:
-            async with httpx.AsyncClient(base_url=cfg.clock_url, timeout=cfg.timeout_s) as c:
+            async with httpx.AsyncClient(base_url=cfg.clock_url, timeout=timeout or cfg.timeout_s) as c:
                 r = await c.request(method, path, json=json, content=content, params=params, headers=headers)
         except httpx.HTTPError:
             return _error(502, "El reloj no responde")
@@ -91,6 +95,15 @@ def create_app(cfg: Config) -> FastAPI:
         if not isinstance(data, dict):
             data = {"ok": r.is_success, "data": data}
         return JSONResponse(data, status_code=r.status_code)
+
+    @app.middleware("http")
+    async def require_header(request: Request, call_next):
+        # Anti-CSRF: un formulario de otra web no puede añadir cabeceras propias.
+        p = request.url.path
+        if request.method not in ("GET", "HEAD", "OPTIONS") and (p.startswith("/api/") or p == "/login") \
+                and request.headers.get("x-friday") != "1":
+            return _error(403, "Petición no permitida")
+        return await call_next(request)
 
     @app.middleware("http")
     async def require_login(request: Request, call_next):
@@ -162,7 +175,7 @@ def create_app(cfg: Config) -> FastAPI:
             return _error(400, "Archivo vacío")
         if len(data) > MAX_SOUND_BYTES:
             return _error(413, "El sonido supera 5 MB")
-        return await clock("POST", "/sounds", content=data, params={"name": name})
+        return await clock("POST", "/sounds", content=data, params={"name": name}, timeout=UPLOAD_TIMEOUT_S)
 
     @app.delete("/api/sounds/{name}")
     async def delete_sound(name: str):

@@ -83,6 +83,31 @@ def _validate_settings(patch: dict) -> tuple[dict, dict]:
     return values, errors
 
 
+def _sound_ok(v) -> bool:
+    """file:<nombre> o system:content:// / android.resource:// con algo detrás."""
+    if not isinstance(v, str):
+        return False
+    if v.startswith("file:"):
+        return bool(v[5:])
+    if v.startswith("system:"):
+        rest = v[7:]
+        return rest.startswith(("content://", "android.resource://")) and bool(rest.split("://", 1)[1])
+    return False
+
+
+DAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def _days_ok(v) -> bool:
+    """Lista de mon..sun, o texto "", daily, weekdays, weekend o lista separada por comas."""
+    if isinstance(v, list):
+        return all(d in DAY_KEYS for d in v)
+    if isinstance(v, str):
+        s = v.strip().lower()
+        return s in ("", "daily", "weekdays", "weekend") or all(p.strip() in DAY_KEYS for p in s.split(","))
+    return False
+
+
 def _apply_alarm_patch(a: dict, body: dict) -> str | None:
     """Aplica el parche sobre una copia; devuelve un error o None."""
     if "time" in body:
@@ -94,6 +119,8 @@ def _apply_alarm_patch(a: dict, body: dict) -> str | None:
             return "label debe tener entre 1 y 40 caracteres"
         a["label"] = body["label"].strip()
     if "days" in body:
+        if not _days_ok(body["days"]):
+            return "days no válido: usa weekdays, weekend, daily o mon,tue…"
         a["days"] = body["days"]
     if "enabled" in body:
         if not isinstance(body["enabled"], bool):
@@ -110,20 +137,8 @@ def _apply_alarm_patch(a: dict, body: dict) -> str | None:
                     return f"{k} debe estar entre {lo} y {hi}"
             elif k == "briefing" and not isinstance(v, bool):
                 return "briefing debe ser true, false o null"
-            elif k == "sound":
-                if not isinstance(v, str):
-                    return "sound debe ser file:<nombre> o system:content://…"
-                if v.startswith("file:"):
-                    if not v[5:]:  # file: followed by empty string
-                        return "sound debe ser file:<nombre> o system:content://…"
-                elif v.startswith("system:"):
-                    rest = v[7:]  # what comes after "system:"
-                    if not (rest.startswith("content://") or rest.startswith("android.resource://")):
-                        return "sound debe ser file:<nombre> o system:content://…"
-                    if not rest.split("://", 1)[1]:  # no content after the protocol
-                        return "sound debe ser file:<nombre> o system:content://…"
-                else:
-                    return "sound debe ser file:<nombre> o system:content://…"
+            elif k == "sound" and not _sound_ok(v):
+                return "sound debe ser file:<nombre> o system:content://…"
         a[k] = v
     return None
 
@@ -237,9 +252,9 @@ class Handler(BaseHTTPRequestHandler):
             if not (isinstance(t, str) and TIME_RE.match(t)):
                 return self._send(400, {"ok": False, "error": "time debe ser HH:MM"})
             aid = _next_id[0]
-            a = {"id": aid, "time": t, "label": body.get("label", "Alarma"), "days": body.get("days", []),
+            a = {"id": aid, "time": t, "label": body.get("label", "Alarma"), "days": [],
                  "enabled": True, "kind": "alarm", **{k: None for k in OPTION_KEYS}}
-            err = _apply_alarm_patch(a, {k: body[k] for k in OPTION_KEYS if k in body})
+            err = _apply_alarm_patch(a, {k: body[k] for k in ("days", "enabled", *OPTION_KEYS) if k in body})
             if err:
                 return self._send(400, {"ok": False, "error": err})
             _next_id[0] += 1

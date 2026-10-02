@@ -117,3 +117,27 @@ def test_invalid_request_format(client):
     assert r.status_code == 400 and r.json()["ok"] is False
     r = client.post("/api/alarms", json="not a dict")
     assert r.status_code == 400 and r.json()["ok"] is False
+
+
+def test_alarm_created_disabled_stays_disabled(client):
+    r = client.post("/api/alarms", json={"time": "07:30", "enabled": False})
+    assert r.status_code == 200 and r.json()["alarm"]["enabled"] is False
+    r = client.post("/api/alarms", json={"time": "07:30", "enabled": "no"})
+    assert r.status_code == 400 and "enabled" in r.json()["error"]
+
+
+def test_update_with_invalid_days_rejected(client):
+    a = client.post("/api/alarms", json={"time": "07:30", "days": ["mon"]}).json()["alarm"]
+    r = client.put(f"/api/alarms/{a['id']}", json={"days": "lunes,martes"})
+    assert r.status_code == 400 and "days" in r.json()["error"]
+
+
+def test_post_without_csrf_header_is_forbidden(clock_url):
+    from fastapi.testclient import TestClient
+    from app import Config, create_app
+
+    bare = TestClient(create_app(Config(clock_url=clock_url, clock_token=TOKEN)))
+    r = bare.post("/api/do/stop")
+    assert r.status_code == 403 and r.json() == {"ok": False, "error": "Petición no permitida"}
+    assert bare.post("/login", json={}).status_code == 403
+    assert bare.get("/api/status").status_code == 200

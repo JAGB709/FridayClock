@@ -32,7 +32,7 @@ def make_client(clock_url):
 
     def _make(**kw):
         cfg = Config(clock_url=kw.pop("clock_url", clock_url), clock_token=kw.pop("clock_token", TOKEN), **kw)
-        return TestClient(create_app(cfg))
+        return TestClient(create_app(cfg), headers={"X-Friday": "1"})
     return _make
 
 
