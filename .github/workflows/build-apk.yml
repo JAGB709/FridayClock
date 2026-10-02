@@ -42,8 +42,14 @@ jobs:
         run: |
           python -m py_compile homelab/clock-bridge/bridge.py
           python -m py_compile hermes-skill/mi-smart-clock/scripts/clock.py
+          python -m py_compile homelab/friday-panel/app.py
       - name: Tests de la skill de Hermes
         working-directory: hermes-skill
         run: |
           pip install -q pytest httpx
+          pytest -q
+      - name: Tests del panel web
+        working-directory: homelab/friday-panel
+        run: |
+          pip install -q -r requirements.txt pytest
           pytest -q

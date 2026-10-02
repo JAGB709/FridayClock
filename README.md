@@ -30,7 +30,7 @@ Agent + Qwen (Ollama)** en tu homelab. Reloj y homelab se hablan por **Tailscale
 > **Índice**
 > 1. [Qué necesitas](#qué-necesitas)
 > 2. [Parte A — Montar el cerebro en el homelab](#parte-a--montar-el-cerebro-en-el-homelab)
->    (Ollama+Qwen · Hermes · voz Whisper/Piper · Tailscale · skill)
+>    (Ollama+Qwen · Hermes · voz Whisper/Piper · Tailscale · skill · panel web)
 > 3. [Parte B — Liberar el reloj e instalar Friday](#parte-b--liberar-el-reloj-e-instalar-friday)
 >    (GSI/root · Tailscale · app · voz del reloj · Bluetooth)
 > 4. [Parte C — Conectarlo todo y probar](#parte-c--conectarlo-todo-y-probar)
@@ -209,6 +209,17 @@ JSON
 
 La skill usa el toolset `terminal` de Hermes.
 
+### A8. Panel web para el móvil (`homelab/friday-panel`)
+
+Para configurar alarmas y ajustes desde el móvil. El token del reloj se queda en el
+homelab. Ver [`homelab/friday-panel/README.md`](homelab/friday-panel/README.md):
+
+    cd homelab/friday-panel && cp .env.example .env   # CLOCK_URL, CLOCK_TOKEN, PANEL_BIND
+    docker compose up -d --build
+
+Abre `http://<ip-tailscale-homelab>:8770` en el móvil. Si el reloj está apagado o sin
+red, el panel lo dice y no guarda nada; las alarmas siguen sonando igual.
+
 **Fin de la Parte A.** Ya tienes cerebro (Qwen+Hermes), voz (Whisper+Piper) y red (Tailscale).
 
 ---
@@ -364,6 +375,13 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /alarm` | `{"action":"set","time":"07:30","label":"Trabajo","days":"weekdays"}` | crear (`days`: `""`, `daily`, `weekdays`, `weekend`, `["mon","fri"]`) |
 | `POST /alarm` | `{"action":"cancel","id":3}` · `{"time":"07:30"}` · `{"all":true}` | borrar |
 | `POST /alarm` | `{"action":"enable"/"disable","id":3}` · `{"action":"stop"/"snooze"}` | activar, desactivar, apagar o posponer |
+| `POST /alarm` | `{"action":"update","id":3,"time":"06:45","max_volume":60}` | editar solo lo enviado; opciones por alarma: `sound`, `max_volume` (1–100), `ramp_s` (0–600), `snooze_min` (1–60), `briefing`; `null` = ajuste general |
+| `GET /settings` | — | ajustes (despertador, pantalla, voz, ubicación) y su esquema |
+| `PUT /settings` | `{"snooze_min":10,"night_brightness":5}` | cambiar ajustes; todo o nada (`400` con `errors` por clave); se aplican al instante |
+| `GET /sounds` | — | tonos del sistema y sonidos subidos |
+| `POST /sounds?name=gallo.mp3` | audio en crudo (≤ 5 MB; mp3/ogg/wav/m4a) | subir un sonido de alarma |
+| `DELETE /sounds/{nombre}` | — | borrar un sonido subido |
+| `POST /sounds/preview` | `{"id":"file:gallo.mp3"}` | escuchar 5 s (`409` si suena una alarma) |
 | `POST /timer` | `{"minutes":10,"label":"Pasta"}` · `{"action":"cancel"}` | temporizador |
 | `POST /display` | `{"type":"text"/"html"/"image"/"url","content":"…","duration_ms":20000}` · `{"action":"clear"}` | pantalla completa |
 | `POST /speak` | `{"text":"Hola"}` | decir en voz alta |
@@ -386,6 +404,7 @@ curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
 app-android/     App Friday del reloj (Kotlin, sin dependencias de runtime)
 hermes-skill/    Skill y tools de Hermes para controlar el reloj + tests
 homelab/         clock-bridge: Whisper (STT) -> Hermes -> Piper (TTS)
+homelab/friday-panel/  panel web (FastAPI + web móvil) para alarmas y ajustes
 device-kit/      Scripts para rootear/liberar el reloj (DRY_RUN por defecto)
 docs/            research-notes, decisions, voz-friday, altavoz-bluetooth
 RUNBOOK.md       Liberar el reloj: pasos con el reloj delante
