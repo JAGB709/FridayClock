@@ -10,6 +10,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.media.audiofx.LoudnessEnhancer
 import android.media.ToneGenerator
 import android.net.Uri
 import android.os.Build
@@ -32,6 +33,7 @@ class AlarmRingService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var player: MediaPlayer? = null
     private var beeper: ToneGenerator? = null
+    private var booster: LoudnessEnhancer? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var startedAt = 0L
     private var label = ""
@@ -89,11 +91,11 @@ class AlarmRingService : Service() {
     }
 
     private fun ensureAudible() {
+        // El altavoz de este reloj es flojo: la alarma siempre al máximo del sistema.
         val am = getSystemService(AudioManager::class.java)
         val max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-        val min = (max * 0.7f).toInt().coerceAtLeast(1)
-        if (am.getStreamVolume(AudioManager.STREAM_ALARM) < min) {
-            am.setStreamVolume(AudioManager.STREAM_ALARM, min, 0)
+        if (am.getStreamVolume(AudioManager.STREAM_ALARM) < max) {
+            am.setStreamVolume(AudioManager.STREAM_ALARM, max, 0)
         }
     }
 
@@ -119,6 +121,10 @@ class AlarmRingService : Service() {
 
         if (mp != null) {
             player = mp
+            // Loudness sobre el tono (si el HAL no lo soporta, se ignora); sube con la rampa.
+            booster = runCatching {
+                LoudnessEnhancer(mp.audioSessionId).apply { setTargetGain(BOOST_START_MB); enabled = true }
+            }.onFailure { Log.w(TAG, "Sin LoudnessEnhancer", it) }.getOrNull()
             rampVolume()
         } else {
             // Una GSI limpia puede venir sin tonos: pitidos sintetizados por el stream de alarma.
@@ -133,9 +139,10 @@ class AlarmRingService : Service() {
             override fun run() {
                 val p = player ?: return
                 val t = if (rampMs <= 0) 1f else ((System.currentTimeMillis() - startedAt).toFloat() / rampMs).coerceIn(0f, 1f)
-                // Curva cuadrática: al principio sube muy despacio.
-                val v = 0.03f + 0.97f * t * t
+                // Arranca ya fuerte y sube con curva suave hasta el máximo.
+                val v = RAMP_FLOOR + (1f - RAMP_FLOOR) * t * t
                 runCatching { p.setVolume(v, v) }
+                booster?.let { b -> runCatching { b.setTargetGain((BOOST_START_MB + (BOOST_MAX_MB - BOOST_START_MB) * t * t).toInt()) } }
                 if (t < 1f) handler.postDelayed(this, 500)
             }
         }
@@ -179,6 +186,8 @@ class AlarmRingService : Service() {
 
     private fun stopSound() {
         handler.removeCallbacksAndMessages(null)
+        booster?.release()
+        booster = null
         player?.let { runCatching { it.stop() }; it.release() }
         player = null
         beeper?.release()
@@ -217,6 +226,10 @@ class AlarmRingService : Service() {
 
     companion object {
         private const val TAG = "AlarmRingService"
+        // La alarma arranca ya fuerte y sigue subiendo hasta el máximo.
+        private const val RAMP_FLOOR = 0.8f        // volumen inicial del reproductor (0..1)
+        private const val BOOST_START_MB = 600     // loudness inicial: +6 dB
+        private const val BOOST_MAX_MB = 1200      // loudness final: +12 dB
         private const val NOTIF_ID = 42
         const val ACTION_DISMISS = "com.jarvis.clock.DISMISS"
         const val ACTION_SNOOZE = "com.jarvis.clock.SNOOZE"

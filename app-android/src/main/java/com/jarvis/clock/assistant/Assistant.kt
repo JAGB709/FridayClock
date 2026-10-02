@@ -68,6 +68,10 @@ class Assistant private constructor(ctx: Context) {
         }
         stopAll()
         val gen = generation.incrementAndGet()
+        if (app.getSystemService(AudioManager::class.java).isMicrophoneMute) {
+            say(gen, "El micrófono está silenciado. Pulsa el botón del centro para activarlo.")
+            return
+        }
         when {
             backend.configured -> worker.execute { listenWithBackend(gen) }
             SpeechRecognizer.isRecognitionAvailable(app) -> main.post { listenWithRecognizer(gen) }
@@ -149,6 +153,7 @@ class Assistant private constructor(ctx: Context) {
             return
         }
         if (gen != generation.get()) return
+        Log.i(TAG, "stt='$text'")
         if (text.isBlank() || LocalIntents.parse(text) is LocalIntents.Intent.StopTalking) { post(State.IDLE); return }
         post(State.THINKING, text)
         respond(gen, process(text))

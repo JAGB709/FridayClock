@@ -56,6 +56,14 @@ class Backend(private val ctx: Context) {
     fun transcribe(wav: ByteArray): String =
         request("/v1/stt", wav, "audio/wav").optString("text").trim()
 
+    data class Wake(val called: Boolean, val text: String, val command: String)
+
+    /** Escucha continua: ¿este fragmento de voz llama a Friday? Devuelve además la orden que lo acompaña. */
+    fun wake(wav: ByteArray): Wake {
+        val o = request("/v1/wake", wav, "audio/wav", readTimeoutMs = 20_000)
+        return Wake(o.optBoolean("wake"), o.optString("text"), o.optString("command").trim())
+    }
+
     /** Estado del reloj que el LLM necesita para razonar ("¿a qué hora suena mañana?"). */
     fun context(): JSONObject {
         val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date())
@@ -76,12 +84,12 @@ class Backend(private val ctx: Context) {
     private fun post(path: String, body: JSONObject): JSONObject =
         request(path, body.toString().toByteArray(), "application/json; charset=utf-8")
 
-    private fun request(path: String, body: ByteArray, contentType: String): JSONObject {
+    private fun request(path: String, body: ByteArray, contentType: String, readTimeoutMs: Int = 90_000): JSONObject {
         val c = URL(Prefs.backendUrl + path).openConnection() as HttpURLConnection
         try {
             c.requestMethod = "POST"
             c.connectTimeout = 5_000
-            c.readTimeout = 90_000 // Hermes puede tardar si usa herramientas
+            c.readTimeout = readTimeoutMs // Hermes puede tardar si usa herramientas
             c.doOutput = true
             c.setFixedLengthStreamingMode(body.size)
             c.setRequestProperty("Content-Type", contentType)

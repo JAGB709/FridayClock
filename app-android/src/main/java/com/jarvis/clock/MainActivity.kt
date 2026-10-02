@@ -11,16 +11,20 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Base64
+import android.util.Log
 import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -36,6 +40,7 @@ import com.jarvis.clock.Events.State
 import com.jarvis.clock.alarm.AlarmActivity
 import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
+import com.jarvis.clock.assistant.Actions
 import com.jarvis.clock.assistant.Assistant
 import com.jarvis.clock.ui.AlarmsActivity
 import com.jarvis.clock.ui.SettingsActivity
@@ -55,6 +60,8 @@ import kotlin.concurrent.thread
 class MainActivity : Activity() {
 
     private val handler = Handler(Looper.getMainLooper())
+    private lateinit var keyLabel: TextView
+    private val hideKeyLabel = Runnable { keyLabel.visibility = View.GONE }
     private val es = Locale("es", "ES")
     private val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
     private val dateFmt = SimpleDateFormat("EEEE, d 'de' MMMM", es)
@@ -81,6 +88,11 @@ class MainActivity : Activity() {
     private val assistant by lazy { Assistant.get(this) }
 
     private val listener = Events.Listener { onEvent(it) }
+
+    private companion object {
+        /** Paso de los botones de volumen, en % (el stream multimedia tiene 100 niveles). */
+        const val VOLUME_STEP = 5
+    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -123,6 +135,40 @@ class MainActivity : Activity() {
         Events.unregister(listener)
         destroyWebView()
         super.onDestroy()
+    }
+
+    // Los botones físicos no hacen nada en el framework de este reloj (los gestionaba el
+    // asistente de Google, deshabilitado): como launcher los recogemos nosotros.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val t0 = SystemClock.uptimeMillis()
+        val handled = when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> { stepVolume(VOLUME_STEP); true }
+            KeyEvent.KEYCODE_VOLUME_DOWN -> { stepVolume(-VOLUME_STEP); true }
+            KeyEvent.KEYCODE_MUTE -> { toggleMicMute(); true } // KEY_MICMUTE del botón central
+            else -> false
+        }
+        if (handled) {
+            Log.i("Keys", "key=$keyCode repeticion=${event.repeatCount} cola=${t0 - event.eventTime}ms manejo=${SystemClock.uptimeMillis() - t0}ms")
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun stepVolume(delta: Int) {
+        showKeyLabel("Volumen ${Actions.setVolume(this, 0, delta)}%")
+    }
+
+    private fun toggleMicMute() {
+        val am = getSystemService(AudioManager::class.java)
+        am.isMicrophoneMute = !am.isMicrophoneMute
+        showKeyLabel(if (am.isMicrophoneMute) "Micrófono silenciado" else "Micrófono activado")
+    }
+
+    private fun showKeyLabel(text: String) {
+        keyLabel.text = text
+        keyLabel.visibility = View.VISIBLE
+        handler.removeCallbacks(hideKeyLabel)
+        handler.postDelayed(hideKeyLabel, 1200)
     }
 
     @Deprecated("Deprecated in Java")
@@ -177,6 +223,14 @@ class MainActivity : Activity() {
         bar.addView(mic, LinearLayout.LayoutParams(dp(64), dp(64)).apply { marginStart = dp(40); marginEnd = dp(40) })
         bar.addView(settingsBtn, LinearLayout.LayoutParams(dp(56), dp(56)))
         root.addView(bar, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply { bottomMargin = dp(8) })
+
+        // Aviso instantáneo de los botones físicos (un Toast tarda en aparecer y se encola).
+        keyLabel = TextView(this).apply {
+            textSize = 26f; setTextColor(Color.WHITE); visibility = View.GONE
+            setPadding(dp(18), dp(8), dp(18), dp(8))
+            background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(Color.parseColor("#CC101820")) }
+        }
+        root.addView(keyLabel, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(16) })
 
         // Panel del asistente
         panel = LinearLayout(this).apply {

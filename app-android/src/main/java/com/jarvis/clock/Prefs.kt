@@ -23,6 +23,11 @@ object Prefs {
         set(v) = sp.edit().putString(K_TOKEN, v.trim()).apply()
 
     /** Enlazar el servidor solo a la IP de Tailscale si existe (si no, a todas con token). */
+    /** Escucha continua: Friday se activa al oír su nombre, sin pulsar el micro. */
+    var wakeWord: Boolean
+        get() = sp.getBoolean("wake_word", true)
+        set(v) = sp.edit().putBoolean("wake_word", v).apply()
+
     var bindTailscaleOnly: Boolean
         get() = sp.getBoolean("bind_ts_only", false)
         set(v) = sp.edit().putBoolean("bind_ts_only", v).apply()
@@ -62,7 +67,7 @@ object Prefs {
 
     /** Segundos que tarda la alarma en subir de volumen mínimo a máximo. */
     var alarmRampSeconds: Int
-        get() = sp.getInt("alarm_ramp_s", 45)
+        get() = sp.getInt("alarm_ramp_s", 20)
         set(v) = sp.edit().putInt("alarm_ramp_s", v.coerceIn(0, 600)).apply()
 
     /** Minutos que suena la alarma antes de posponerse sola. */

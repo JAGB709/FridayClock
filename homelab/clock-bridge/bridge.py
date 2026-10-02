@@ -26,6 +26,9 @@ import wave
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
+
+from wake import split_wake
 
 log = logging.getLogger("clock-bridge")
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -47,6 +50,16 @@ LANGUAGE = os.getenv("LANGUAGE", "es")
 
 PIPER_BIN = os.getenv("PIPER_BIN", "piper")
 PIPER_MODEL = os.getenv("PIPER_MODEL", "")  # p.ej. /models/es_ES-davefx-medium.onnx
+# Motor de voz: "kokoro" (más natural, 82M, CPU) o "piper". Si Kokoro falla, se usa Piper.
+TTS_ENGINE = os.getenv("TTS_ENGINE", "piper").lower()
+KOKORO_MODEL = os.getenv("KOKORO_MODEL", "/models/kokoro-v1.0.onnx")
+KOKORO_VOICES = os.getenv("KOKORO_VOICES", "/models/voices-v1.0.bin")
+KOKORO_VOICE = os.getenv("KOKORO_VOICE", "ef_dora")  # español, mujer
+KOKORO_LANG = os.getenv("KOKORO_LANG", "es")
+KOKORO_SPEED = float(os.getenv("KOKORO_SPEED", "1.0"))
+VOICE_TARGET_RMS = float(os.getenv("VOICE_TARGET_RMS", "0.18"))  # RMS objetivo (0..1 de fondo de escala)
+VOICE_MAX_GAIN = float(os.getenv("VOICE_MAX_GAIN", "6"))
+PIPER_SPEAKER = os.getenv("PIPER_SPEAKER", "")  # id de hablante en voces multi-hablante (sharvard: 1 = mujer)
 
 VOICE_INSTRUCTIONS = """\
 Estás respondiendo por el altavoz de un reloj despertador inteligente (Mi Smart Clock)
@@ -97,31 +110,117 @@ def whisper():
         return _whisper
 
 
-def transcribe(wav_bytes: bytes) -> str:
+# Pistas de vocabulario para Whisper: despertador y, en la escucha continua, el nombre de Friday.
+STT_PROMPT = "Pon una alarma a las siete y media. Temporizador de cinco minutos. ¿Qué tiempo hace?"
+WAKE_EN_MAX_BYTES = 16000 * 2 * 3  # solo fragmentos de hasta 3 s (WAV de 16 kHz, 16 bits)
+WAKE_PROMPT = "Friday. Friday, ¿qué hora es? Friday, pon una alarma. Friday, apaga la luz."
+
+
+def _decode_wav(wav_bytes: bytes):
+    """float32 mono 16 kHz desde un WAV de 16 bits (remuestrea si hace falta).
+
+    Evita que faster-whisper decodifique con PyAV, que rompe con cada versión nueva.
+    """
+    import numpy as np
+
+    with wave.open(io.BytesIO(wav_bytes)) as w:
+        if w.getsampwidth() != 2:
+            return None
+        ch, rate = w.getnchannels(), w.getframerate()
+        x = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32768.0
+    if ch > 1:
+        x = x[: len(x) - len(x) % ch].reshape(-1, ch).mean(axis=1)
+    if rate != 16000 and len(x):
+        n = int(len(x) * 16000 / rate)
+        x = np.interp(np.linspace(0, len(x) - 1, n), np.arange(len(x)), x).astype(np.float32)
+    return x
+
+
+def transcribe(wav_bytes: bytes, prompt: str = STT_PROMPT, language: str = LANGUAGE) -> str:
+    audio = _decode_wav(wav_bytes)
     segments, _ = whisper().transcribe(
-        io.BytesIO(wav_bytes),
-        language=LANGUAGE,
+        audio if audio is not None else io.BytesIO(wav_bytes),
+        language=language,
         beam_size=1,
         vad_filter=True,
-        # Pista de vocabulario típico de un despertador.
-        initial_prompt="Pon una alarma a las siete y media. Temporizador de cinco minutos. ¿Qué tiempo hace?",
+        initial_prompt=prompt,
     )
     return " ".join(s.text.strip() for s in segments).strip()
 
 # --------------------------------------------------------------------------- TTS
 
+def _louder(raw: bytes) -> bytes:
+    """Sube el nivel de la voz de Piper: el altavoz del reloj es flojo.
+
+    Ganancia hacia un RMS objetivo (máx. x6) con limitador suave (tanh) para no saturar.
+    """
+    import numpy as np
+
+    x = np.frombuffer(raw, dtype="<i2").astype(np.float32)
+    if x.size == 0:
+        return raw
+    rms = float(np.sqrt(np.mean(x * x)))
+    if rms < 1.0:
+        return raw
+    gain = min(VOICE_MAX_GAIN, VOICE_TARGET_RMS * 32768.0 / rms)
+    if gain <= 1.05:
+        return raw
+    return (np.tanh(x * gain / 32768.0) * 32767.0).astype("<i2").tobytes()
+
+
+_kokoro = None
+_kokoro_lock = threading.Lock()
+
+
+def _wav_b64(pcm: bytes, rate: int) -> str:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def synthesize_kokoro(text: str) -> str | None:
+    global _kokoro
+    import numpy as np
+
+    with _kokoro_lock:
+        if _kokoro is None:
+            from kokoro_onnx import Kokoro
+
+            log.info("Cargando Kokoro (%s, voz %s)…", KOKORO_MODEL, KOKORO_VOICE)
+            _kokoro = Kokoro(KOKORO_MODEL, KOKORO_VOICES)
+        samples, rate = _kokoro.create(text, voice=KOKORO_VOICE, speed=KOKORO_SPEED, lang=KOKORO_LANG)
+    pcm = (np.clip(samples, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
+    return _wav_b64(_louder(pcm), int(rate))
+
+
 def synthesize(text: str) -> str | None:
+    """WAV en base64 (Kokoro o Piper), o None para que el reloj use su TTS local."""
+    if TTS_ENGINE == "kokoro" and text:
+        try:
+            return synthesize_kokoro(text)
+        except Exception:  # noqa: BLE001 - Piper es el plan B
+            log.exception("Kokoro falló; pruebo con Piper")
+    return synthesize_piper(text)
+
+
+def synthesize_piper(text: str) -> str | None:
     """WAV en base64 con Piper, o None para que el reloj use su TTS local."""
     if not PIPER_MODEL or not text or not shutil.which(PIPER_BIN):
         return None
     try:
         raw = subprocess.run(
-            [PIPER_BIN, "--model", PIPER_MODEL, "--output-raw"],
+            [PIPER_BIN, "--model", PIPER_MODEL, "--output-raw"]
+            + (["--speaker", PIPER_SPEAKER] if PIPER_SPEAKER else []),
             input=text.encode("utf-8"),
             capture_output=True,
             timeout=30,
             check=True,
         ).stdout
+        raw = _louder(raw)
         cfg = json.load(open(PIPER_MODEL + ".json", encoding="utf-8"))
         rate = cfg.get("audio", {}).get("sample_rate", 22050)
         buf = io.BytesIO()
@@ -198,9 +297,28 @@ async def stt(request: Request) -> dict:
     if not audio:
         raise HTTPException(400, "cuerpo vacío")
     t0 = time.time()
-    text = transcribe(audio)
+    text = await run_in_threadpool(transcribe, audio)
     log.info("STT %.1fs: %s", time.time() - t0, text)
     return {"text": text}
+
+
+@app.post("/v1/wake", dependencies=[Depends(check_token)])
+async def wake(request: Request) -> dict:
+    """Escucha continua: el reloj manda cada fragmento de voz; aquí se mira si llama a Friday."""
+    audio = await request.body()
+    if not audio:
+        raise HTTPException(400, "cuerpo vacío")
+    t0 = time.time()
+    text = await run_in_threadpool(transcribe, audio, WAKE_PROMPT)
+    called, command = split_wake(text)
+    if not called and len(audio) < WAKE_EN_MAX_BYTES:
+        # "Friday" es inglés: en un fragmento corto Whisper en español la deforma. Segundo intento en inglés.
+        text_en = await run_in_threadpool(transcribe, audio, WAKE_PROMPT, "en")
+        called, command = split_wake(text_en)
+        if called:
+            text = text_en
+    log.info("WAKE %s %.1fs: %r -> %r", "SI" if called else "no", time.time() - t0, text, command)
+    return {"wake": called, "text": text, "command": command}
 
 
 @app.post("/v1/assist", dependencies=[Depends(check_token)])

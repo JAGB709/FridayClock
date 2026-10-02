@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import com.jarvis.clock.assistant.WakeWord
 import com.jarvis.clock.server.Api
 import com.jarvis.clock.server.HttpServer
 import com.jarvis.clock.server.NetUtil
@@ -17,6 +18,7 @@ import com.jarvis.clock.server.NetUtil
 class ClockService : Service() {
 
     private var server: HttpServer? = null
+    private var wake: WakeWord? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -38,6 +40,7 @@ class ClockService : Service() {
             startForeground(NOTIF_ID, n)
         }
         server = newServer()
+        wake = WakeWord(this).also { it.start() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -54,6 +57,7 @@ class ClockService : Service() {
     }
 
     override fun onDestroy() {
+        wake?.stop()
         server?.stop()
         super.onDestroy()
     }

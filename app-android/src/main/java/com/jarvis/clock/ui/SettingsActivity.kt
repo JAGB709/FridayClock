@@ -51,6 +51,7 @@ class SettingsActivity : Activity() {
         text("Nombre del asistente", Prefs.assistantName) { Prefs.assistantName = it }
         text("URL del puente del homelab", Prefs.backendUrl, hint = "http://100.x.y.z:8765") { Prefs.backendUrl = it }
         text("Token del puente", Prefs.backendToken) { Prefs.backendToken = it }
+        switch("Activar al decir \"${Prefs.assistantName}\" (escucha continua)", Prefs.wakeWord) { Prefs.wakeWord = it }
         switch("Seguir escuchando si pregunta algo", Prefs.followUp) { Prefs.followUp = it }
         decimal("Velocidad de voz (0.5–2)", Prefs.ttsRate.toDouble()) { Prefs.ttsRate = it.toFloat() }
         button("Probar conexión con Hermes") { testBackend() }
@@ -82,6 +83,13 @@ class SettingsActivity : Activity() {
 
         section("Altavoz Bluetooth")
         button("Modo altavoz Bluetooth (conectar el móvil)") { startActivity(Intent(this, BluetoothActivity::class.java)) }
+
+        section("Red")
+        button("Wi-Fi (elegir red y contraseña)") { startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) }
+        button("Tailscale") {
+            // La VPN mantiene el reloj accesible desde el homelab en cualquier Wi-Fi.
+            packageManager.getLaunchIntentForPackage("com.tailscale.ipn")?.let { startActivity(it) }
+        }
 
         section("Sistema")
         button("Elegir launcher predeterminado") { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
