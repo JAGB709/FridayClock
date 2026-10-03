@@ -169,7 +169,32 @@ class VoiceRecorder {
             rec.release()
         }
         if (!speaking || voiced < WAKE_MIN_VOICED_FRAMES) return null
-        return wav(normalize(pcm.toByteArray()))
+        val raw = pcm.toByteArray()
+        val hf = highFrequencyRatio(raw)
+        if (hf < MIN_HF_RATIO) {
+            // Golpes en la mesa, pulsaciones de botones...: mucho volumen pero casi sin agudos.
+            Log.i(TAG, "descartado por no sonar a voz (hf=${"%.4f".format(hf)})")
+            return null
+        }
+        return wav(normalize(raw))
+    }
+
+    /**
+     * Energía de la señal diferenciada / energía total. La voz (centroide ~1-2 kHz) da 0,05-0,2;
+     * un golpe (energía por debajo de 200 Hz) da menos de 0,005.
+     */
+    private fun highFrequencyRatio(pcm: ByteArray): Double {
+        val bb = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN)
+        var energy = 0.0
+        var diff = 0.0
+        var prev = 0
+        for (i in 0 until pcm.size / 2) {
+            val v = bb.getShort(i * 2).toInt()
+            energy += v.toDouble() * v
+            if (i > 0) diff += (v - prev).toDouble() * (v - prev)
+            prev = v
+        }
+        return if (energy <= 0.0) 0.0 else diff / energy
     }
 
     /** El micro de este reloj entrega la voz muy floja: se sube hasta un nivel que Whisper entienda bien. */
@@ -203,6 +228,7 @@ class VoiceRecorder {
         private const val NOISE_FACTOR = 3.0
         private const val MIN_THRESHOLD = 25.0    // este micro es muy flojo: el ruido real ronda 3-6 y la voz 150-500
         private const val TARGET_PEAK = 16_000
+        private const val MIN_HF_RATIO = 0.02       // por debajo, no es voz sino un golpe
         private const val PREROLL_FRAMES = 10       // 0,3 s previos al inicio de la voz
         private const val WAKE_END_SILENCE_MS = 700 // fin de frase en la escucha continua
         private const val WAKE_MAX_SECONDS = 7
