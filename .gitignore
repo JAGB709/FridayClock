@@ -19,3 +19,11 @@ logs/
 
 # superpowers (scratch de planes)
 .superpowers/
+
+# device-kit: binarios de terceros, APKs, volcados y restos de mtkclient/magiskboot (no se versionan)
+device-kit/vendor/*
+!device-kit/vendor/README.md
+device-kit/hwparam.json
+device-kit/.state
+.state
+hwparam.json
