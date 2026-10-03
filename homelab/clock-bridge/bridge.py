@@ -46,6 +46,7 @@ SESSION_IDLE_MIN = float(os.getenv("SESSION_IDLE_MIN", "15"))
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE = os.getenv("WHISPER_COMPUTE", "int8")
+WHISPER_THREADS = int(os.getenv("WHISPER_THREADS", "6"))
 LANGUAGE = os.getenv("LANGUAGE", "es")
 
 PIPER_BIN = os.getenv("PIPER_BIN", "piper")
@@ -106,13 +107,18 @@ def whisper():
             from faster_whisper import WhisperModel
 
             log.info("Cargando Whisper %s (%s/%s)…", WHISPER_MODEL, WHISPER_DEVICE, WHISPER_COMPUTE)
-            _whisper = WhisperModel(WHISPER_MODEL, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE)
+            _whisper = WhisperModel(
+                WHISPER_MODEL, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE, cpu_threads=WHISPER_THREADS
+            )
         return _whisper
 
 
 # Pistas de vocabulario para Whisper: despertador y, en la escucha continua, el nombre de Friday.
 STT_PROMPT = "Pon una alarma a las siete y media. Temporizador de cinco minutos. ¿Qué tiempo hace?"
-WAKE_EN_MAX_BYTES = 16000 * 2 * 3  # solo fragmentos de hasta 3 s (WAV de 16 kHz, 16 bits)
+WAKE_HEAD_SAMPLES = 16000 * 2  # se analiza el arranque (2 s): ahí va el nombre
+# Segundo intento en inglés ("Friday" es inglés): duplica el coste por fragmento, así que es opcional.
+WAKE_TRY_EN = os.getenv("WAKE_TRY_EN", "0") == "1"
+WAKE_EN_MAX_SAMPLES = 16000 * 3
 WAKE_PROMPT = "Friday. Friday, ¿qué hora es? Friday, pon una alarma. Friday, apaga la luz."
 
 
@@ -138,8 +144,12 @@ def _decode_wav(wav_bytes: bytes):
 
 def transcribe(wav_bytes: bytes, prompt: str = STT_PROMPT, language: str = LANGUAGE) -> str:
     audio = _decode_wav(wav_bytes)
+    return transcribe_audio(audio if audio is not None else io.BytesIO(wav_bytes), prompt, language)
+
+
+def transcribe_audio(audio, prompt: str = STT_PROMPT, language: str = LANGUAGE) -> str:
     segments, _ = whisper().transcribe(
-        audio if audio is not None else io.BytesIO(wav_bytes),
+        audio,
         language=language,
         beam_size=1,
         vad_filter=True,
@@ -302,6 +312,33 @@ async def stt(request: Request) -> dict:
     return {"text": text}
 
 
+def _check_wake(wav: bytes) -> tuple[bool, str, str]:
+    """(¿llama a Friday?, orden, texto). Dos etapas para no gastar CPU en conversaciones ajenas:
+
+    1. Se transcribe solo el arranque del fragmento (donde va el nombre), en español y, si es corto,
+       también en inglés ("Friday" es inglés y Whisper en español la deforma).
+    2. Solo si ese arranque llama a Friday se transcribe el fragmento entero para sacar la orden.
+    """
+    audio = _decode_wav(wav)
+    if audio is None:
+        text = transcribe(wav, WAKE_PROMPT)
+        called, command = split_wake(text)
+        return called, command, text
+    head = audio[:WAKE_HEAD_SAMPLES]
+    text = transcribe_audio(head, WAKE_PROMPT)
+    called, command = split_wake(text)
+    if not called and WAKE_TRY_EN and len(head) <= WAKE_EN_MAX_SAMPLES:
+        text_en = transcribe_audio(head, WAKE_PROMPT, "en")
+        called, command = split_wake(text_en)
+        text = text_en if called else text
+    if called and len(audio) > len(head):
+        full = transcribe_audio(audio, WAKE_PROMPT)
+        ok, full_command = split_wake(full)
+        if ok:
+            text, command = full, full_command
+    return called, command, text
+
+
 @app.post("/v1/wake", dependencies=[Depends(check_token)])
 async def wake(request: Request) -> dict:
     """Escucha continua: el reloj manda cada fragmento de voz; aquí se mira si llama a Friday."""
@@ -309,16 +346,14 @@ async def wake(request: Request) -> dict:
     if not audio:
         raise HTTPException(400, "cuerpo vacío")
     t0 = time.time()
-    text = await run_in_threadpool(transcribe, audio, WAKE_PROMPT)
-    called, command = split_wake(text)
-    if not called and len(audio) < WAKE_EN_MAX_BYTES:
-        # "Friday" es inglés: en un fragmento corto Whisper en español la deforma. Segundo intento en inglés.
-        text_en = await run_in_threadpool(transcribe, audio, WAKE_PROMPT, "en")
-        called, command = split_wake(text_en)
-        if called:
-            text = text_en
-    log.info("WAKE %s %.1fs: %r -> %r", "SI" if called else "no", time.time() - t0, text, command)
-    return {"wake": called, "text": text, "command": command}
+    called, command, text = await run_in_threadpool(_check_wake, audio)
+    if called:
+        log.info("WAKE SI %.1fs: %r -> %r", time.time() - t0, text, command)
+    else:
+        # No se registra lo que se dice en la habitación: solo que hubo voz y cuánto costó.
+        log.info("WAKE no %.1fs (%d bytes de audio)", time.time() - t0, len(audio))
+        text = ""
+    return {"wake": called, "text": text if called else "", "command": command}
 
 
 @app.post("/v1/assist", dependencies=[Depends(check_token)])
