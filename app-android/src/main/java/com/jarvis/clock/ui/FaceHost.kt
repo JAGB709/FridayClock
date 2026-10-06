@@ -40,9 +40,11 @@ class FaceHost private constructor(private val ctx: Context, private val listene
 
     val view: WebView = WebView(ctx)
     private val main = Handler(Looper.getMainLooper())
-    private val pending = ArrayList<String>()
+    private class Job(val js: String, val check: String?)
+    private val pending = ArrayList<Job>()
     private var ready = false
     private var released = false
+    @Volatile private var dead = false
 
     init {
         configure()
@@ -71,9 +73,14 @@ class FaceHost private constructor(private val ctx: Context, private val listene
             override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse =
                 intercept(request.url)
             override fun onPageFinished(v: WebView, url: String) {
-                ready = true
-                pending.forEach { v.evaluateJavascript(it, null) }
-                pending.clear()
+                // La página puede cargar y el motor no arrancar (error de JS): se comprueba antes de usarlo.
+                v.evaluateJavascript("typeof window.Face") { r ->
+                    if (released || dead) return@evaluateJavascript
+                    if (r != "\"object\"") { fail("el motor no cargó"); return@evaluateJavascript }
+                    ready = true
+                    pending.forEach { run(it) }
+                    pending.clear()
+                }
             }
             override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) fail("carga: ${error.description}")
@@ -86,10 +93,21 @@ class FaceHost private constructor(private val ctx: Context, private val listene
     }
 
     private fun fail(reason: String) {
+        dead = true
         if (!released) main.post { if (!released) listener.onFailure(reason) }
     }
 
-    private fun intercept(uri: Uri): WebResourceResponse {
+    private fun notFound() =
+        WebResourceResponse("text/plain", "utf-8", 404, "No encontrado", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+
+    private fun intercept(uri: Uri): WebResourceResponse = try {
+        interceptOrNull(uri) ?: notFound()
+    } catch (e: Exception) {
+        Log.w(TAG, "intercept falló para $uri", e)
+        notFound()
+    }
+
+    private fun interceptOrNull(uri: Uri): WebResourceResponse? {
         if (uri.host == HOST) {
             val path = uri.path.orEmpty()
             if (path.startsWith("/assets/face/")) {
@@ -107,7 +125,7 @@ class FaceHost private constructor(private val ctx: Context, private val listene
                 if (f != null) return WebResourceResponse(Backgrounds.mimeOf(f.name), null, FileInputStream(f))
             }
         }
-        return WebResourceResponse("text/plain", "utf-8", 404, "No encontrado", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+        return null
     }
 
     /** Puente hacia Android: solo existe en la página del motor. */
@@ -119,15 +137,24 @@ class FaceHost private constructor(private val ctx: Context, private val listene
         @JavascriptInterface fun error(msg: String) { Log.w(TAG, "motor: $msg") }
     }
 
-    fun render(design: JSONObject, opts: JSONObject) =
-        eval("Face.render(JSON.parse(${JSONObject.quote(design.toString())}), JSON.parse(${JSONObject.quote(opts.toString())}))")
+    fun render(design: JSONObject, opts: JSONObject) {
+        val js = "(function(){try{Face.render(JSON.parse(${JSONObject.quote(design.toString())}), " +
+            "JSON.parse(${JSONObject.quote(opts.toString())}));return 'ok'}catch(e){return 'error: '+e.message}})()"
+        eval(Job(js, "render"))
+    }
 
-    fun setData(data: JSONObject) = eval("Face.setData(JSON.parse(${JSONObject.quote(data.toString())}))")
+    fun setData(data: JSONObject) = eval(Job("Face.setData(JSON.parse(${JSONObject.quote(data.toString())}))", null))
 
-    private fun eval(js: String) {
-        if (released) return
-        if (!ready) { pending.add(js); return }
-        view.evaluateJavascript(js, null)
+    private fun eval(job: Job) {
+        if (released || dead) return
+        if (!ready) { pending.add(job); return }
+        run(job)
+    }
+
+    private fun run(job: Job) {
+        if (released || dead) return
+        if (job.check == null) { view.evaluateJavascript(job.js, null); return }
+        view.evaluateJavascript(job.js) { r -> if (r != "\"ok\"") fail("${job.check}: $r") }
     }
 
     fun release() {

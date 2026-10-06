@@ -460,7 +460,7 @@ class MainActivity : Activity() {
             is Event.Display -> showDisplay(e)
             Event.DisplayClear -> hideDisplay()
             Event.AlarmsChanged -> { refreshNextAlarm(); pushFaceData() }
-            is Event.AlarmRinging -> { endPreview.run(); runCatching { startActivity(AlarmActivity.intent(this, e.label)) } }
+            is Event.AlarmRinging -> { handler.removeCallbacks(endPreview); endPreview.run(); runCatching { startActivity(AlarmActivity.intent(this, e.label)) } }
             Event.AlarmStopped -> { refreshNextAlarm(); pushFaceData() }
             is Event.Brightness -> { brightnessOverride = e.percent; applyNightMode() }
             is Event.SettingsChanged -> {
@@ -532,6 +532,13 @@ class MainActivity : Activity() {
                 val wv = WebView(this).apply {
                     setBackgroundColor(Color.BLACK)
                     settings.javaScriptEnabled = true
+                    // Todos los WebView comparten renderer: si muere, sin esto se cae la app entera.
+                    webViewClient = object : android.webkit.WebViewClient() {
+                        override fun onRenderProcessGone(v: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                            hideDisplay()
+                            return true
+                        }
+                    }
                     if (e.type == "url") loadUrl(e.content)
                     else loadDataWithBaseURL(null, e.content, "text/html", "utf-8", null)
                 }
