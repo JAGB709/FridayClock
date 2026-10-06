@@ -2,7 +2,7 @@
 
 Panel web del despertador Friday, para usar desde el móvil por Tailscale. Ver y
 editar alarmas (con sonido, volumen, subida, posponer y buenos días propios), cambiar
-ajustes y acciones rápidas. Los cambios se aplican en el reloj al pulsar **Guardar**.
+ajustes, editor de **Pantallas** (temas, pantallas en rejilla, perfiles por hora y pantalla de alarma) con vista previa exacta y prueba de 30 s en el reloj, y acciones rápidas. Los cambios se aplican en el reloj al pulsar **Guardar**.
 
 Variables de entorno (`.env`):
 
@@ -14,6 +14,8 @@ Variables de entorno (`.env`):
 | `PANEL_PORT` | `8770` |
 | `PANEL_PASSWORD` | opcional; si la pones, el panel pide contraseña |
 | `CLOCK_TIMEOUT_S` | `5` |
+
+**Nota:** El motor de la vista previa (`static/face/`) es una copia del del APK: tras cambiar `app-android/src/main/assets/face/` ejecuta `bash tools/sync-face.sh`.
 
 Crea el `.env` (rellena el token y las IPs):
 

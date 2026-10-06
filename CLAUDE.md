@@ -27,9 +27,15 @@ Homelab panel (`homelab/friday-panel`, FastAPI + web móvil):
 cd homelab/friday-panel && pip install -r requirements.txt pytest && pytest -q   # usa el mock de hermes-skill
 ```
 
+Screen engine and editor (`app-android/face-tests/`, `homelab/friday-panel/tests-js/`, Node v25+):
+```bash
+node --test app-android/face-tests/*.test.js homelab/friday-panel/tests-js/*.test.js   # motor de pantallas y editor
+bash tools/sync-face.sh           # copia el motor del APK al panel (--check lo verifica; la CI lo exige)
+```
+
 Homelab bridge: CI only does `python -m py_compile homelab/clock-bridge/bridge.py`. Run with `docker compose up -d --build` (create `.env`, see README A5) or `python bridge.py`; health at `:8765/health`. Useful `.env` keys beyond the README: `TTS_ENGINE=magpie|kokoro|piper` (each falls back to the next; text is stripped of emojis/markdown first), `MAGPIE_URL/KEY/VOICE/LANG` (NVIDIA Magpie via `nemo-speech serve` on the homelab host, Vulkan on the GPU, user systemd unit `nemo-speech.service`, port 8780, config in `~/nemo-speech/tts.yaml`; **pass the speaker INDEX, not the name** — the GGUF's names are shifted: 0=Aria 1=Jason 2=John 3=Leo 4=Sofia; it keeps ~1 GB of VRAM next to Qwen), `TTS_ENGINE=kokoro` (+ `KOKORO_VOICE=ef_dora`, models in `./models`), `PIPER_SPEAKER` (sharvard: 0=male, 1=female), `WHISPER_THREADS`, `WAKE_TRY_EN=1` (doubles the cost of every wake check).
 
-CI (`.github/workflows/build-apk.yml`) runs exactly: Android unit tests + assemble, then py_compile of `bridge.py`, `clock.py` and `homelab/friday-panel/app.py`, then the skill's pytest and the panel's pytest.
+CI (`.github/workflows/build-apk.yml`) runs exactly: Android unit tests + assemble, then py_compile of `bridge.py`, `clock.py` and `homelab/friday-panel/app.py`, then the skill's pytest and the panel's pytest, and in the job de homelab los tests `node --test` del motor y del editor y `tools/sync-face.sh --check`.
 
 ## Architecture
 
@@ -52,6 +58,8 @@ When adding a capability, add it to `Actions`, then wire the HTTP route in `Api.
 `assistant/Assistant.kt` orchestrates listen (VAD via `VoiceRecorder`, or system SpeechRecognizer fallback) → understand (local, then backend) → act → speak (`Tts`, bridge/Piper audio or system TTS), re-listening if Friday asks a question. `ClockService` is the foreground service hosting the HTTP server; `Events` is the shared state/event bus.
 
 Alarms (`alarm/`) use `AlarmManager.setAlarmClock()` and must never depend on network or the homelab; `BootReceiver` reschedules after reboot. Ring service falls back to beeps if the GSI has no ringtones.
+
+La carátula y la pantalla de alarma las dibuja un motor HTML/JS (`app-android/src/main/assets/face/`, ES2017 por el WebView Chrome 74) a partir de un diseño JSON validado por `design/DesignSchema.kt` y guardado en `design/DesignStore.kt`; el mismo motor, copiado a `homelab/friday-panel/static/face/`, da la vista previa del panel. `ui/FaceHost.kt` aloja el WebView; si falla, `MainActivity` vuelve a la carátula nativa. Las alarmas nunca dependen del WebView.
 
 ### Wake word ("Friday" without pressing the mic)
 

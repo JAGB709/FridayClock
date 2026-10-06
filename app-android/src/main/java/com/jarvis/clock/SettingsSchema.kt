@@ -40,7 +40,7 @@ object SettingsSchema {
     }
 
     private const val G_ALARM = "Despertador"
-    private const val G_SCREEN = "Pantalla"
+    private const val G_SCREEN = "Carátula de respaldo"
     private const val G_VOICE = "Voz y asistente"
     private const val G_PLACE = "Ubicación"
 

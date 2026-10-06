@@ -38,6 +38,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Puente y skill compilan
         run: |
           python -m py_compile homelab/clock-bridge/bridge.py
@@ -53,3 +56,9 @@ jobs:
         run: |
           pip install -q -r requirements.txt pytest
           pytest -q
+      - name: Motor de pantallas y editor (node) y copia en el panel
+        run: |
+          node --check app-android/src/main/assets/face/face.js
+          node --check homelab/friday-panel/static/pantallas.js
+          node --test app-android/face-tests/*.test.js homelab/friday-panel/tests-js/*.test.js
+          bash tools/sync-face.sh --check

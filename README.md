@@ -364,6 +364,16 @@ Si algo no responde, empieza por `clock.py status` y por `curl .../health` del p
 - **Modo noche** (rojo tenue, brillo mínimo) y anti-quemado.
 - Capa `/display` para texto, HTML, imágenes o una web.
 
+### Pantallas y temas
+
+La carátula y la pantalla de alarma se describen en un diseño (JSON): **temas** (colores, letra,
+fondo liso, degradado o imagen), **pantallas** en una rejilla de 8×6 con hora, fecha, tiempo,
+previsión, próxima alarma y texto o frase del día, y **perfiles** por hora (Mañana, Día, Noche…)
+con su tema, sus pantallas, rotación y brillo. Se edita desde la pestaña **Pantallas** del panel
+web, con una vista previa idéntica a la del reloj y un botón **▶ Probar** que lo muestra 30 s en el
+reloj sin guardarlo. Si el `WebView` del reloj fallase, vuelve la carátula nativa de siempre; las
+alarmas no dependen de él.
+
 ### Órdenes que funcionan sin red (y sin Hermes)
 | Dices | Hace |
 |---|---|
@@ -401,6 +411,13 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /sounds?name=gallo.mp3` | audio en crudo (≤ 5 MB; mp3/ogg/wav/m4a) | subir un sonido de alarma |
 | `DELETE /sounds/{nombre}` | — | borrar un sonido subido |
 | `POST /sounds/preview` | `{"id":"file:gallo.mp3"}` | escuchar 5 s (`409` si suena una alarma) |
+| `GET /design` | — | diseño de pantallas (temas, pantallas en rejilla 8×6, perfiles, pantalla de alarma) y `saved` |
+| `PUT /design` | el diseño entero | validar y guardar (todo o nada: `400` con `errors` por ruta); se aplica al instante |
+| `POST /design/reset` | — | restaurar el diseño inicial |
+| `POST /design/preview` | `{"design":{…},"seconds":30}` | mostrar un diseño 5–120 s sin guardarlo (`409` si suena una alarma) |
+| `DELETE /design/preview` | — | cancelar la prueba |
+| `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 2 MB, jpg/png/webp, ≤ 4096 px) | fondos de pantalla |
+| `GET /face/data` | — | los datos que recibe el motor: tiempo, previsión y próxima alarma |
 | `POST /timer` | `{"minutes":10,"label":"Pasta"}` · `{"action":"cancel"}` | temporizador |
 | `POST /display` | `{"type":"text"/"html"/"image"/"url","content":"…","duration_ms":20000}` · `{"action":"clear"}` | pantalla completa |
 | `POST /speak` | `{"text":"Hola"}` | decir en voz alta |
@@ -421,6 +438,7 @@ curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
 
 ```
 app-android/     App Friday del reloj (Kotlin, sin dependencias de runtime)
+app-android/src/main/assets/face/  motor de pantallas (HTML/JS), copiado a homelab/friday-panel/static/face/ con tools/sync-face.sh
 hermes-skill/    Skill y tools de Hermes para controlar el reloj + tests
 homelab/         clock-bridge: Whisper (STT) -> Hermes -> Piper (TTS)
 homelab/friday-panel/  panel web (FastAPI + web móvil) para alarmas y ajustes
