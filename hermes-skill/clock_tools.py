@@ -141,8 +141,39 @@ def clock_list_sounds() -> dict:
     return _call("GET", "/sounds")
 
 
+def clock_get_design() -> dict:
+    """Diseño de pantallas del reloj: temas, pantallas (rejilla 8×6), perfiles por hora y pantalla de alarma."""
+    return _call("GET", "/design")
+
+
+def clock_set_design(design: dict) -> dict:
+    """Guarda el diseño entero. Todo o nada: si algo no vale devuelve "errors" por ruta y no cambia nada."""
+    return _call("PUT", "/design", design)
+
+
+def clock_preview_design(design: dict, seconds: int = 30) -> dict:
+    """Muestra un diseño en el reloj `seconds` segundos (5-120) sin guardarlo."""
+    return _call("POST", "/design/preview", {"design": design, "seconds": seconds})
+
+
+def clock_cancel_preview() -> dict:
+    """Cancela la prueba de diseño en curso."""
+    return _call("DELETE", "/design/preview")
+
+
+def clock_reset_design() -> dict:
+    """Restaura el diseño inicial (borra el diseño guardado)."""
+    return _call("POST", "/design/reset", {})
+
+
+def clock_list_backgrounds() -> dict:
+    """Imágenes de fondo subidas al reloj."""
+    return _call("GET", "/backgrounds")
+
+
 TOOLS = [
     clock_status, clock_list_alarms, clock_set_alarm, clock_cancel_alarm,
     clock_set_timer, clock_say, clock_display, clock_set_volume, clock_bluetooth,
     clock_get_settings, clock_set_settings, clock_update_alarm, clock_list_sounds,
+    clock_get_design, clock_set_design, clock_preview_design, clock_cancel_preview, clock_reset_design, clock_list_backgrounds,
 ]

@@ -46,7 +46,11 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
    Es todo o nada: si un valor no vale, no se cambia ninguno y se devuelve `errors`.
 9. Editar una alarma sin borrarla: `clock.py alarm-update 3 --time 06:45 --max-volume 60`.
 10. Sonidos disponibles para las alarmas: `clock.py sounds`.
-11. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
+11. Diseño de las pantallas del reloj (temas, rejilla 8×6, perfiles por hora, pantalla de alarma):
+    `clock.py design` · `clock.py design-set diseno.json` · `clock.py design-preview diseno.json --seconds 30`
+    · `clock.py design-reset`. Guardar es todo o nada: si algo no vale, devuelve `errors` por ruta.
+12. Fondos de pantalla subidos: `clock.py backgrounds`.
+13. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
    es epoch ms del próximo disparo).
 
 ## Pitfalls

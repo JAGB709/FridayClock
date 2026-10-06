@@ -135,3 +135,48 @@ def test_update_alarm_invalid_sound(clock):
     a = clock.clock_set_alarm("07:30", label="Test")["alarm"]
     r = clock.clock_update_alarm(a["id"], {"sound": "system:http://x/y.mp3"})
     assert r["ok"] is False
+
+
+def test_get_design_is_sample_and_not_saved(clock):
+    r = clock.clock_get_design()
+    assert r["ok"] and r["saved"] is False
+    assert r["design"]["version"] == 1 and "clasico" in r["design"]["themes"]
+
+
+def test_set_design_saves(clock):
+    d = clock.clock_get_design()["design"]
+    d["themes"]["clasico"]["name"] = "Mío"
+    assert clock.clock_set_design(d)["ok"] is True
+    g = clock.clock_get_design()
+    assert g["saved"] is True and g["design"]["themes"]["clasico"]["name"] == "Mío"
+
+
+def test_set_design_overlap_changes_nothing(clock):
+    d = clock.clock_get_design()["design"]
+    d["screens"]["principal"]["elements"][1].update(x=0, y=0, w=8, h=1)
+    r = clock.clock_set_design(d)
+    assert r["ok"] is False and "screens.principal.elements.fecha" in r["errors"]
+    assert clock.clock_get_design()["saved"] is False
+
+
+def test_preview_and_cancel(clock):
+    import mock_clock_server as mock
+    d = clock.clock_get_design()["design"]
+    assert clock.clock_preview_design(d, 20)["ok"] is True
+    assert mock.PREVIEW and mock.PREVIEW[0]["seconds"] == 20
+    assert clock.clock_cancel_preview()["ok"] is True
+    assert mock.PREVIEW == []
+
+
+def test_reset_design(clock):
+    d = clock.clock_get_design()["design"]
+    d["themes"]["clasico"]["name"] = "Otro"
+    clock.clock_set_design(d)
+    r = clock.clock_reset_design()
+    assert r["ok"] and r["design"]["themes"]["clasico"]["name"] != "Otro"
+    assert clock.clock_get_design()["saved"] is False
+
+
+def test_list_backgrounds_empty(clock):
+    r = clock.clock_list_backgrounds()
+    assert r["ok"] and r["backgrounds"] == []

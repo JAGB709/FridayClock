@@ -108,6 +108,15 @@ def main():
     st.add_argument("pairs", nargs="+", help="p.ej. snooze_min=10 wake_word=false city=Sevilla")
     sub.add_parser("sounds", help="sonidos de alarma disponibles")
 
+    sub.add_parser("design", help="ver el diseño de pantallas del reloj")
+    ds = sub.add_parser("design-set", help="guardar un diseño desde un archivo JSON")
+    ds.add_argument("file")
+    dp = sub.add_parser("design-preview", help="probar un diseño (archivo JSON) en el reloj sin guardarlo")
+    dp.add_argument("file")
+    dp.add_argument("--seconds", type=int, default=30)
+    sub.add_parser("design-reset", help="restaurar el diseño inicial")
+    sub.add_parser("backgrounds", help="fondos de pantalla subidos")
+
     x = p.parse_args()
     if x.cmd == "status":
         return call("GET", "/status")
@@ -146,6 +155,16 @@ def main():
         return call("PUT", "/settings", patch)
     if x.cmd == "sounds":
         return call("GET", "/sounds")
+    if x.cmd == "design":
+        return call("GET", "/design")
+    if x.cmd == "design-set":
+        return call("PUT", "/design", json.load(open(x.file, encoding="utf-8")))
+    if x.cmd == "design-preview":
+        return call("POST", "/design/preview", {"design": json.load(open(x.file, encoding="utf-8")), "seconds": x.seconds})
+    if x.cmd == "design-reset":
+        return call("POST", "/design/reset", {})
+    if x.cmd == "backgrounds":
+        return call("GET", "/backgrounds")
     if x.cmd == "alarm-stop":
         return call("POST", "/alarm", {"action": "stop"})
     if x.cmd == "alarm-snooze":

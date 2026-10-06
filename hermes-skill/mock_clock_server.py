@@ -49,6 +49,41 @@ OPTION_KEYS = ("sound", "max_volume", "ramp_s", "snooze_min", "briefing")
 OPTION_RANGES = {"max_volume": (1, 100), "ramp_s": (0, 600), "snooze_min": (1, 60)}
 TIME_RE = re.compile(r"^\d{2}:\d{2}$")
 
+FACE_VERSION = "mock"
+SAMPLE_DESIGN = {
+    "version": 1,
+    "themes": {
+        "clasico": {"name": "Clásico", "bg": {"type": "color", "color": "#000000"},
+                    "fg": "#ffffff", "muted": "#90a4ae", "accent": "#4fc3f7", "font": "thin"},
+        "noche_roja": {"name": "Noche roja", "bg": {"type": "color", "color": "#000000"},
+                       "fg": "#8b0000", "muted": "#8b0000", "accent": "#8b0000", "font": "thin"},
+    },
+    "screens": {
+        "principal": {"name": "Principal", "elements": [
+            {"id": "hora", "type": "clock", "x": 0, "y": 0, "w": 8, "h": 3, "style": "digital"},
+            {"id": "fecha", "type": "date", "x": 0, "y": 3, "w": 8, "h": 1, "format": "long", "color": "muted"},
+        ]},
+    },
+    "profiles": [
+        {"id": "dia", "name": "Día", "from": "07:00", "theme": "clasico", "screens": ["principal"],
+         "rotate_s": 0, "brightness": 70, "night": False, "show_bar": True},
+    ],
+    "alarm_screen": {"theme": "clasico", "elements": [
+        {"id": "hora", "type": "clock", "x": 0, "y": 0, "w": 8, "h": 3, "style": "digital"},
+    ], "snooze_label": "Posponer {min} min", "dismiss_label": "Descartar"},
+}
+DESIGN: dict = copy.deepcopy(SAMPLE_DESIGN)
+DESIGN_SAVED = [False]
+BACKGROUNDS: list[dict] = []
+BG_DATA: dict[str, bytes] = {}
+PREVIEW: list[dict] = []
+FACE_DATA = {
+    "weather": {"temp": 19, "icon": "☀", "description": "Despejado", "max": 22, "min": 12, "rain": 10},
+    "forecast": {"hours": [{"h": 15, "temp": 20, "icon": "☀"}], "days": [{"d": "mié", "min": 12, "max": 23, "icon": "☁"}]},
+    "next_alarm": {"label": "Despertar", "when": "mañana", "time": "07:30"},
+    "exact_alarm_missing": False,
+}
+
 
 def _is_int(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and float(v).is_integer()
@@ -108,6 +143,33 @@ def _days_ok(v) -> bool:
     return False
 
 
+def _validate_design(d) -> dict:
+    """Validación mínima y fiel en la forma de los errores (el reloj real valida mucho más)."""
+    try:
+        if not isinstance(d, dict) or d.get("version") != 1:
+            return {"version": "debe ser 1"}
+        errors = {}
+        for k in ("themes", "screens", "profiles", "alarm_screen"):
+            if k not in d:
+                errors[k] = "falta"
+        for sid, s in (d.get("screens") or {}).items():
+            els = s.get("elements", [])
+            for i, a in enumerate(els):
+                if a["x"] + a["w"] > 8:
+                    errors[f"screens.{sid}.elements.{a['id']}.w"] = "se sale de la rejilla (x + w ≤ 8)"
+                elif a["y"] + a["h"] > 6:
+                    errors[f"screens.{sid}.elements.{a['id']}.h"] = "se sale de la rejilla (y + h ≤ 6)"
+                for b in els[i + 1:]:
+                    if a["x"] < b["x"] + b["w"] and b["x"] < a["x"] + a["w"] and a["y"] < b["y"] + b["h"] and b["y"] < a["y"] + a["h"]:
+                        errors[f"screens.{sid}.elements.{b['id']}"] = f"se solapa con {a['id']}"
+        for p in d.get("profiles", []):
+            if p.get("theme") not in d.get("themes", {}):
+                errors[f"profiles.{p.get('id')}.theme"] = "el tema no existe"
+        return errors
+    except (KeyError, TypeError, AttributeError):
+        return {"design": "estructura no válida"}
+
+
 def _apply_alarm_patch(a: dict, body: dict) -> str | None:
     """Aplica el parche sobre una copia; devuelve un error o None."""
     if "time" in body:
@@ -155,6 +217,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_bytes(self, code: int, data: bytes, ctype: str):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def _auth(self) -> bool:
         return self.headers.get("X-Auth-Token") == TOKEN
 
@@ -180,13 +249,25 @@ class Handler(BaseHTTPRequestHandler):
         if not self._auth():
             return self._send(401, {"ok": False, "error": "token inválido"})
         if self._path == "/status":
-            return self._send(200, {"ok": True, "time": int(time.time() * 1000), "ringing": False, "alarms": ALARMS})
+            return self._send(200, {"ok": True, "time": int(time.time() * 1000), "ringing": False, "alarms": ALARMS, "face_version": FACE_VERSION})
         if self._path == "/alarms":
             return self._send(200, {"ok": True, "alarms": ALARMS})
         if self._path == "/settings":
             return self._send(200, {"ok": True, "settings": SETTINGS, "schema": SCHEMA})
         if self._path == "/sounds":
             return self._send(200, {"ok": True, "sounds": SOUNDS})
+        if self._path == "/design":
+            return self._send(200, {"ok": True, "design": DESIGN, "saved": DESIGN_SAVED[0], "face_version": FACE_VERSION})
+        if self._path == "/backgrounds":
+            return self._send(200, {"ok": True, "backgrounds": BACKGROUNDS})
+        if self._path.startswith("/backgrounds/"):
+            name = unquote(self._path.removeprefix("/backgrounds/"))
+            if name not in BG_DATA:
+                return self._send(404, {"ok": False, "error": f"no existe el fondo {name}"})
+            ctype = "image/png" if name.endswith(".png") else "image/webp" if name.endswith(".webp") else "image/jpeg"
+            return self._send_bytes(200, BG_DATA[name], ctype)
+        if self._path == "/face/data":
+            return self._send(200, {"ok": True, **FACE_DATA})
         self._send(404, {"ok": False, "error": "no existe"})
 
     def do_PUT(self):
@@ -198,6 +279,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"ok": False, "error": "ajustes no válidos", "errors": errors})
             SETTINGS.update(values)
             return self._send(200, {"ok": True, "settings": SETTINGS})
+        if self._path == "/design":
+            body = self._read()
+            errors = _validate_design(body)
+            if errors:
+                return self._send(400, {"ok": False, "error": "diseño no válido", "errors": errors})
+            DESIGN.clear(); DESIGN.update(copy.deepcopy(body)); DESIGN_SAVED[0] = True
+            return self._send(200, {"ok": True, "design": DESIGN})
         self._send(404, {"ok": False, "error": "no existe"})
 
     def do_DELETE(self):
@@ -209,6 +297,16 @@ class Handler(BaseHTTPRequestHandler):
             SOUNDS[:] = [s for s in SOUNDS if s["id"] != f"file:{name}"]
             if len(SOUNDS) == before:
                 return self._send(404, {"ok": False, "error": f"no existe el sonido {name}"})
+            return self._send(200, {"ok": True})
+        if self._path == "/design/preview":
+            PREVIEW.clear()
+            return self._send(200, {"ok": True})
+        if self._path.startswith("/backgrounds/"):
+            name = unquote(self._path.removeprefix("/backgrounds/"))
+            if name not in BG_DATA:
+                return self._send(404, {"ok": False, "error": f"no existe el fondo {name}"})
+            del BG_DATA[name]
+            BACKGROUNDS[:] = [b for b in BACKGROUNDS if b["name"] != name]
             return self._send(200, {"ok": True})
         self._send(404, {"ok": False, "error": "no existe"})
 
@@ -223,7 +321,24 @@ class Handler(BaseHTTPRequestHandler):
             sid = f"file:{name}"
             SOUNDS[:] = [s for s in SOUNDS if s["id"] != sid] + [{"id": sid, "name": name, "kind": "file", "size": len(data)}]
             return self._send(200, {"ok": True, "id": sid})
+        if self._path == "/backgrounds":
+            data = self._raw()
+            name = self._query.get("name", "")
+            if not data or not re.match(r"^[A-Za-z0-9_-]+\.(jpg|jpeg|png|webp)$", name, re.I):
+                return self._send(400, {"ok": False, "error": "imagen no válida"})
+            BG_DATA[name] = data
+            BACKGROUNDS[:] = [b for b in BACKGROUNDS if b["name"] != name] + [{"name": name, "size": len(data)}]
+            return self._send(200, {"ok": True, "name": name})
         body = self._read()
+        if self._path == "/design/reset":
+            DESIGN.clear(); DESIGN.update(copy.deepcopy(SAMPLE_DESIGN)); DESIGN_SAVED[0] = False
+            return self._send(200, {"ok": True, "design": DESIGN})
+        if self._path == "/design/preview":
+            errors = _validate_design(body.get("design"))
+            if errors:
+                return self._send(400, {"ok": False, "error": "diseño no válido", "errors": errors})
+            PREVIEW[:] = [{"design": body["design"], "seconds": body.get("seconds", 30)}]
+            return self._send(200, {"ok": True, "seconds": body.get("seconds", 30)})
         if self._path == "/sounds/preview":
             return self._send(200, {"ok": True})
         if self._path == "/alarm":
@@ -295,6 +410,8 @@ def reset():
     _next_id[0] = 1
     SETTINGS.clear(); SETTINGS.update(copy.deepcopy(DEFAULT_SETTINGS))
     SOUNDS[:] = copy.deepcopy(DEFAULT_SOUNDS)
+    DESIGN.clear(); DESIGN.update(copy.deepcopy(SAMPLE_DESIGN)); DESIGN_SAVED[0] = False
+    BACKGROUNDS.clear(); BG_DATA.clear(); PREVIEW.clear()
 
 
 def make_server(port: int = 0, token: str = "secreto") -> ThreadingHTTPServer:
