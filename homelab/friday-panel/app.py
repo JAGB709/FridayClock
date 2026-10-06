@@ -20,7 +20,7 @@ from urllib.parse import quote
 import httpx
 from fastapi import Body, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 STATIC = Path(__file__).parent / "static"
@@ -37,6 +37,18 @@ QUICK_ACTIONS = {
     "test": ("/timer", {"seconds": 10, "label": "Prueba de alarma"}),
     "briefing": ("/briefing", {}),
 }
+
+FACE_FILES = ("index.html", "face.css", "face-core.js", "face.js")
+BG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+MAX_BG_BYTES = 2 * 1024 * 1024
+
+
+def face_version(face_dir: Path) -> str:
+    """SHA-256 abreviado de los archivos del motor, igual que el que calcula el reloj sobre su APK."""
+    h = hashlib.sha256()
+    for name in FACE_FILES:
+        h.update((face_dir / name).read_bytes())
+    return h.hexdigest()[:12]
 
 
 @dataclass
@@ -196,6 +208,75 @@ def create_app(cfg: Config) -> FastAPI:
             return _error(404, f"acción desconocida: {action}")
         path, payload = QUICK_ACTIONS[action]
         return await clock("POST", path, json=payload)
+
+    panel_face_version = face_version(STATIC / "face")
+
+    @app.get("/api/design")
+    async def get_design():
+        return await clock("GET", "/design")
+
+    @app.put("/api/design")
+    async def put_design(body: dict = Body(...)):
+        return await clock("PUT", "/design", json=body)
+
+    @app.post("/api/design/reset")
+    async def reset_design():
+        return await clock("POST", "/design/reset", json={})
+
+    @app.post("/api/design/preview")
+    async def preview_design(body: dict = Body(...)):
+        return await clock("POST", "/design/preview", json=body)
+
+    @app.delete("/api/design/preview")
+    async def cancel_preview():
+        return await clock("DELETE", "/design/preview")
+
+    @app.get("/api/face-data")
+    async def face_data():
+        return await clock("GET", "/face/data")
+
+    @app.get("/api/face-version")
+    async def get_face_version():
+        return {"ok": True, "face_version": panel_face_version}
+
+    @app.get("/api/backgrounds")
+    async def list_backgrounds():
+        return await clock("GET", "/backgrounds")
+
+    @app.post("/api/backgrounds")
+    async def upload_background(request: Request, name: str):
+        if Path(name).suffix.lower() not in BG_EXTS:
+            return _error(400, "Formato no admitido: usa jpg, png o webp")
+        try:
+            content_length = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            return _error(400, "Content-Length no válido")
+        if content_length > MAX_BG_BYTES:
+            return _error(413, "La imagen supera 2 MB")
+        data = await request.body()
+        if not data:
+            return _error(400, "Archivo vacío")
+        if len(data) > MAX_BG_BYTES:
+            return _error(413, "La imagen supera 2 MB")
+        return await clock("POST", "/backgrounds", content=data, params={"name": name}, timeout=UPLOAD_TIMEOUT_S)
+
+    @app.delete("/api/backgrounds/{name}")
+    async def delete_background(name: str):
+        return await clock("DELETE", f"/backgrounds/{quote(name, safe='')}")
+
+    @app.get("/api/bg/{name}")
+    async def get_background(name: str):
+        try:
+            async with httpx.AsyncClient(base_url=cfg.clock_url, timeout=cfg.timeout_s) as c:
+                r = await c.get(f"/backgrounds/{quote(name, safe='')}", headers={"X-Auth-Token": cfg.clock_token})
+        except httpx.HTTPError:
+            return _error(502, "El reloj no responde")
+        if r.status_code == 404:
+            return _error(404, "No existe ese fondo")
+        if r.status_code != 200:
+            return _error(502, "No se pudo leer el fondo")
+        return Response(content=r.content, media_type=r.headers.get("content-type", "image/jpeg"),
+                        headers={"Cache-Control": "no-store"})
 
     # La web, al final para que no tape /api.
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
