@@ -9,7 +9,7 @@ import java.io.File
 /** Imágenes de fondo subidas desde el panel (en filesDir/backgrounds, así se ven sin red). */
 object Backgrounds {
     const val MAX_BYTES = 2 * 1024 * 1024
-    private const val MAX_SIDE = 4096
+    private const val MAX_SIDE = 2048
     private val EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
 
     /** Nombre seguro para disco (solo [A-Za-z0-9_-] + extensión admitida) o null. */
