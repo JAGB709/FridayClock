@@ -10,3 +10,11 @@ fun darken(color: Int, factor: Float): Int {
     val b = (color and 0xFF) * factor
     return (0xFF shl 24) or (r.toInt() shl 16) or (g.toInt() shl 8) or b.toInt()
 }
+
+/** Negro o blanco, el que se lea mejor sobre [bg]. */
+fun readableOn(bg: Int): Int {
+    val r = (bg shr 16) and 0xFF
+    val g = (bg shr 8) and 0xFF
+    val b = bg and 0xFF
+    return if ((r * 299 + g * 587 + b * 114) / 1000 > 140) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()
+}
