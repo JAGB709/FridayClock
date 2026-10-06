@@ -394,10 +394,13 @@ function imagePicker(bg) {
   const known = new Set(dz.backgrounds.map((b) => b.name));
   const select = h("select", { onchange: (ev) => { bg.image = ev.target.value; touch(); paintSub(); } },
     h("option", { value: "", selected: !bg.image }, "(ninguna)"),
+    bg.image && !known.has(bg.image) ? h("option", { value: bg.image, selected: true }, `(falta: ${bg.image})`) : null,
     dz.backgrounds.map((b) => h("option", { value: b.name, selected: b.name === bg.image }, `${b.name} · ${Math.round(b.size / 1024)} KB`)));
   const file = h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", hidden: true,
     onchange: async (ev) => {
-      const f = ev.target.files[0];
+      const input = ev.target;
+      const f = input.files[0];
+      input.value = "";
       if (!f) return;
       if (f.size > 2 * 1024 * 1024) { toast("La imagen supera 2 MB", true); return; }
       toast("Subiendo…");
@@ -410,6 +413,7 @@ function imagePicker(bg) {
     } });
   return h("div", { class: "opt" },
     labeled("Imagen", select),
+    !bg.image ? h("div", { class: "muted" }, "Sube una imagen para usar este fondo") : null,
     bg.image && !known.has(bg.image) ? h("div", { class: "warn" }, "⚠ Esa imagen ya no está en el reloj: se verá el color de respaldo.") : null,
     h("div", { class: "row" }, btn("Subir imagen…", () => file.click(), "small ghost"), file),
     dz.backgrounds.map((b) => h("div", { class: "row between" }, h("span", {}, b.name), btn("Borrar", () => deleteBackground(b.name), "small ghost"))));
