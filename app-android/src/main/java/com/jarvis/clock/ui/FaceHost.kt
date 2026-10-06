@@ -1,0 +1,155 @@
+package com.jarvis.clock.ui
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Color
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import com.jarvis.clock.design.Backgrounds
+import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.FileInputStream
+
+/**
+ * Aloja el motor de pantallas (assets/face) en un WebView. Solo se carga esa página, servida por
+ * la propia app; cualquier otra petición responde 404 y la navegación externa está bloqueada.
+ * Si el WebView no existe, se cae o no carga, avisa con [Listener.onFailure] para volver a la
+ * carátula nativa.
+ */
+class FaceHost private constructor(private val ctx: Context, private val listener: Listener) {
+
+    interface Listener {
+        fun onTap()
+        fun onDoubleTap()
+        fun onLongPress()
+        fun onPermission()
+        fun onFailure(reason: String)
+    }
+
+    val view: WebView = WebView(ctx)
+    private val main = Handler(Looper.getMainLooper())
+    private val pending = ArrayList<String>()
+    private var ready = false
+    private var released = false
+
+    init {
+        configure()
+        view.loadUrl(PAGE)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun configure() {
+        view.setBackgroundColor(Color.BLACK)
+        view.isVerticalScrollBarEnabled = false
+        view.isHorizontalScrollBarEnabled = false
+        view.overScrollMode = View.OVER_SCROLL_NEVER
+        view.isHapticFeedbackEnabled = false
+        view.setOnLongClickListener { true }
+        view.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = false
+            allowFileAccess = false
+            allowContentAccess = false
+            setSupportZoom(false)
+            cacheMode = WebSettings.LOAD_NO_CACHE
+        }
+        view.addJavascriptInterface(Bridge(), "Native")
+        view.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean = true
+            override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse =
+                intercept(request.url)
+            override fun onPageFinished(v: WebView, url: String) {
+                ready = true
+                pending.forEach { v.evaluateJavascript(it, null) }
+                pending.clear()
+            }
+            override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
+                if (request.isForMainFrame) fail("carga: ${error.description}")
+            }
+            override fun onRenderProcessGone(v: WebView, detail: RenderProcessGoneDetail): Boolean {
+                fail("el proceso de dibujo murió")
+                return true
+            }
+        }
+    }
+
+    private fun fail(reason: String) {
+        if (!released) main.post { if (!released) listener.onFailure(reason) }
+    }
+
+    private fun intercept(uri: Uri): WebResourceResponse {
+        if (uri.host == HOST) {
+            val path = uri.path.orEmpty()
+            if (path.startsWith("/assets/face/")) {
+                val name = path.removePrefix("/assets/face/")
+                if (name in FILES) {
+                    val mime = when (name.substringAfterLast('.')) {
+                        "html" -> "text/html"
+                        "css" -> "text/css"
+                        else -> "application/javascript"
+                    }
+                    return WebResourceResponse(mime, "utf-8", ctx.assets.open("face/$name"))
+                }
+            } else if (path.startsWith("/bg/")) {
+                val f = Backgrounds.fileFor(Backgrounds.dir(ctx), path.removePrefix("/bg/"))
+                if (f != null) return WebResourceResponse(Backgrounds.mimeOf(f.name), null, FileInputStream(f))
+            }
+        }
+        return WebResourceResponse("text/plain", "utf-8", 404, "No encontrado", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+    }
+
+    /** Puente hacia Android: solo existe en la página del motor. */
+    inner class Bridge {
+        @JavascriptInterface fun tap() { main.post { listener.onTap() } }
+        @JavascriptInterface fun doubleTap() { main.post { listener.onDoubleTap() } }
+        @JavascriptInterface fun longPress() { main.post { listener.onLongPress() } }
+        @JavascriptInterface fun permission() { main.post { listener.onPermission() } }
+        @JavascriptInterface fun error(msg: String) { Log.w(TAG, "motor: $msg") }
+    }
+
+    fun render(design: JSONObject, opts: JSONObject) =
+        eval("Face.render(JSON.parse(${JSONObject.quote(design.toString())}), JSON.parse(${JSONObject.quote(opts.toString())}))")
+
+    fun setData(data: JSONObject) = eval("Face.setData(JSON.parse(${JSONObject.quote(data.toString())}))")
+
+    private fun eval(js: String) {
+        if (released) return
+        if (!ready) { pending.add(js); return }
+        view.evaluateJavascript(js, null)
+    }
+
+    fun release() {
+        if (released) return
+        released = true
+        view.stopLoading()
+        (view.parent as? ViewGroup)?.removeView(view)
+        view.destroy()
+    }
+
+    companion object {
+        private const val TAG = "FaceHost"
+        private const val HOST = "appassets.androidplatform.net"
+        private const val PAGE = "https://$HOST/assets/face/index.html"
+        private val FILES = setOf("index.html", "face.css", "face-core.js", "face.js")
+
+        /** null si el dispositivo no tiene WebView o no se puede crear. */
+        fun create(ctx: Context, listener: Listener): FaceHost? = try {
+            FaceHost(ctx, listener)
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo crear el WebView de la carátula", e)
+            null
+        }
+    }
+}

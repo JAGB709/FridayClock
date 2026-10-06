@@ -42,6 +42,11 @@ import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.assistant.Actions
 import com.jarvis.clock.assistant.Assistant
+import com.jarvis.clock.design.DesignSchema
+import com.jarvis.clock.design.DesignStore
+import com.jarvis.clock.design.FaceData
+import com.jarvis.clock.ui.FaceHost
+import org.json.JSONObject
 import com.jarvis.clock.ui.AlarmsActivity
 import com.jarvis.clock.ui.SettingsActivity
 import com.jarvis.clock.ui.Ui
@@ -85,6 +90,29 @@ class MainActivity : Activity() {
     private var night = false
     private var wakeUntil = 0L
     private var brightnessOverride: Int? = null
+    private var faceHost: FaceHost? = null
+    private var cachedDesign: JSONObject? = null
+    private var previewDesign: JSONObject? = null
+    private var shownKey: String? = null
+
+    private val faceListener = object : FaceHost.Listener {
+        override fun onTap() { wakeScreen() }
+        override fun onDoubleTap() { assistant.listen() }
+        override fun onLongPress() { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+        override fun onPermission() {
+            startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
+        }
+        override fun onFailure(reason: String) {
+            Log.w("Face", "El WebView de la carátula falló ($reason): vuelvo a la carátula nativa")
+            useNativeFace()
+        }
+    }
+
+    private val endPreview = Runnable {
+        previewDesign = null
+        shownKey = null
+        applyNightMode()
+    }
     private val assistant by lazy { Assistant.get(this) }
 
     private val listener = Events.Listener { onEvent(it) }
@@ -120,20 +148,27 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         Ui.immersive(window)
+        faceHost?.view?.onResume()
         tickMinute()
         refreshWeather()
         refreshNextAlarm()
+        pushFaceData()
         if (AlarmRingService.ringing) startActivity(AlarmActivity.intent(this, AlarmRingService.currentLabel ?: "Alarma"))
     }
 
     override fun onPause() {
         handler.removeCallbacksAndMessages(null)
+        previewDesign = null // la prueba termina si sales de la carátula
+        shownKey = null
+        faceHost?.view?.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
         Events.unregister(listener)
         destroyWebView()
+        faceHost?.release()
+        faceHost = null
         super.onDestroy()
     }
 
@@ -208,6 +243,11 @@ class MainActivity : Activity() {
         face.addView(weather, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(4) })
         face.addView(nextAlarm, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
         root.addView(face, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = dp(56) })
+        // El motor de pantallas va detrás de todo; si no hay WebView, se queda la carátula nativa.
+        faceHost = FaceHost.create(this, faceListener)?.also { host ->
+            root.addView(host.view, 0, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = dp(56) })
+            face.visibility = View.GONE
+        }
 
         // Barra inferior: alarmas · micro · ajustes
         bar = LinearLayout(this).apply {
@@ -289,6 +329,7 @@ class MainActivity : Activity() {
         val c = Calendar.getInstance()
         if (c.get(Calendar.MINUTE) % 20 == 0) refreshWeather()
         refreshNextAlarm()
+        pushFaceData()
         val msToNextMinute = 60_000 - (System.currentTimeMillis() % 60_000) + 50
         handler.removeCallbacks(minuteRunnable)
         handler.postDelayed(minuteRunnable, msToNextMinute)
@@ -304,7 +345,62 @@ class MainActivity : Activity() {
         face.translationY = (((m / 5) % 3) - 1) * d
     }
 
+    private fun minuteOfDay(): Int {
+        val c = Calendar.getInstance()
+        return c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
+    }
+
+    private fun activeDesign(): JSONObject =
+        previewDesign ?: cachedDesign ?: DesignStore.load(this).design.also { cachedDesign = it }
+
+    /** Brillo al tocar la pantalla en un perfil de noche: el del primer perfil que no sea de noche. */
+    private fun wakeBrightness(design: JSONObject): Int {
+        val ps = design.optJSONArray("profiles") ?: return 70
+        for (i in 0 until ps.length()) {
+            val p = ps.optJSONObject(i) ?: continue
+            if (!p.optBoolean("night", false)) return p.optInt("brightness", 70)
+        }
+        return 70
+    }
+
+    /** Perfil activo según la hora: brillo, modo noche, barra inferior y qué dibuja el motor. */
     private fun applyNightMode() {
+        val host = faceHost
+        if (host == null) { applyNativeNightMode(); return }
+        val design = activeDesign()
+        val profile = DesignSchema.activeProfile(design, minuteOfDay()) ?: return
+        val profileNight = profile.optBoolean("night", false)
+        val awake = System.currentTimeMillis() < wakeUntil
+        night = profileNight && !awake
+        val showBar = profile.optBoolean("show_bar", true)
+        bar.visibility = if (showBar) View.VISIBLE else View.GONE
+        bar.alpha = if (night) 0.15f else 1f
+        (host.view.layoutParams as FrameLayout.LayoutParams).bottomMargin = if (showBar) Ui.dp(this, 56) else 0
+        host.view.requestLayout()
+        val pct = brightnessOverride ?: if (profileNight && awake) wakeBrightness(design) else profile.optInt("brightness", 70)
+        window.attributes = window.attributes.apply { screenBrightness = pct.coerceIn(1, 100) / 100f }
+        val key = profile.optString("id") + "|" + design.toString().hashCode()
+        if (key != shownKey) {
+            shownKey = key
+            host.render(design, JSONObject().put("profile", profile.optString("id")))
+            pushFaceData()
+        }
+    }
+
+    private fun pushFaceData() {
+        faceHost?.setData(FaceData.build(this))
+    }
+
+    private fun useNativeFace() {
+        faceHost?.release()
+        faceHost = null
+        face.visibility = View.VISIBLE
+        bar.visibility = View.VISIBLE
+        bar.alpha = 1f
+        tickMinute()
+    }
+
+    private fun applyNativeNightMode() {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         val awake = System.currentTimeMillis() < wakeUntil
         night = Prefs.isNight(hour) && !awake
@@ -329,7 +425,7 @@ class MainActivity : Activity() {
         Weather.cached()?.let { weather.text = it.shortText() }
         thread(name = "weather") {
             val w = Weather.get() ?: return@thread
-            runOnUiThread { weather.text = w.shortText() }
+            runOnUiThread { weather.text = w.shortText(); pushFaceData() }
         }
     }
 
@@ -363,16 +459,30 @@ class MainActivity : Activity() {
             is Event.MicLevel -> level.progress = (e.level * 100).toInt()
             is Event.Display -> showDisplay(e)
             Event.DisplayClear -> hideDisplay()
-            Event.AlarmsChanged -> refreshNextAlarm()
-            is Event.AlarmRinging -> runCatching { startActivity(AlarmActivity.intent(this, e.label)) }
-            Event.AlarmStopped -> refreshNextAlarm()
+            Event.AlarmsChanged -> { refreshNextAlarm(); pushFaceData() }
+            is Event.AlarmRinging -> { endPreview.run(); runCatching { startActivity(AlarmActivity.intent(this, e.label)) } }
+            Event.AlarmStopped -> { refreshNextAlarm(); pushFaceData() }
             is Event.Brightness -> { brightnessOverride = e.percent; applyNightMode() }
             is Event.SettingsChanged -> {
                 // Un brillo nuevo desde el panel manda sobre un /brightness puntual anterior.
                 if (e.keys.any { it.endsWith("brightness") }) brightnessOverride = null
                 applyNightMode()
             }
-            Event.DesignChanged, is Event.DesignPreview, Event.DesignPreviewCancel -> Unit
+            Event.DesignChanged -> {
+                handler.removeCallbacks(endPreview)
+                previewDesign = null
+                cachedDesign = null
+                shownKey = null
+                applyNightMode()
+            }
+            is Event.DesignPreview -> {
+                previewDesign = e.design
+                shownKey = null
+                applyNightMode()
+                handler.removeCallbacks(endPreview)
+                handler.postDelayed(endPreview, e.seconds * 1000L)
+            }
+            Event.DesignPreviewCancel -> { handler.removeCallbacks(endPreview); endPreview.run() }
             is Event.BluetoothDiscoverable -> runCatching {
                 startActivity(com.jarvis.clock.bt.BluetoothControl.discoverableIntent(e.seconds))
             }
