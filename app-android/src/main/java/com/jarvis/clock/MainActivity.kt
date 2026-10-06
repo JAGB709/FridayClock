@@ -94,6 +94,8 @@ class MainActivity : Activity() {
     private var cachedDesign: JSONObject? = null
     private var previewDesign: JSONObject? = null
     private var shownKey: String? = null
+    private var lastFailureKind: String? = null
+    private val retryTimes = ArrayList<Long>()
 
     private val faceListener = object : FaceHost.Listener {
         override fun onTap() { wakeScreen() }
@@ -102,8 +104,9 @@ class MainActivity : Activity() {
         override fun onPermission() {
             startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
         }
-        override fun onFailure(reason: String) {
+        override fun onFailure(kind: String, reason: String) {
             Log.w("Face", "El WebView de la carátula falló ($reason): vuelvo a la carátula nativa")
+            lastFailureKind = kind
             useNativeFace()
         }
     }
@@ -148,6 +151,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         Ui.immersive(window)
+        maybeRecoverFace()
         faceHost?.view?.onResume()
         tickMinute()
         refreshWeather()
@@ -244,10 +248,7 @@ class MainActivity : Activity() {
         face.addView(nextAlarm, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
         root.addView(face, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = dp(56) })
         // El motor de pantallas va detrás de todo; si no hay WebView, se queda la carátula nativa.
-        faceHost = FaceHost.create(this, faceListener)?.also { host ->
-            root.addView(host.view, 0, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = dp(56) })
-            face.visibility = View.GONE
-        }
+        attachFaceHost()
 
         // Barra inferior: alarmas · micro · ajustes
         bar = LinearLayout(this).apply {
@@ -391,6 +392,25 @@ class MainActivity : Activity() {
         faceHost?.setData(FaceData.build(this))
     }
 
+    private fun attachFaceHost() {
+        faceHost = FaceHost.create(this, faceListener)?.also { host ->
+            root.addView(host.view, 0, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = Ui.dp(this@MainActivity, 56) })
+            face.visibility = View.GONE
+        }
+    }
+
+    /** Tras morir el proceso de dibujo se reintenta (máx. 3 veces por hora); los fallos de carga o de JS no. */
+    private fun maybeRecoverFace() {
+        if (faceHost != null || lastFailureKind != FaceHost.REASON_RENDERER) return
+        val now = SystemClock.elapsedRealtime()
+        retryTimes.removeAll { now - it > 3_600_000L }
+        if (retryTimes.size >= 3) return
+        retryTimes.add(now)
+        Log.w("Face", "Reintento de recuperar la carátula tras la muerte del renderer (${retryTimes.size}/3)")
+        attachFaceHost()
+        if (faceHost != null) { shownKey = null; applyNightMode() }
+    }
+
     private fun useNativeFace() {
         faceHost?.release()
         faceHost = null
@@ -466,6 +486,8 @@ class MainActivity : Activity() {
             is Event.SettingsChanged -> {
                 // Un brillo nuevo desde el panel manda sobre un /brightness puntual anterior.
                 if (e.keys.any { it.endsWith("brightness") }) brightnessOverride = null
+                cachedDesign = null
+                shownKey = null
                 applyNightMode()
             }
             Event.DesignChanged -> {
@@ -473,9 +495,12 @@ class MainActivity : Activity() {
                 previewDesign = null
                 cachedDesign = null
                 shownKey = null
+                maybeRecoverFace()
                 applyNightMode()
             }
             is Event.DesignPreview -> {
+                if (faceHost == null) Log.w("Face", "Prueba de diseño recibida sin WebView: no se muestra")
+                maybeRecoverFace()
                 previewDesign = e.design
                 shownKey = null
                 applyNightMode()

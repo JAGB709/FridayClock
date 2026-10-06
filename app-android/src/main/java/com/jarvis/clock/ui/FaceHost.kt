@@ -35,13 +35,16 @@ class FaceHost private constructor(private val ctx: Context, private val listene
         fun onDoubleTap()
         fun onLongPress()
         fun onPermission()
-        fun onFailure(reason: String)
+        /** [kind] es uno de REASON_*: solo REASON_RENDERER merece un reintento. */
+        fun onFailure(kind: String, reason: String)
     }
 
     val view: WebView = WebView(ctx)
     private val main = Handler(Looper.getMainLooper())
     private class Job(val js: String, val check: String?)
-    private val pending = ArrayList<Job>()
+    // Solo se conserva el último render y el último setData hasta que el motor esté listo.
+    private var pendingRender: Job? = null
+    private var pendingData: Job? = null
     private var ready = false
     private var released = false
     @Volatile private var dead = false
@@ -49,6 +52,8 @@ class FaceHost private constructor(private val ctx: Context, private val listene
     init {
         configure()
         view.loadUrl(PAGE)
+        // Si onPageFinished nunca llega, la carátula nativa no puede quedarse esperando para siempre.
+        main.postDelayed({ if (!ready && !dead && !released) fail(REASON_LOAD, "tiempo de carga agotado") }, LOAD_TIMEOUT_MS)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -76,25 +81,28 @@ class FaceHost private constructor(private val ctx: Context, private val listene
                 // La página puede cargar y el motor no arrancar (error de JS): se comprueba antes de usarlo.
                 v.evaluateJavascript("typeof window.Face") { r ->
                     if (released || dead) return@evaluateJavascript
-                    if (r != "\"object\"") { fail("el motor no cargó"); return@evaluateJavascript }
+                    if (r != "\"object\"") { fail(REASON_ENGINE, "el motor no cargó"); return@evaluateJavascript }
                     ready = true
-                    pending.forEach { run(it) }
-                    pending.clear()
+                    pendingRender?.let { run(it) }
+                    pendingData?.let { run(it) }
+                    pendingRender = null
+                    pendingData = null
                 }
             }
             override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) fail("carga: ${error.description}")
+                if (request.isForMainFrame) fail(REASON_LOAD, "carga: ${error.description}")
             }
             override fun onRenderProcessGone(v: WebView, detail: RenderProcessGoneDetail): Boolean {
-                fail("el proceso de dibujo murió")
+                fail(REASON_RENDERER, "el proceso de dibujo murió")
                 return true
             }
         }
     }
 
-    private fun fail(reason: String) {
+    private fun fail(kind: String, reason: String) {
+        if (dead) return
         dead = true
-        if (!released) main.post { if (!released) listener.onFailure(reason) }
+        if (!released) main.post { if (!released) listener.onFailure(kind, reason) }
     }
 
     private fun notFound() =
@@ -140,21 +148,21 @@ class FaceHost private constructor(private val ctx: Context, private val listene
     fun render(design: JSONObject, opts: JSONObject) {
         val js = "(function(){try{Face.render(JSON.parse(${JSONObject.quote(design.toString())}), " +
             "JSON.parse(${JSONObject.quote(opts.toString())}));return 'ok'}catch(e){return 'error: '+e.message}})()"
-        eval(Job(js, "render"))
+        eval(Job(js, "render"), true)
     }
 
-    fun setData(data: JSONObject) = eval(Job("Face.setData(JSON.parse(${JSONObject.quote(data.toString())}))", null))
+    fun setData(data: JSONObject) = eval(Job("Face.setData(JSON.parse(${JSONObject.quote(data.toString())}))", null), false)
 
-    private fun eval(job: Job) {
+    private fun eval(job: Job, isRender: Boolean) {
         if (released || dead) return
-        if (!ready) { pending.add(job); return }
+        if (!ready) { if (isRender) pendingRender = job else pendingData = job; return }
         run(job)
     }
 
     private fun run(job: Job) {
         if (released || dead) return
         if (job.check == null) { view.evaluateJavascript(job.js, null); return }
-        view.evaluateJavascript(job.js) { r -> if (r != "\"ok\"") fail("${job.check}: $r") }
+        view.evaluateJavascript(job.js) { r -> if (r != "\"ok\"") fail(REASON_ENGINE, "${job.check}: $r") }
     }
 
     fun release() {
@@ -167,6 +175,10 @@ class FaceHost private constructor(private val ctx: Context, private val listene
 
     companion object {
         private const val TAG = "FaceHost"
+        const val REASON_RENDERER = "renderer"
+        const val REASON_LOAD = "load"
+        const val REASON_ENGINE = "engine"
+        private const val LOAD_TIMEOUT_MS = 10_000L
         private const val HOST = "appassets.androidplatform.net"
         private const val PAGE = "https://$HOST/assets/face/index.html"
         private val FILES = setOf("index.html", "face.css", "face-core.js", "face.js")

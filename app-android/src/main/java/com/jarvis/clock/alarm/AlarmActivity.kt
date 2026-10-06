@@ -53,7 +53,7 @@ class AlarmActivity : Activity() {
         override fun onDoubleTap() {}
         override fun onLongPress() {}
         override fun onPermission() {}
-        override fun onFailure(reason: String) { runOnUiThread { rebuildNative() } }
+        override fun onFailure(kind: String, reason: String) { runOnUiThread { rebuildNative() } }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,7 +82,7 @@ class AlarmActivity : Activity() {
         val theme = design.optJSONObject("themes")?.optJSONObject(alarm?.optString("theme").orEmpty())
         val accent = themeColor(theme, "accent", Ui.ACCENT)
         val bg = theme?.optJSONObject("bg")
-        val rootBg = if (bg?.optString("type") == "color") themeColor(bg, "color", Color.BLACK) else Color.BLACK
+        val rootBg = if (web && bg?.optString("type") == "color") themeColor(bg, "color", Color.BLACK) else Color.BLACK
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -90,12 +90,15 @@ class AlarmActivity : Activity() {
             setPadding(0, 0, 0, dp(16))
         }
 
-        val top: View = (if (web) FaceHost.create(this, hostListener) else null)?.let { host ->
-            faceHost = host
-            host.render(design, JSONObject().put("alarm", true))
-            host.setData(FaceData.build(this, ringingLabel = label))
-            host.view
-        } ?: nativeTop()
+        // Una excepción inesperada del motor no puede tirar la única pantalla con botones.
+        val top: View = (if (web) runCatching {
+            FaceHost.create(this, hostListener)?.let { host ->
+                faceHost = host
+                host.render(design, JSONObject().put("alarm", true))
+                host.setData(FaceData.build(this, ringingLabel = label))
+                host.view
+            }
+        }.onFailure { faceHost?.release(); faceHost = null }.getOrNull() else null) ?: nativeTop()
         root.addView(top, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val snoozeText = alarm?.optString("snooze_label").orEmpty().ifEmpty { "Posponer {min} min" }
