@@ -4,6 +4,8 @@
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const view = $("#view");
+// replaceChildren convierte null en el texto "null": se descartan los huecos.
+const setView = (...kids) => view.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
 const DAYS = [["mon", "L"], ["tue", "M"], ["wed", "X"], ["thu", "J"], ["fri", "V"], ["sat", "S"], ["sun", "D"]];
 const PRESETS = [
   ["Laborables", ["mon", "tue", "wed", "thu", "fri"]],
@@ -58,7 +60,7 @@ const errText = (r) => r.data.login_required ? "Inicia sesión" : (r.data.error 
 // Si hace falta login, la pantalla de login manda: no la tapamos con un error.
 function showError(r) {
   if (r.data.login_required) return;
-  view.replaceChildren(h("div", { class: "card bad" }, errText(r)));
+  setView(h("div", { class: "card bad" }, errText(r)));
 }
 
 function setConn(on, msg) {
@@ -173,6 +175,7 @@ function render(next) {
   window.scrollTo(0, 0);
   if (route.tab === "home") return renderHome();
   if (route.tab === "alarms") return route.edit != null ? renderAlarmEdit(route.edit) : renderAlarms();
+  if (route.tab === "design") return renderDesign();
   if (route.tab === "settings") return renderSettings();
 }
 
@@ -190,7 +193,7 @@ function showLogin() {
     const r = await api("POST", "/login", { password: pass.value });
     if (r.ok) { loginShown = false; render(route); } else toast(errText(r), true);
   };
-  view.replaceChildren(h("form", { class: "card stack", onsubmit: submit },
+  setView(h("form", { class: "card stack", onsubmit: submit },
     h("h2", {}, "Entrar"), h("label", { class: "field" }, h("span", {}, "Contraseña del panel"), pass),
     h("button", { type: "submit" }, "Entrar")));
 }
@@ -212,7 +215,7 @@ async function renderHome() {
   const time = new Date(s.time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
   const next = s.next_alarm ? `${s.next_alarm.time} · ${s.next_alarm.label} (${whenText(s.next_alarm.at)})` : "ninguna";
   const say = h("input", { id: "say", type: "text", placeholder: "Decir en el reloj…", maxlength: "300" });
-  view.replaceChildren(
+  setView(
     h("div", { class: "card" }, h("div", { class: "clock" }, time), h("div", { class: "muted" }, "Próxima alarma: ", next)),
     s.ringing ? h("div", { class: "card ring stack" }, h("strong", {}, "🔔 Sonando: ", s.ringing_label || "Alarma"),
       h("div", { class: "row" }, btn("Apagar", () => doAction("stop")), btn("Posponer", () => doAction("snooze"), "ghost"))) : null,
@@ -256,7 +259,7 @@ async function renderAlarms() {
       label);
   };
 
-  view.replaceChildren(
+  setView(
     h("div", { class: "card" }, h("h2", {}, "Alarmas"),
       alarms.length ? alarms.map(row) : h("p", { class: "muted" }, "No hay alarmas."),
       btn("＋ Nueva alarma", () => go({ tab: "alarms", edit: "new" }))),
@@ -325,7 +328,7 @@ async function renderAlarmEdit(id) {
   if (!ra.ok) { showError(ra); return; }
   const isNew = id === "new";
   const found = (ra.data.alarms || []).find((a) => a.id === id);
-  if (!isNew && !found) { view.replaceChildren(h("div", { class: "card bad" }, "Esa alarma ya no existe.")); return; }
+  if (!isNew && !found) { setView(h("div", { class: "card bad" }, "Esa alarma ya no existe.")); return; }
   const src = isNew ? NEW_ALARM : found;
   const fields = ["time", "label", "days", "enabled", "sound", "max_volume", "ramp_s", "snooze_min", "briefing"];
   const original = Object.fromEntries(fields.map((k) => [k, src[k] ?? NEW_ALARM[k]]));
@@ -353,7 +356,7 @@ function paintAlarmEdit(id, isNew, sounds) {
     h("option", { value: "1", selected: c.briefing === true }, "Sí"),
     h("option", { value: "0", selected: c.briefing === false }, "No"));
 
-  view.replaceChildren(
+  setView(
     h("div", { class: "row between" }, btn("‹ Alarmas", () => go({ tab: "alarms" }), "ghost small"), h("h2", {}, isNew ? "Nueva alarma" : "Editar alarma")),
     h("div", { class: "card" },
       h("label", { class: "field", "data-key": "time" }, h("span", {}, "Hora"),
@@ -406,7 +409,7 @@ async function renderSettings() {
   const groups = new Map();
   for (const f of r.data.schema) { if (!groups.has(f.group)) groups.set(f.group, []); groups.get(f.group).push(f); }
   const files = rs.ok ? (rs.data.sounds || []).filter((s) => s.kind === "file") : [];
-  view.replaceChildren(
+  setView(
     ...[...groups].map(([g, fs]) => h("div", { class: "card" }, h("h2", {}, g), fs.map(settingInput))),
     h("div", { class: "card" }, h("h2", {}, "Sonidos subidos"),
       files.length ? files.map((s) => h("div", { class: "row between" },
