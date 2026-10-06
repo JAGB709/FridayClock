@@ -175,6 +175,7 @@ function render(next) {
   window.scrollTo(0, 0);
   if (route.tab === "home") return renderHome();
   if (route.tab === "alarms") return route.edit != null ? renderAlarmEdit(route.edit) : renderAlarms();
+  $("#try").hidden = route.tab !== "design";
   if (route.tab === "design") return renderDesign();
   if (route.tab === "settings") return renderSettings();
 }

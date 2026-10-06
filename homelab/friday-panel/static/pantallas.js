@@ -11,7 +11,7 @@ const SAMPLE_DATA = {
   next_alarm: { label: "Despertar", when: "mañana", time: "07:30" },
 };
 
-const SUBS = [["screen", "Pantalla"], ["alarm", "Alarma"]];
+const SUBS = [["screen", "Pantalla"], ["theme", "Tema"], ["profiles", "Perfiles"], ["alarm", "Alarma"]];
 const dz = {
   sub: "screen", screenId: null, themeId: null, profileId: null, selected: null,
   frame: null, ready: false, data: SAMPLE_DATA, backgrounds: [], subEl: null,
@@ -114,9 +114,11 @@ function previewFrame() {
 // ------------------------------------------------------------------ entrada de la pestaña
 
 async function renderDesign() {
-  const [rd, rv] = await Promise.all([api("GET", "/api/design"), api("GET", "/api/face-version")]);
+  const [rd, rv, rb] = await Promise.all([api("GET", "/api/design"), api("GET", "/api/face-version"), api("GET", "/api/backgrounds")]);
   if (route.tab !== "design") return;
   if (!rd.ok) { showError(rd); return; }
+  dz.backgrounds = rb.ok ? rb.data.backgrounds : [];
+  bindTry();
   startForm(rd.data.design, () => api("PUT", "/api/design", form.current));
   dz.clockVersion = rd.data.face_version;
   dz.panelVersion = rv.ok ? rv.data.face_version : null;
@@ -155,7 +157,7 @@ function switchSub(k) {
 
 function paintSub() {
   if (!dz.subEl) return;
-  const fn = { screen: subScreen, alarm: subAlarm }[dz.sub];
+  const fn = { screen: subScreen, theme: subTheme, profiles: subProfiles, alarm: subAlarm }[dz.sub];
   dz.subEl.replaceChildren(...fn());
 }
 
@@ -321,4 +323,204 @@ function subAlarm() {
       textField("Texto de Descartar", a.dismiss_label === undefined ? "Descartar" : a.dismiss_label, 20, (v) => { a.dismiss_label = v; touch(); })),
     elementsPanel(),
   ];
+}
+
+// ------------------------------------------------------------------ Probar en el reloj
+
+function bindTry() {
+  if (dz.tryBound) return;
+  dz.tryBound = true;
+  $("#try").addEventListener("click", async () => {
+    if (route.tab !== "design" || !form) return;
+    const b = $("#try");
+    b.disabled = true;
+    const r = await api("POST", "/api/design/preview", { design: form.current, seconds: 30 });
+    b.disabled = false;
+    if (r.ok) { toast("▶ Mostrándose 30 s en el reloj"); return; }
+    const detail = Object.entries(r.data.errors || {}).map(([k, v]) => `${k}: ${v}`).join(" · ");
+    toast(errText(r) + (detail ? " — " + detail : ""), true);
+  });
+}
+
+// ------------------------------------------------------------------ sub-pestaña Tema
+
+const FONT_OPTIONS = [["thin", "Fina"], ["normal", "Normal"], ["bold", "Negrita"], ["mono", "Monoespaciada"], ["digital", "Digital (7 segmentos)"]];
+
+function subTheme() {
+  const t = form.current.themes[dz.themeId];
+  return [
+    h("div", { class: "card" },
+      labeled("Tema", themeSelect(dz.themeId, (v) => { dz.themeId = v; paintSub(); pushPreview(); })),
+      h("div", { class: "row" }, btn("Duplicar", duplicateTheme, "small ghost"), btn("Borrar", deleteTheme, "small danger")),
+      textField("Nombre", t.name, 30, (v) => { t.name = v; updateSaveBar(); }),
+      selectField("Letra de la hora y los textos", FONT_OPTIONS, t.font, (v) => { t.font = v; touch(); }),
+      colorField("Color principal", t.fg, (v) => { t.fg = v; touch(); }),
+      colorField("Color secundario", t.muted, (v) => { t.muted = v; touch(); }),
+      colorField("Color de acento", t.accent, (v) => { t.accent = v; touch(); })),
+    h("div", { class: "card" }, h("h2", {}, "Fondo"), ...bgFields(t)),
+    h("div", { class: "card" },
+      h("p", { class: "muted" }, "Vuelve al diseño que traía el reloj (borra el que tienes guardado)."),
+      btn("Restaurar diseño inicial", restoreInitial, "ghost")),
+  ];
+}
+
+function bgFields(t) {
+  const bg = t.bg;
+  const kind = selectField("Tipo de fondo", [["color", "Color liso"], ["gradient", "Degradado"], ["image", "Imagen"]], bg.type, (v) => {
+    const base = bg.color || bg.from || "#000000";
+    if (v === "color") t.bg = { type: "color", color: base };
+    else if (v === "gradient") t.bg = { type: "gradient", from: base, to: bg.to || "#ffffff", angle: bg.angle === undefined ? 160 : bg.angle };
+    else t.bg = { type: "image", image: dz.backgrounds.length ? dz.backgrounds[0].name : "", dim: 30, color: base };
+    touch(); paintSub();
+  });
+  if (bg.type === "color") return [kind, colorField("Color", bg.color, (v) => { bg.color = v; touch(); })];
+  if (bg.type === "gradient") {
+    return [kind,
+      colorField("Desde", bg.from, (v) => { bg.from = v; touch(); }),
+      colorField("Hasta", bg.to, (v) => { bg.to = v; touch(); }),
+      numberField("Ángulo (0–359)", bg.angle === undefined ? 160 : bg.angle, 0, 359, (v) => { bg.angle = v; touch(); })];
+  }
+  return [kind, imagePicker(bg),
+    numberField("Oscurecer la imagen (0–80 %)", bg.dim === undefined ? 0 : bg.dim, 0, 80, (v) => { bg.dim = v; touch(); }),
+    colorField("Color si falta la imagen", bg.color || "#000000", (v) => { bg.color = v; touch(); })];
+}
+
+async function refreshBackgrounds() {
+  const r = await api("GET", "/api/backgrounds");
+  dz.backgrounds = r.ok ? r.data.backgrounds : [];
+}
+
+function imagePicker(bg) {
+  const known = new Set(dz.backgrounds.map((b) => b.name));
+  const select = h("select", { onchange: (ev) => { bg.image = ev.target.value; touch(); paintSub(); } },
+    h("option", { value: "", selected: !bg.image }, "(ninguna)"),
+    dz.backgrounds.map((b) => h("option", { value: b.name, selected: b.name === bg.image }, `${b.name} · ${Math.round(b.size / 1024)} KB`)));
+  const file = h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", hidden: true,
+    onchange: async (ev) => {
+      const f = ev.target.files[0];
+      if (!f) return;
+      if (f.size > 2 * 1024 * 1024) { toast("La imagen supera 2 MB", true); return; }
+      toast("Subiendo…");
+      const r = await api("POST", `/api/backgrounds?name=${encodeURIComponent(f.name)}`, undefined, f);
+      if (!r.ok) { toast(errText(r), true); return; }
+      toast("✓ Imagen subida al reloj");
+      bg.image = r.data.name;
+      await refreshBackgrounds();
+      touch(); paintSub();
+    } });
+  return h("div", { class: "opt" },
+    labeled("Imagen", select),
+    bg.image && !known.has(bg.image) ? h("div", { class: "warn" }, "⚠ Esa imagen ya no está en el reloj: se verá el color de respaldo.") : null,
+    h("div", { class: "row" }, btn("Subir imagen…", () => file.click(), "small ghost"), file),
+    dz.backgrounds.map((b) => h("div", { class: "row between" }, h("span", {}, b.name), btn("Borrar", () => deleteBackground(b.name), "small ghost"))));
+}
+
+async function deleteBackground(name) {
+  const used = Object.values(form.current.themes).filter((t) => t.bg.type === "image" && t.bg.image === name).map((t) => t.name);
+  const msg = used.length ? `¿Borrar ${name}? Lo usan los temas: ${used.join(", ")}. Se verá su color de respaldo.` : `¿Borrar ${name}?`;
+  if (!(await confirmInPage(msg, "Borrar"))) return;
+  const r = await api("DELETE", `/api/backgrounds/${encodeURIComponent(name)}`);
+  toast(r.ok ? "✓ Imagen borrada" : errText(r), !r.ok);
+  await refreshBackgrounds();
+  paintSub(); pushPreview();
+}
+
+function duplicateTheme() {
+  const d = form.current;
+  if (Object.keys(d.themes).length >= 12) { toast("Máximo 12 temas", true); return; }
+  const src = d.themes[dz.themeId];
+  const id = EditorCore.uniqueId(src.name, Object.keys(d.themes));
+  d.themes[id] = Object.assign(structuredClone(src), { name: (src.name + " (copia)").slice(0, 30) });
+  dz.themeId = id;
+  touch(); paintSub();
+}
+
+async function deleteTheme() {
+  const d = form.current;
+  if (Object.keys(d.themes).length <= 1) { toast("Tiene que quedar al menos un tema", true); return; }
+  const users = d.profiles.filter((p) => p.theme === dz.themeId).map((p) => p.name);
+  if (d.alarm_screen.theme === dz.themeId) users.push("pantalla de alarma");
+  if (users.length) { toast("Lo usan: " + users.join(", "), true); return; }
+  if (!(await confirmInPage("¿Borrar este tema?", "Borrar"))) return;
+  delete d.themes[dz.themeId];
+  dz.themeId = Object.keys(d.themes)[0];
+  touch(); paintSub();
+}
+
+async function restoreInitial() {
+  if (!(await confirmInPage("Se borrará el diseño guardado y volverá el inicial. ¿Seguir?", "Restaurar"))) return;
+  const r = await api("POST", "/api/design/reset");
+  if (!r.ok) { toast(errText(r), true); return; }
+  toast("✓ Diseño inicial restaurado");
+  form = null; updateSaveBar();
+  renderDesign();
+}
+
+// ------------------------------------------------------------------ sub-pestaña Perfiles
+
+const ROTATE_OPTIONS = [[0, "Solo deslizando"], [10, "Cada 10 s"], [30, "Cada 30 s"], [60, "Cada minuto"], [300, "Cada 5 minutos"]];
+
+function subProfiles() {
+  return [
+    ...form.current.profiles.map(profileCard),
+    h("div", { class: "card" }, btn("＋ Nuevo perfil", addProfile, "ghost")),
+  ];
+}
+
+function profileCard(p) {
+  const d = form.current;
+  const rotate = p.rotate_s === undefined ? 0 : p.rotate_s;
+  const options = ROTATE_OPTIONS.some(([v]) => v === rotate) ? ROTATE_OPTIONS : [...ROTATE_OPTIONS, [rotate, `Cada ${rotate} s`]];
+  const current = p.id === dz.profileId;
+  return h("div", { class: "card" + (current ? " ring" : "") },
+    h("div", { class: "row between" },
+      h("h2", {}, p.name),
+      current ? h("span", { class: "muted" }, "en la vista previa")
+        : btn("Ver", () => { dz.profileId = p.id; paintSub(); pushPreview(); }, "small ghost")),
+    textField("Nombre", p.name, 30, (v) => { p.name = v; updateSaveBar(); }),
+    labeled("Empieza a las", h("input", { type: "time", value: p.from, onchange: (ev) => { p.from = ev.target.value; touch(); } })),
+    labeled("Tema", themeSelect(p.theme, (v) => { p.theme = v; touch(); })),
+    h("div", { class: "field" },
+      h("span", { class: "muted" }, "Pantallas de este perfil"),
+      Object.keys(d.screens).map((id) => boolField(d.screens[id].name, p.screens.includes(id), (on) => {
+        const ids = Object.keys(d.screens).filter((x) => (x === id ? on : p.screens.includes(x)));
+        if (!ids.length) { toast("Cada perfil necesita al menos una pantalla", true); paintSub(); return; }
+        p.screens = ids;
+        touch();
+      }))),
+    selectField("Cambio de pantalla", options.map(([v, l]) => [String(v), l]), String(rotate), (v) => { p.rotate_s = Number(v); touch(); }),
+    numberField("Brillo (1–100)", p.brightness === undefined ? 70 : p.brightness, 1, 100, (v) => { p.brightness = v; touch(); }),
+    boolField("Modo noche (se atenúa y tocar la pantalla la ilumina un momento)", p.night, (v) => { p.night = v; touch(); }),
+    boolField("Mostrar la barra de botones", p.show_bar !== false, (v) => { p.show_bar = v; touch(); }),
+    d.profiles.length > 1 ? btn("Borrar perfil", () => deleteProfile(p), "small danger") : null);
+}
+
+function freeHour() {
+  const used = new Set(form.current.profiles.map((p) => p.from));
+  for (let hr = 0; hr < 24; hr++) {
+    const s = String(hr).padStart(2, "0") + ":00";
+    if (!used.has(s)) return s;
+  }
+  return "12:30";
+}
+
+function addProfile() {
+  const d = form.current;
+  if (d.profiles.length >= 4) { toast("Máximo 4 perfiles", true); return; }
+  const id = EditorCore.uniqueId("perfil", d.profiles.map((p) => p.id));
+  d.profiles.push({
+    id, name: "Nuevo perfil", from: freeHour(), theme: Object.keys(d.themes)[0],
+    screens: [Object.keys(d.screens)[0]], rotate_s: 0, brightness: 70, night: false, show_bar: true,
+  });
+  dz.profileId = id;
+  touch(); paintSub();
+}
+
+async function deleteProfile(p) {
+  const d = form.current;
+  if (d.profiles.length <= 1) { toast("Tiene que quedar al menos un perfil", true); return; }
+  if (!(await confirmInPage(`¿Borrar el perfil «${p.name}»?`, "Borrar"))) return;
+  d.profiles.splice(d.profiles.indexOf(p), 1);
+  if (dz.profileId === p.id) dz.profileId = d.profiles[0].id;
+  touch(); paintSub();
 }
