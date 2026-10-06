@@ -13,6 +13,10 @@
     W: 0, H: 0, updaters: [], rotateTimer: null,
   };
   var rootEl, contentEl, resizeTimer, lastMinute = -1;
+  var pending = []; // llamadas a render/setData recibidas antes de que exista el DOM
+  // El script va al final de <body>: los elementos ya existen, así render() funciona antes de init().
+  rootEl = document.getElementById("root");
+  contentEl = document.getElementById("content");
 
   function native(name, arg) {
     var n = window.Native;
@@ -77,6 +81,7 @@
   // ------------------------------------------------------------------ dibujo
 
   function render(design, opts) {
+    if (!rootEl || !contentEl) { pending.push(function () { render(design, opts); }); return; }
     S.design = design;
     S.opts = opts || {};
     var p = pick(design, S.opts);
@@ -373,7 +378,11 @@
 
   // ------------------------------------------------------------------ API pública
 
-  function setData(data) { S.data = data || {}; updateAll(); }
+  function setData(data) {
+    if (!rootEl || !contentEl) { pending.push(function () { setData(data); }); return; }
+    S.data = data || {};
+    updateAll();
+  }
 
   function tick() {
     updateAll();
@@ -405,6 +414,9 @@
       else if (m.type === "face-data") setData(m.data || {});
     });
     setInterval(tick, 1000);
+    var queued = pending;
+    pending = [];
+    for (var q = 0; q < queued.length; q++) queued[q]();
   }
 
   window.Face = { render: render, setData: setData };
