@@ -53,4 +53,18 @@ class WeatherParseTest {
         assertEquals(1, r.days.size)
         assertEquals(0, r.days[0].code)
     }
+
+    @Test fun `un null en la previsión diaria no tira el informe`() {
+        val r = Weather.parse(sample.replace("[22.2,23.0,19.6,18.0,20.4,21.1]", "[22.2,23.0,null,18.0,20.4,21.1]"))
+        assertEquals(19, r.temp); assertEquals(22, r.max); assertEquals(12, r.min)
+        assertTrue(r.days.isEmpty())
+        assertEquals(5, r.hours.size)
+    }
+
+    @Test fun `un null en la previsión horaria no tira el informe`() {
+        val r = Weather.parse(sample.replace("[19.4,20.1,20.6,21.0,", "[19.4,20.1,20.6,null,"))
+        assertEquals(19, r.temp); assertEquals(22, r.max)
+        assertTrue(r.hours.isEmpty())
+        assertEquals(5, r.days.size)
+    }
 }

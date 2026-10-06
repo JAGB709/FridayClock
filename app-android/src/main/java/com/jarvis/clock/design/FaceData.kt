@@ -55,7 +55,7 @@ object FaceData {
     fun faceVersion(ctx: Context): String =
         version ?: runCatching {
             versionOf(FILES.map { name -> ctx.assets.open("face/$name").use { it.readBytes() } })
-        }.getOrDefault("?").also { version = it }
+        }.onSuccess { version = it }.getOrDefault("?")
 
     /** Datos actuales: tiempo y previsión de la caché, próxima alarma y si falta el permiso de alarmas exactas. */
     fun build(ctx: Context, ringingLabel: String? = null): JSONObject {

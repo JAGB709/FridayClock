@@ -83,21 +83,28 @@ object Weather {
         val dMax = d.getJSONArray("temperature_2m_max")
         val dMin = d.getJSONArray("temperature_2m_min")
         val dCode = d.optJSONArray("weather_code")
-        val days = ArrayList<Day>()
-        for (i in 1 until dTimes.length()) {
-            days += Day(dayName(dTimes.getString(i)), dMin.getDouble(i).roundToInt(), dMax.getDouble(i).roundToInt(), dCode?.optInt(i) ?: 0)
-        }
-        val hours = ArrayList<Hour>()
-        o.optJSONObject("hourly")?.let { hr ->
-            val t = hr.getJSONArray("time")
-            val temp = hr.getJSONArray("temperature_2m")
-            val code = hr.optJSONArray("weather_code")
-            var i = 1
-            while (i < t.length() && hours.size < 5) {
-                hours += Hour(t.getString(i).substring(11, 13).toInt(), temp.getDouble(i).roundToInt(), code?.optInt(i) ?: 0)
-                i += 2
+        // La previsión es opcional: una entrada nula solo pierde la previsión, no el tiempo actual.
+        val days = runCatching {
+            val l = ArrayList<Day>()
+            for (i in 1 until dTimes.length()) {
+                l += Day(dayName(dTimes.getString(i)), dMin.getDouble(i).roundToInt(), dMax.getDouble(i).roundToInt(), dCode?.optInt(i) ?: 0)
             }
-        }
+            l.toList()
+        }.getOrDefault(emptyList())
+        val hours = runCatching {
+            val l = ArrayList<Hour>()
+            o.optJSONObject("hourly")?.let { hr ->
+                val t = hr.getJSONArray("time")
+                val temp = hr.getJSONArray("temperature_2m")
+                val code = hr.optJSONArray("weather_code")
+                var i = 1
+                while (i < t.length() && l.size < 5) {
+                    l += Hour(t.getString(i).substring(11, 13).toInt(), temp.getDouble(i).roundToInt(), code?.optInt(i) ?: 0)
+                    i += 2
+                }
+            }
+            l.toList()
+        }.getOrDefault(emptyList())
         return Report(
             temp = cur.getDouble("temperature_2m").roundToInt(),
             code = cur.getInt("weather_code"),
