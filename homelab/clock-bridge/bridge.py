@@ -28,6 +28,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
+import calc
+from route import needs_agent, needs_thinking
 from wake import split_wake
 
 log = logging.getLogger("clock-bridge")
@@ -61,6 +63,27 @@ KOKORO_SPEED = float(os.getenv("KOKORO_SPEED", "1.0"))
 VOICE_TARGET_RMS = float(os.getenv("VOICE_TARGET_RMS", "0.18"))  # RMS objetivo (0..1 de fondo de escala)
 VOICE_MAX_GAIN = float(os.getenv("VOICE_MAX_GAIN", "6"))
 PIPER_SPEAKER = os.getenv("PIPER_SPEAKER", "")  # id de hablante en voces multi-hablante (sharvard: 1 = mujer)
+
+# Camino rápido: lo cotidiano se contesta con Qwen directo (sin razonamiento y con un prompt corto)
+# en vez de pasar por Hermes, que manda ~16.000 tokens de herramientas y deja que el modelo piense.
+# Medido en la GTX 1060: ~0,4 s (reasoning none) frente a 9 s (por defecto) y ~4 s (Hermes).
+FAST_CHAT = os.getenv("FAST_CHAT", "1") == "1"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+FAST_MODEL = os.getenv("FAST_MODEL", "qwen3.5:4b")
+FAST_TIMEOUT = float(os.getenv("FAST_TIMEOUT", "40"))
+FAST_HISTORY_TURNS = int(os.getenv("FAST_HISTORY_TURNS", "6"))
+FAST_MAX_TOKENS = int(os.getenv("FAST_MAX_TOKENS", "130"))  # voz: ~90 palabras como tope duro
+
+FAST_INSTRUCTIONS = """\
+Eres {name}, una asistente de voz. Respondes con precisión y en español natural. Puedes charlar de
+cualquier tema, contar chistes, explicar cosas, hacer cálculos y dar consejos. Lo que escribas se
+lee en voz alta.
+- Brevedad: 1-2 frases (máximo 35 palabras), salvo que pidan más detalle.
+- Sin markdown, listas, emojis, URLs ni tablas. Los números, como se dicen.
+- Si te falta un dato, haz UNA pregunta corta que termine en "?".
+- No inventes datos en tiempo real que no tengas (noticias, resultados, precios): dilo con franqueza.
+Datos útiles: ahora es {now} ({weekday}); ciudad: {city}.{weather}
+"""
 
 VOICE_INSTRUCTIONS = """\
 Estás respondiendo por el altavoz de un reloj despertador inteligente (Mi Smart Clock)
@@ -286,6 +309,64 @@ def extract_text(resp: dict) -> str:
                 parts.append(c.get("text", ""))
     return "\n".join(p for p in parts if p).strip()
 
+_chats: dict[str, tuple[list[dict], float]] = {}
+_last_calc: dict[str, tuple[object, float]] = {}  # último resultado de la calculadora, para "¿y si le sumo diez?"
+
+
+def _fast_system(context: dict) -> str:
+    loc = context.get("location") or {}
+    w = context.get("weather") or {}
+    weather = ""
+    if w:
+        weather = (
+            f" Tiempo hoy: {w.get('description', '')}, {w.get('temp', '?')} grados "
+            f"(máxima {w.get('max', '?')}, mínima {w.get('min', '?')}, lluvia {w.get('rain_prob', '?')} por ciento)."
+        )
+    return FAST_INSTRUCTIONS.format(
+        name=context.get("assistant_name") or "Friday",
+        now=str(context.get("now", ""))[:16].replace("T", " "),
+        weekday=context.get("weekday", ""),
+        city=loc.get("city", ""),
+        weather=weather,
+    )
+
+
+def ask_fast(text: str, context: dict, device: str) -> str:
+    """Respuesta directa de Qwen por Ollama, sin razonamiento. Lanza si no hay respuesta útil."""
+    now = time.time()
+    hist, last = _chats.get(device, ([], 0.0))
+    if now - last > SESSION_IDLE_MIN * 60:
+        hist = []
+    # No se envía num_ctx: Ollama recargaría el modelo si difiere del contexto con el que está cargado.
+    r = httpx.post(
+        f"{OLLAMA_URL}/v1/chat/completions",
+        json={
+            "model": FAST_MODEL,
+            "messages": [{"role": "system", "content": _fast_system(context)}, *hist, {"role": "user", "content": text}],
+            # Sin razonamiento: 0,4 s en vez de 9. Las cuentas no llegan aquí (calc.py o Hermes).
+            "reasoning_effort": "none",
+            "max_tokens": FAST_MAX_TOKENS,
+            "temperature": 0.3,
+            "stream": False,
+        },
+        timeout=FAST_TIMEOUT,
+    )
+    r.raise_for_status()
+    reply = (r.json()["choices"][0]["message"].get("content") or "").strip()
+    if not reply:
+        raise RuntimeError("Ollama devolvió una respuesta vacía")
+    remember_turn(device, text, reply)
+    return reply
+
+
+def remember_turn(device: str, user: str, reply: str) -> None:
+    """Memoria corta de la charla (también de los turnos que atendió Hermes, para que los seguimientos casen)."""
+    hist = _chats.get(device, ([], 0.0))[0]
+    if time.time() - _chats.get(device, ([], 0.0))[1] > SESSION_IDLE_MIN * 60:
+        hist = []
+    hist = [*hist, {"role": "user", "content": user}, {"role": "assistant", "content": reply}]
+    _chats[device] = (hist[-2 * FAST_HISTORY_TURNS :], time.time())
+
 # --------------------------------------------------------------------------- API
 
 class AssistRequest(BaseModel):
@@ -367,12 +448,29 @@ def assist(req: AssistRequest) -> dict:
         return {"transcript": "", "reply": ""}
 
     t0 = time.time()
-    try:
-        reply = ask_hermes(transcript, req.context, req.device)
-    except httpx.HTTPError:
-        log.exception("Hermes no responde")
-        reply = "Hermes no me responde ahora mismo."
-    log.info("Hermes %.1fs: %s -> %s", time.time() - t0, transcript, reply)
+    engine, reply = "Hermes", ""
+    # El parte de buenos días usa agenda y herramientas: siempre Hermes.
+    if FAST_CHAT and req.mode != "briefing" and not needs_agent(transcript):
+        last, stamp = _last_calc.get(req.device, (None, 0.0))
+        solved = calc.solve_with_value(transcript, last if time.time() - stamp < SESSION_IDLE_MIN * 60 else None)
+        if solved:
+            engine, reply = "Calculadora", solved[0]
+            _last_calc[req.device] = (solved[1], time.time())
+            remember_turn(req.device, transcript, reply)
+        elif not needs_thinking(transcript):  # un cálculo que no entendemos exige razonar: Hermes
+            try:
+                engine, reply = "Qwen", ask_fast(transcript, req.context, req.device)
+            except Exception:  # noqa: BLE001 - si el camino rápido falla, Hermes contesta
+                log.exception("Camino rápido falló; paso a Hermes")
+    if not reply:
+        try:
+            reply = ask_hermes(transcript, req.context, req.device)
+            if req.mode != "briefing":
+                remember_turn(req.device, transcript, reply)
+        except httpx.HTTPError:
+            log.exception("Hermes no responde")
+            reply = "Hermes no me responde ahora mismo."
+    log.info("%s %.1fs: %s -> %s", engine, time.time() - t0, transcript, reply)
 
     out = {
         "transcript": "" if req.mode == "briefing" else transcript,
