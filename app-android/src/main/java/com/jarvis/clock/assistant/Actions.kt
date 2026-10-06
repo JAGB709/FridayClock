@@ -9,6 +9,9 @@ import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.alarm.AlarmStore
 import com.jarvis.clock.bt.BluetoothControl
+import com.jarvis.clock.design.DesignSchema
+import com.jarvis.clock.design.DesignStore
+import com.jarvis.clock.design.FaceData
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
@@ -88,6 +91,33 @@ object Actions {
                 if (v.values.isNotEmpty()) Events.post(Events.Event.SettingsChanged(v.values.keys))
                 ok().put("settings", SettingsSchema.valuesJson())
             }
+        }
+        "get_design" -> {
+            val l = DesignStore.load(ctx)
+            ok().put("design", l.design).put("saved", l.saved).put("face_version", FaceData.faceVersion(ctx))
+        }
+        "set_design" -> when (val v = DesignSchema.validate(a.optJSONObject("design") ?: JSONObject())) {
+            is DesignSchema.Result.Invalid ->
+                JSONObject().put("ok", false).put("error", "diseño no válido").put("errors", JSONObject(v.errors))
+            is DesignSchema.Result.Ok -> {
+                DesignStore.save(ctx, v.design)
+                Events.post(Events.Event.DesignChanged)
+                ok().put("design", v.design)
+            }
+        }
+        "preview_design" -> when (val v = DesignSchema.validate(a.optJSONObject("design") ?: JSONObject())) {
+            is DesignSchema.Result.Invalid ->
+                JSONObject().put("ok", false).put("error", "diseño no válido").put("errors", JSONObject(v.errors))
+            is DesignSchema.Result.Ok -> {
+                val secs = a.optInt("seconds", 30).coerceIn(5, 120)
+                Events.post(Events.Event.DesignPreview(v.design, secs))
+                ok().put("seconds", secs)
+            }
+        }
+        "reset_design" -> {
+            DesignStore.reset(ctx)
+            Events.post(Events.Event.DesignChanged)
+            ok().put("design", DesignStore.load(ctx).design)
         }
         else -> JSONObject().put("ok", false).put("error", "acción desconocida: ${a.optString("type")}")
     }

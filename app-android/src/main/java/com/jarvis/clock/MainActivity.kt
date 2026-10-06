@@ -372,6 +372,7 @@ class MainActivity : Activity() {
                 if (e.keys.any { it.endsWith("brightness") }) brightnessOverride = null
                 applyNightMode()
             }
+            Event.DesignChanged, is Event.DesignPreview, Event.DesignPreviewCancel -> Unit
             is Event.BluetoothDiscoverable -> runCatching {
                 startActivity(com.jarvis.clock.bt.BluetoothControl.discoverableIntent(e.seconds))
             }

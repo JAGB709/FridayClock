@@ -25,6 +25,11 @@ object Events {
         data class BluetoothDiscoverable(val seconds: Int) : Event()
         /** Ajustes cambiados por la API: la UI vuelve a aplicar lo que dependa de ellos. */
         data class SettingsChanged(val keys: Set<String>) : Event()
+        /** El diseño de pantallas guardado cambió (o se restauró). */
+        object DesignChanged : Event()
+        /** Mostrar un diseño sin guardarlo durante [seconds] segundos. */
+        data class DesignPreview(val design: JSONObject, val seconds: Int) : Event()
+        object DesignPreviewCancel : Event()
     }
 
     enum class State { IDLE, LISTENING, THINKING, SPEAKING, HEARD, ERROR }
