@@ -105,7 +105,9 @@ Un único JSON `design` (≤ 64 KB), versión 1. Ejemplo reducido:
 | `weather_now` | tiempo ahora: icono y temperatura | `detail` (añade descripción, máx/mín, lluvia) |
 | `forecast` | previsión | `mode` `hours`/`days`, `count` 2–5 |
 | `next_alarm` | próxima alarma | `show_label` |
-| `text` | texto libre o frase del día | `mode` `fixed`/`daily`, `text`, `quotes` |
+| `text` | texto libre o frase del día | `mode` `fixed`/`daily`/`alarm_label`, `text`, `quotes` |
+
+`alarm_label` muestra el nombre de la alarma que está sonando; fuera de la pantalla de alarma queda vacío.
 
 Opciones comunes: `color` (`fg`, `muted` o `accent`, del tema) y `align`
 (`left`/`center`/`right`).
@@ -121,7 +123,7 @@ Opciones comunes: `color` (`fg`, `muted` o `accent`, del tema) y `align`
 
 ### Motor `face/` (fuente única: `app-android/src/main/assets/face/`)
 
-- `index.html`, `face.js`, `face.css`, y la fuente de 7 segmentos para el estilo `digital`.
+- `index.html`, `face.js`, `face.css`, El estilo `digital` del tema dibuja la hora con segmentos SVG generados por el propio motor (sin archivo de fuente); en el resto de textos equivale a `mono`.
   JavaScript clásico **ES2017** sin `?.`, `??`, ni `aspect-ratio` (el `WebView` del reloj es
   Chrome 74); se comprueba en el reloj real.
 - API del motor: `Face.render(design, profileId, data)` y `Face.setData(data)`.
@@ -156,11 +158,12 @@ Opciones comunes: `color` (`fg`, `muted` o `accent`, del tema) y `align`
   Si suena una alarma, la vista previa se cancela.
 - **Alarma sonando:** `AlarmActivity` carga el motor con el diseño de `alarm_screen` en la
   parte superior; Posponer y Descartar son nativos, con los textos del diseño y los colores del
-  tema.
+  tema. `snooze_label` admite `{min}`, que se sustituye por los minutos de posponer.
 - **Respaldo:** si el `WebView` no se puede crear, el proceso de render muere, la página no carga
   o el diseño guardado no es válido, se muestra la carátula nativa actual. Los ajustes
   `night_start`, `night_end`, `night_brightness` y `day_brightness` pasan a gobernar solo esa
   carátula de respaldo (en Ajustes de la web, su grupo se llama "Carátula de respaldo").
+- Tocar la pantalla en un perfil con `night` solo sube el brillo unos segundos (al del primer perfil que no sea de noche); el tema no cambia.
 - Se mantiene: doble toque = hablar, pulsación larga = Ajustes, `POST /brightness` puntual.
 
 ### API nueva del reloj (token, 503 si no hay token)
@@ -205,8 +208,7 @@ Opciones comunes: `color` (`fg`, `muted` o `accent`, del tema) y `align`
 - Fondo borrado que usa un tema: el tema se muestra con su color de respaldo (`bg.color` o
   negro) y la web avisa.
 - Previsión no disponible (sin red): el elemento muestra "—"; el resto sigue funcionando.
-- Diseño guardado corrupto: carátula nativa de respaldo y `GET /design` devuelve el diseño
-  inicial para poder repararlo desde la web.
+- Diseño guardado corrupto o inválido: el reloj usa el diseño inicial (siempre válido) y `GET /design` devuelve `"saved": false` para poder repararlo desde la web.
 - Memoria: se mide en el reloj real (objetivo: ≤ 100 MB extra con el `WebView` abierto); si se
   supera, se libera el `WebView` cuando la actividad pasa a segundo plano.
 
