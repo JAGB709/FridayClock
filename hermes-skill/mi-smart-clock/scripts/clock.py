@@ -114,6 +114,7 @@ def main():
     dp = sub.add_parser("design-preview", help="probar un diseño (archivo JSON) en el reloj sin guardarlo")
     dp.add_argument("file")
     dp.add_argument("--seconds", type=int, default=30)
+    sub.add_parser("design-preview-cancel", help="cancelar la prueba de diseño en curso")
     sub.add_parser("design-reset", help="restaurar el diseño inicial")
     sub.add_parser("backgrounds", help="fondos de pantalla subidos")
 
@@ -157,10 +158,18 @@ def main():
         return call("GET", "/sounds")
     if x.cmd == "design":
         return call("GET", "/design")
-    if x.cmd == "design-set":
-        return call("PUT", "/design", json.load(open(x.file, encoding="utf-8")))
-    if x.cmd == "design-preview":
-        return call("POST", "/design/preview", {"design": json.load(open(x.file, encoding="utf-8")), "seconds": x.seconds})
+    if x.cmd in ("design-set", "design-preview"):
+        try:
+            with open(x.file, encoding="utf-8") as f:
+                design = json.load(f)
+        except (OSError, ValueError) as e:
+            print(json.dumps({"ok": False, "error": f"no se pudo leer {x.file}: {e}"}, ensure_ascii=False, indent=2))
+            return 1
+        if x.cmd == "design-set":
+            return call("PUT", "/design", design)
+        return call("POST", "/design/preview", {"design": design, "seconds": x.seconds})
+    if x.cmd == "design-preview-cancel":
+        return call("DELETE", "/design/preview")
     if x.cmd == "design-reset":
         return call("POST", "/design/reset", {})
     if x.cmd == "backgrounds":

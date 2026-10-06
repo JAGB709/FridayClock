@@ -48,6 +48,7 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
 10. Sonidos disponibles para las alarmas: `clock.py sounds`.
 11. Diseño de las pantallas del reloj (temas, rejilla 8×6, perfiles por hora, pantalla de alarma):
     `clock.py design` · `clock.py design-set diseno.json` · `clock.py design-preview diseno.json --seconds 30`
+    · `clock.py design-preview-cancel`
     · `clock.py design-reset`. Guardar es todo o nada: si algo no vale, devuelve `errors` por ruta.
 12. Fondos de pantalla subidos: `clock.py backgrounds`.
 13. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`

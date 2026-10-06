@@ -264,7 +264,7 @@ class Handler(BaseHTTPRequestHandler):
             name = unquote(self._path.removeprefix("/backgrounds/"))
             if name not in BG_DATA:
                 return self._send(404, {"ok": False, "error": f"no existe el fondo {name}"})
-            ctype = "image/png" if name.endswith(".png") else "image/webp" if name.endswith(".webp") else "image/jpeg"
+            ctype = "text/html" if BG_DATA[name].startswith(b"<html") else "image/png" if name.endswith(".png") else "image/webp" if name.endswith(".webp") else "image/jpeg"
             return self._send_bytes(200, BG_DATA[name], ctype)
         if self._path == "/face/data":
             return self._send(200, {"ok": True, **FACE_DATA})

@@ -40,6 +40,11 @@ const numberField = (label, value, min, max, onChange) =>
 const colorField = (label, value, onChange) =>
   labeled(label, h("input", { type: "color", value, oninput: (ev) => onChange(ev.target.value) }));
 
+// Actualiza el texto de la opción de un <select> mientras se escribe el nombre, sin repintar (no pierde el foco).
+function setOptionText(select, value, text) {
+  for (const o of select.options) if (o.value === value) o.textContent = text;
+}
+
 const themeSelect = (current, onChange) =>
   h("select", { onchange: (ev) => onChange(ev.target.value) },
     Object.keys(form.current.themes).map((id) => h("option", { value: id, selected: id === current }, form.current.themes[id].name)));
@@ -66,13 +71,20 @@ function previewOpts() {
   return { screen: dz.screenId, theme: themeForPreview(), edit: true, selected: dz.selected, grid: true, bgBase };
 }
 
+// Tipos de elemento desconocidos (p. ej. de una versión más nueva del reloj) no deben romper el panel.
+const typeInfo = (type) => EditorCore.TYPES[type] || { label: type, fields: [], defaults: {} };
+
+function frameGone() { return !dz.frame || !dz.frame.isConnected || !dz.frame.contentWindow; }
+
 function pushPreview() {
-  if (!dz.ready || !dz.frame || !form) return;
+  if (frameGone()) return;
+  if (!dz.ready || !form) return;
   dz.frame.contentWindow.postMessage({ type: "face-render", design: form.current, opts: previewOpts() }, location.origin);
 }
 
 function pushData() {
-  if (!dz.ready || !dz.frame) return;
+  if (frameGone()) return;
+  if (!dz.ready) return;
   const data = Object.assign({}, dz.data, dz.sub === "alarm" ? { ringing_label: "Despertar" } : {});
   dz.frame.contentWindow.postMessage({ type: "face-data", data }, location.origin);
 }
@@ -175,7 +187,7 @@ function subScreen() {
         btn("＋ Nueva", addScreen, "small ghost"),
         btn("Duplicar", duplicateScreen, "small ghost"),
         btn("Borrar", deleteScreen, "small danger")),
-      textField("Nombre", scr.name, 30, (v) => { scr.name = v; updateSaveBar(); })),
+      textField("Nombre", scr.name, 30, (v) => { scr.name = v; setOptionText(sel, dz.screenId, v); updateSaveBar(); })),
     elementsPanel(),
   ];
 }
@@ -215,13 +227,12 @@ async function deleteScreen() {
 function elementsPanel() {
   const list = currentElements();
   const sel = list.find((e) => e.id === dz.selected);
-  const T = EditorCore.TYPES;
   return h("div", { class: "card" },
     h("h2", {}, "Elementos"),
     h("p", { class: "muted" }, "Toca un elemento en la vista previa o en la lista. Arrastra su esquina azul para cambiar el tamaño."),
     list.length
       ? list.map((e) => h("div", { class: "elrow" + (e.id === dz.selected ? " on" : ""), onclick: () => selectElement(e.id) },
-        h("span", {}, T[e.type].label + " · " + e.id), h("span", { class: "muted" }, e.w + "×" + e.h + " en " + e.x + "," + e.y)))
+        h("span", {}, typeInfo(e.type).label + " · " + e.id), h("span", { class: "muted" }, e.w + "×" + e.h + " en " + e.x + "," + e.y)))
       : h("p", { class: "muted" }, "Sin elementos."),
     addMenu(),
     sel ? elementOptions(sel) : null);
@@ -261,6 +272,7 @@ function setRect(e, patch) {
   if (other) { toast("Se solapa con " + other.id, true); return false; }
   Object.assign(e, patch);
   touch();
+  paintSub(); // los números ya salieron del foco (onchange): se refresca la lista
   return true;
 }
 
@@ -278,9 +290,9 @@ function resizeElement(id, w, hh) {
 }
 
 function typedField(e, f) {
-  const def = EditorCore.TYPES[e.type].defaults[f.key];
+  const def = typeInfo(e.type).defaults[f.key];
   const val = e[f.key] === undefined ? def : e[f.key];
-  if (f.when && (e[f.when.key] === undefined ? EditorCore.TYPES[e.type].defaults[f.when.key] : e[f.when.key]) !== f.when.value) return null;
+  if (f.when && (e[f.when.key] === undefined ? typeInfo(e.type).defaults[f.when.key] : e[f.when.key]) !== f.when.value) return null;
   if (f.kind === "select") return selectField(f.label, f.options, val, (v) => { e[f.key] = v; touch(); paintSub(); });
   if (f.kind === "bool") return boolField(f.label, val, (v) => { e[f.key] = v; touch(); });
   if (f.kind === "number") return numberField(f.label, val, f.min, f.max, (v) => { e[f.key] = v; touch(); });
@@ -293,15 +305,14 @@ function typedField(e, f) {
 }
 
 function elementOptions(e) {
-  const T = EditorCore.TYPES;
   const rows = currentRows();
   const pos = (key, min, max) => numberField(key.toUpperCase(), e[key], min, max, (v) => { if (!setRect(e, { [key]: v })) paintSub(); });
   return h("div", { class: "opt" },
-    h("h2", {}, T[e.type].label),
+    h("h2", {}, typeInfo(e.type).label),
     h("div", { class: "grid4" }, pos("x", 0, 7), pos("y", 0, rows - 1), pos("w", 1, 8), pos("h", 1, rows)),
     selectField("Color", EditorCore.COLOR_OPTIONS, e.color || "fg", (v) => { e.color = v; touch(); }),
     selectField("Alineación", [["left", "Izquierda"], ["center", "Centro"], ["right", "Derecha"]], e.align || "center", (v) => { e.align = v; touch(); }),
-    ...T[e.type].fields.map((f) => typedField(e, f)),
+    ...typeInfo(e.type).fields.map((f) => typedField(e, f)),
     btn("Borrar elemento", () => {
       const list = currentElements();
       list.splice(list.indexOf(e), 1);
@@ -348,11 +359,12 @@ const FONT_OPTIONS = [["thin", "Fina"], ["normal", "Normal"], ["bold", "Negrita"
 
 function subTheme() {
   const t = form.current.themes[dz.themeId];
+  const themeSel = themeSelect(dz.themeId, (v) => { dz.themeId = v; paintSub(); pushPreview(); });
   return [
     h("div", { class: "card" },
-      labeled("Tema", themeSelect(dz.themeId, (v) => { dz.themeId = v; paintSub(); pushPreview(); })),
+      labeled("Tema", themeSel),
       h("div", { class: "row" }, btn("Duplicar", duplicateTheme, "small ghost"), btn("Borrar", deleteTheme, "small danger")),
-      textField("Nombre", t.name, 30, (v) => { t.name = v; updateSaveBar(); }),
+      textField("Nombre", t.name, 30, (v) => { t.name = v; setOptionText(themeSel, dz.themeId, v); updateSaveBar(); }),
       selectField("Letra de la hora y los textos", FONT_OPTIONS, t.font, (v) => { t.font = v; touch(); }),
       colorField("Color principal", t.fg, (v) => { t.fg = v; touch(); }),
       colorField("Color secundario", t.muted, (v) => { t.muted = v; touch(); }),
@@ -476,12 +488,13 @@ function profileCard(p) {
   const rotate = p.rotate_s === undefined ? 0 : p.rotate_s;
   const options = ROTATE_OPTIONS.some(([v]) => v === rotate) ? ROTATE_OPTIONS : [...ROTATE_OPTIONS, [rotate, `Cada ${rotate} s`]];
   const current = p.id === dz.profileId;
+  const title = h("h2", {}, p.name);
   return h("div", { class: "card" + (current ? " ring" : "") },
     h("div", { class: "row between" },
-      h("h2", {}, p.name),
+      title,
       current ? h("span", { class: "muted" }, "en la vista previa")
         : btn("Ver", () => { dz.profileId = p.id; paintSub(); pushPreview(); }, "small ghost")),
-    textField("Nombre", p.name, 30, (v) => { p.name = v; updateSaveBar(); }),
+    textField("Nombre", p.name, 30, (v) => { p.name = v; title.textContent = v; updateSaveBar(); }),
     labeled("Empieza a las", h("input", { type: "time", value: p.from, onchange: (ev) => { p.from = ev.target.value; touch(); } })),
     labeled("Tema", themeSelect(p.theme, (v) => { p.theme = v; touch(); })),
     h("div", { class: "field" },

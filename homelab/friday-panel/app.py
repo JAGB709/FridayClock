@@ -40,6 +40,7 @@ QUICK_ACTIONS = {
 
 FACE_FILES = ("index.html", "face.css", "face-core.js", "face.js")
 BG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+BG_MIME = {"image/jpeg", "image/png", "image/webp"}
 MAX_BG_BYTES = 2 * 1024 * 1024
 
 
@@ -266,17 +267,24 @@ def create_app(cfg: Config) -> FastAPI:
 
     @app.get("/api/bg/{name}")
     async def get_background(name: str):
+        if Path(name).name != name or Path(name).suffix.lower() not in BG_EXTS:
+            return _error(400, "Nombre no válido")
         try:
             async with httpx.AsyncClient(base_url=cfg.clock_url, timeout=cfg.timeout_s) as c:
                 r = await c.get(f"/backgrounds/{quote(name, safe='')}", headers={"X-Auth-Token": cfg.clock_token})
         except httpx.HTTPError:
             return _error(502, "El reloj no responde")
+        if r.status_code == 401:
+            return _error(502, "El token del reloj (CLOCK_TOKEN) no es válido")
         if r.status_code == 404:
             return _error(404, "No existe ese fondo")
         if r.status_code != 200:
             return _error(502, "No se pudo leer el fondo")
-        return Response(content=r.content, media_type=r.headers.get("content-type", "image/jpeg"),
-                        headers={"Cache-Control": "no-store"})
+        ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
+        if ctype not in BG_MIME:
+            ctype = "application/octet-stream"
+        return Response(content=r.content, media_type=ctype,
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
     # La web, al final para que no tape /api.
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

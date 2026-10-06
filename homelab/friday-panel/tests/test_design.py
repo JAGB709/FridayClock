@@ -61,6 +61,28 @@ def test_background_upload_list_serve_delete(client):
     assert client.delete("/api/backgrounds/playa.jpg").status_code == 404
 
 
+def test_background_serve_rejects_bad_names_and_non_images(client):
+    assert client.get("/api/bg/%2e%2e").status_code == 400
+    assert client.get("/api/bg/sinextension").status_code == 400
+    assert client.get("/api/bg/virus.exe").status_code == 400
+    mock.BG_DATA["raro.jpg"] = b"<html><script>alert(1)</script>"
+    r = client.get("/api/bg/raro.jpg")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/octet-stream"
+    assert r.headers["x-content-type-options"] == "nosniff"
+
+
+def test_background_serve_clock_down_is_502(make_client):
+    c = make_client(clock_url="http://127.0.0.1:9")
+    r = c.get("/api/bg/playa.jpg")
+    assert r.status_code == 502 and "no responde" in r.json()["error"]
+
+
+def test_background_serve_bad_token_is_translated(make_client):
+    r = make_client(clock_token="otro").get("/api/bg/playa.jpg")
+    assert r.status_code == 502 and "CLOCK_TOKEN" in r.json()["error"]
+
+
 def test_face_version_endpoint_matches_static_copy(client):
     from pathlib import Path
     import app as panel
