@@ -18,7 +18,7 @@
 - Motor `face/`: JavaScript clásico **ES2017**, sin `?.`, sin `??`, y en CSS sin `inset`, `gap` en flex ni `aspect-ratio` (el WebView del reloj es **Chrome 74**).
 - WebView: solo carga `https://appassets.androidplatform.net/assets/face/…` servido por la app (`shouldInterceptRequest`); cualquier otra petición responde 404; navegación externa bloqueada; el puente JS (`Native`) solo existe en esa página.
 - Rejilla fija **8 columnas × 6 filas** (la zona superior de la pantalla de alarma: **8×4**). Elementos sin solapes, dentro de la rejilla.
-- Límites del diseño: ≤ 64 KB; ≤ 12 temas; ≤ 8 pantallas; ≤ 12 elementos por pantalla; 1–4 perfiles; 1–6 pantallas por perfil; textos ≤ 120 caracteres; ≤ 20 frases; fondos ≤ 2 MB (jpg/png/webp, máx. 4096 px).
+- Límites del diseño: ≤ 64 KB; ≤ 12 temas; ≤ 8 pantallas; ≤ 12 elementos por pantalla; 1–4 perfiles; 1–6 pantallas por perfil; textos ≤ 120 caracteres; ≤ 20 frases; fondos ≤ 2 MB (jpg/png/webp, máx. 2048 px).
 - Diseño: guardado todo o nada (`400` con `{"ok":false,"error":"diseño no válido","errors":{"<ruta>":"<motivo>"}}`).
 - Cada vez que se cambie `app-android/src/main/assets/face/`, ejecutar `bash tools/sync-face.sh` y commitear también la copia `homelab/friday-panel/static/face/` (un test de CI falla si difieren).
 - Capacidad nueva del reloj ⇒ `Actions` + `Api.kt` + skill (`clock.py`, `clock_tools.py`, `SKILL.md`, `mock_clock_server.py` + tests) + tabla de la API del README.
@@ -2021,7 +2021,7 @@ import java.io.File
 /** Imágenes de fondo subidas desde el panel (en filesDir/backgrounds, así se ven sin red). */
 object Backgrounds {
     const val MAX_BYTES = 2 * 1024 * 1024
-    private const val MAX_SIDE = 4096
+    private const val MAX_SIDE = 2048
     private val EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
 
     /** Nombre seguro para disco (solo [A-Za-z0-9_-] + extensión admitida) o null. */
@@ -4231,7 +4231,7 @@ y al final del job:
 | `POST /design/reset` | — | restaurar el diseño inicial |
 | `POST /design/preview` | `{"design":{…},"seconds":30}` | mostrar un diseño 5–120 s sin guardarlo (`409` si suena una alarma) |
 | `DELETE /design/preview` | — | cancelar la prueba |
-| `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 2 MB, jpg/png/webp, ≤ 4096 px) | fondos de pantalla |
+| `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 2 MB, jpg/png/webp, ≤ 2048 px) | fondos de pantalla |
 | `GET /face/data` | — | los datos que recibe el motor: tiempo, previsión y próxima alarma |
 ```
 

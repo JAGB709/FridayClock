@@ -399,13 +399,13 @@ Sin token configurado, el servidor responde 503 a todo.
 | Método y ruta | Cuerpo | Qué hace |
 |---|---|---|
 | `GET /health` | — | vivo (sin token) |
-| `GET /status` | — | hora, próxima alarma, si suena, estado del asistente, Bluetooth, alarmas |
+| `GET /status` | — | hora, próxima alarma, si suena, estado del asistente, Bluetooth, alarmas, `face_version` (versión del motor de pantallas) |
 | `GET /alarms` | — | lista de alarmas y temporizadores |
 | `POST /alarm` | `{"action":"set","time":"07:30","label":"Trabajo","days":"weekdays"}` | crear (`days`: `""`, `daily`, `weekdays`, `weekend`, `["mon","fri"]`) |
 | `POST /alarm` | `{"action":"cancel","id":3}` · `{"time":"07:30"}` · `{"all":true}` | borrar |
 | `POST /alarm` | `{"action":"enable"/"disable","id":3}` · `{"action":"stop"/"snooze"}` | activar, desactivar, apagar o posponer |
 | `POST /alarm` | `{"action":"update","id":3,"time":"06:45","max_volume":60}` | editar solo lo enviado; opciones por alarma: `sound`, `max_volume` (1–100), `ramp_s` (0–600), `snooze_min` (1–60), `briefing`; `null` = ajuste general; `sound` = `file:<nombre>` o `system:content://…` (tonos del reloj; otras URLs se rechazan). El panel devuelve los errores como `{"ok":false,"error":…}` |
-| `GET /settings` | — | ajustes (despertador, pantalla, voz, ubicación) y su esquema |
+| `GET /settings` | — | ajustes (despertador, carátula de respaldo, voz, ubicación) y su esquema |
 | `PUT /settings` | `{"snooze_min":10,"night_brightness":5}` | cambiar ajustes; todo o nada (`400` con `errors` por clave); se aplican al instante |
 | `GET /sounds` | — | tonos del sistema y sonidos subidos |
 | `POST /sounds?name=gallo.mp3` | audio en crudo (≤ 5 MB; mp3/ogg/wav/m4a) | subir un sonido de alarma |
@@ -416,7 +416,7 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /design/reset` | — | restaurar el diseño inicial |
 | `POST /design/preview` | `{"design":{…},"seconds":30}` | mostrar un diseño 5–120 s sin guardarlo (`409` si suena una alarma) |
 | `DELETE /design/preview` | — | cancelar la prueba |
-| `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 2 MB, jpg/png/webp, ≤ 4096 px) | fondos de pantalla |
+| `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 2 MB, jpg/png/webp, ≤ 2048 px); `GET /backgrounds/{nombre}` devuelve la imagen, no JSON | fondos de pantalla |
 | `GET /face/data` | — | los datos que recibe el motor: tiempo, previsión y próxima alarma |
 | `POST /timer` | `{"minutes":10,"label":"Pasta"}` · `{"action":"cancel"}` | temporizador |
 | `POST /display` | `{"type":"text"/"html"/"image"/"url","content":"…","duration_ms":20000}` · `{"action":"clear"}` | pantalla completa |

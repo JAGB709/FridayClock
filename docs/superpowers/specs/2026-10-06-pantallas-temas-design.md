@@ -123,10 +123,11 @@ Opciones comunes: `color` (`fg`, `muted` o `accent`, del tema) y `align`
 
 ### Motor `face/` (fuente única: `app-android/src/main/assets/face/`)
 
-- `index.html`, `face.js`, `face.css`, El estilo `digital` del tema dibuja la hora con segmentos SVG generados por el propio motor (sin archivo de fuente); en el resto de textos equivale a `mono`.
+- `index.html`, `face-core.js`, `face.js` y `face.css`. El estilo `digital` del tema dibuja la hora con segmentos SVG generados por el propio motor (sin archivo de fuente); en el resto de textos equivale a `mono`.
   JavaScript clásico **ES2017** sin `?.`, `??`, ni `aspect-ratio` (el `WebView` del reloj es
   Chrome 74); se comprueba en el reloj real.
-- API del motor: `Face.render(design, profileId, data)` y `Face.setData(data)`.
+- API del motor: `Face.render(design, opts)` (`opts`: `profile`, `screen`, `theme`, `alarm`, `edit`,
+  `selected`, `grid`, `bgBase`) y `Face.setData(data)`.
   `data = {weather: {...}, forecast: {hours: [...], days: [...]}, next_alarm: {...}|null}`.
 - La **hora y la fecha las calcula el motor** con el reloj del dispositivo. La rotación entre
   pantallas, el deslizar, el antidesgaste (desplazar unos píxeles cada minuto) y el ajuste del
@@ -137,9 +138,10 @@ Opciones comunes: `color` (`fg`, `muted` o `accent`, del tema) y `align`
 
 ### Reloj (`app-android`)
 
-- `MainActivity` aloja un `WebView` a pantalla completa. Configuración: solo `file:///android_asset/face/`,
-  navegación externa bloqueada, sin red (`blockNetworkLoads`), fondos servidos desde su carpeta
-  con `shouldInterceptRequest` (esquema `friday://bg/<archivo>`).
+- `MainActivity` aloja un `WebView` a pantalla completa. Configuración: solo se carga
+  `https://appassets.androidplatform.net/assets/face/`, servido por la propia app con
+  `shouldInterceptRequest`; navegación externa bloqueada; los fondos se sirven desde su carpeta en
+  `/bg/<nombre>`. `blockNetworkLoads` no se usa: cualquier petición ajena recibe 404 por interceptación.
 - **Android decide** el perfil activo según la hora y se lo dice al motor; también pone el
   brillo del perfil, el modo noche (`night`: tocar la pantalla la ilumina un momento, la
   barra inferior queda atenuada) y ocultar la barra (`show_bar`).
