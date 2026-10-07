@@ -1,9 +1,13 @@
+/* Inter empaquetada (licencia OFL en fonts/OFL.txt) */
+@font-face { font-family: "Inter"; font-weight: 300; src: url("fonts/Inter-Light.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Inter"; font-weight: 400; src: url("fonts/Inter-Regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Inter"; font-weight: 600; src: url("fonts/Inter-SemiBold.ttf") format("truetype"); font-display: swap; }
 html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
 body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 #root {
   position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden;
   color: var(--fg, #fff); font-family: var(--ff, sans-serif); font-weight: var(--fw, 400);
-  touch-action: none;
+  touch-action: none; font-variant-numeric: tabular-nums;
 }
 #content { position: absolute; left: 0; top: 0; right: 0; bottom: 0; transition: opacity 0.2s; }
 .el { position: absolute; display: flex; align-items: center; box-sizing: border-box; overflow: hidden; }

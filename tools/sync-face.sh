@@ -12,5 +12,5 @@ if [ "${1:-}" = "--check" ]; then
   exit 0
 fi
 mkdir -p "$DST"
-cp "$SRC"/* "$DST"/
+cp -r "$SRC"/. "$DST"/
 echo "copiado $SRC -> $DST"

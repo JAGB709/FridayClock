@@ -46,3 +46,12 @@ def test_all_declared_pairs_meet_their_minimum_contrast():
 def test_generated_tokens_are_up_to_date():
     r = subprocess.run([sys.executable, str(ROOT / "tools" / "gen-tokens.py"), "--check"], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_inter_fonts_are_bundled_with_license():
+    fonts = ROOT / "app-android/src/main/assets/face/fonts"
+    for name in ("Inter-Light.ttf", "Inter-Regular.ttf", "Inter-SemiBold.ttf", "OFL.txt"):
+        f = fonts / name
+        assert f.is_file() and f.stat().st_size > 1000, name
+    for name in ("Inter-Light.ttf", "Inter-Regular.ttf", "Inter-SemiBold.ttf"):
+        assert (fonts / name).read_bytes()[:4] in (b"\x00\x01\x00\x00", b"true", b"OTTO")
