@@ -60,25 +60,33 @@ test("fitText: reloj, linea y bloque", () => {
   assert.ok(Math.ceil(200 / perLine) * size * 1.2 <= 160 || size === 8);
 });
 
-test("weatherLine y nextAlarmLine", () => {
-  const w = { temp: 19, icon: "☀", description: "Despejado", max: 22, min: 12, rain: 10 };
-  assert.equal(C.weatherLine(w, false), "☀ 19°");
-  assert.equal(C.weatherLine(w, true), "☀ 19° · Despejado · ↑22° ↓12°");
-  assert.equal(C.weatherLine({ temp: 8, icon: "☂", description: "Lluvia", max: 10, min: 6, rain: 80 }, true), "☂ 8° · Lluvia · ↑10° ↓6° · lluvia 80%");
-  assert.equal(C.weatherLine(null, true), "—");
-  const na = { label: "Trabajo", when: "mañana", time: "07:30" };
-  assert.equal(C.nextAlarmLine(na, true), "⏰ Trabajo · mañana 07:30");
-  assert.equal(C.nextAlarmLine(na, false), "⏰ mañana 07:30");
-  assert.equal(C.nextAlarmLine(null, true), "");
+test("weatherParts: icono y texto sin emojis", () => {
+  const w = { temp: 19, icon: "sun", description: "Despejado", max: 22, min: 12, rain: 10 };
+  assert.deepEqual(C.weatherParts(w, false), { icon: "sun", text: "19°" });
+  assert.deepEqual(C.weatherParts(w, true), { icon: "sun", text: "19° · Despejado · ↑22° ↓12°" });
+  assert.deepEqual(C.weatherParts({ ...w, rain: 50 }, true).text, "19° · Despejado · ↑22° ↓12° · lluvia 50%");
+  assert.deepEqual(C.weatherParts(null, true), { icon: "", text: "—" });
+});
+
+test("nextAlarmParts: campana y texto, null sin alarma", () => {
+  const na = { label: "Alarma", when: "mañana", time: "08:30" };
+  assert.deepEqual(C.nextAlarmParts(na, true), { icon: "bell", text: "Alarma · mañana 08:30" });
+  assert.deepEqual(C.nextAlarmParts(na, false), { icon: "bell", text: "mañana 08:30" });
+  assert.equal(C.nextAlarmParts(null, true), null);
+});
+
+test("fontStyle inter", () => {
+  assert.deepEqual(C.fontStyle("inter"), { family: "\"Inter\", sans-serif", weight: 300, digital: false });
+  assert.equal(C.fontStyle("thin").weight, 100);
 });
 
 test("forecastItems por horas y por dias, y sin datos", () => {
   const f = {
-    hours: [{ h: 9, temp: 18, icon: "☀" }, { h: 11, temp: 21, icon: "☀" }, { h: 13, temp: 23, icon: "⛅" }],
-    days: [{ d: "mié", min: 11, max: 22, icon: "☁" }],
+    hours: [{ h: 9, temp: 18, icon: "sun" }, { h: 11, temp: 21, icon: "sun" }, { h: 13, temp: 23, icon: "cloud-sun" }],
+    days: [{ d: "mié", min: 11, max: 22, icon: "cloud" }],
   };
-  assert.deepEqual(C.forecastItems("hours", 2, f), [{ label: "09h", icon: "☀", text: "18°" }, { label: "11h", icon: "☀", text: "21°" }]);
-  assert.deepEqual(C.forecastItems("days", 5, f), [{ label: "mié", icon: "☁", text: "22°/11°" }]);
+  assert.deepEqual(C.forecastItems("hours", 2, f), [{ label: "09h", icon: "sun", text: "18°" }, { label: "11h", icon: "sun", text: "21°" }]);
+  assert.deepEqual(C.forecastItems("days", 5, f), [{ label: "mié", icon: "cloud", text: "22°/11°" }]);
   assert.deepEqual(C.forecastItems("hours", 3, null), []);
   assert.equal(C.forecastItems("hours", 99, f).length, 3); // count se acota a 2..5
 });

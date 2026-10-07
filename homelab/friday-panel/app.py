@@ -38,7 +38,7 @@ QUICK_ACTIONS = {
     "briefing": ("/briefing", {}),
 }
 
-FACE_FILES = ("index.html", "face.css", "face-core.js", "face.js")
+FACE_FILES = ("index.html", "tokens.css", "face.css", "icons.js", "face-core.js", "face.js")
 BG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 BG_MIME = {"image/jpeg", "image/png", "image/webp"}
 MAX_BG_BYTES = 8 * 1024 * 1024

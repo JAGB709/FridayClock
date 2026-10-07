@@ -78,8 +78,8 @@ BACKGROUNDS: list[dict] = []
 BG_DATA: dict[str, bytes] = {}
 PREVIEW: list[dict] = []
 FACE_DATA = {
-    "weather": {"temp": 19, "icon": "☀", "description": "Despejado", "max": 22, "min": 12, "rain": 10},
-    "forecast": {"hours": [{"h": 15, "temp": 20, "icon": "☀"}], "days": [{"d": "mié", "min": 12, "max": 23, "icon": "☁"}]},
+    "weather": {"temp": 19, "icon": "sun", "description": "Despejado", "max": 22, "min": 12, "rain": 10},
+    "forecast": {"hours": [{"h": 15, "temp": 20, "icon": "sun"}], "days": [{"d": "mié", "min": 12, "max": 23, "icon": "cloud"}]},
     "next_alarm": {"label": "Despertar", "when": "mañana", "time": "07:30"},
     "exact_alarm_missing": False,
 }

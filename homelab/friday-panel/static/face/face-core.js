@@ -84,19 +84,20 @@
     return Math.max(8, size);
   }
 
-  function weatherLine(w, detail) {
-    if (!w) return "—";
-    var s = w.icon + " " + w.temp + "°";
+  // Icono (nombre Lucide) y texto por separado: el motor dibuja el SVG, nunca un emoji.
+  function weatherParts(w, detail) {
+    if (!w) return { icon: "", text: "—" };
+    var s = w.temp + "°";
     if (detail) {
       s += " · " + w.description + " · ↑" + w.max + "° ↓" + w.min + "°";
       if (w.rain >= 30) s += " · lluvia " + w.rain + "%";
     }
-    return s;
+    return { icon: w.icon || "", text: s };
   }
 
-  function nextAlarmLine(na, showLabel) {
-    if (!na) return "";
-    return "⏰ " + (showLabel !== false ? na.label + " · " : "") + na.when + " " + na.time;
+  function nextAlarmParts(na, showLabel) {
+    if (!na) return null;
+    return { icon: "bell", text: (showLabel !== false ? na.label + " · " : "") + na.when + " " + na.time };
   }
 
   function forecastItems(mode, count, f) {
@@ -122,6 +123,7 @@
   }
 
   function fontStyle(font) {
+    if (font === "inter") return { family: "\"Inter\", sans-serif", weight: 300, digital: false };
     if (font === "thin") return { family: "\"sans-serif-thin\", sans-serif", weight: 100, digital: false };
     if (font === "bold") return { family: "sans-serif", weight: 700, digital: false };
     if (font === "mono") return { family: "monospace", weight: 400, digital: false };
@@ -173,7 +175,7 @@
   return {
     COLS: COLS, cellRect: cellRect, minutesOf: minutesOf, activeProfile: activeProfile,
     dayOfYear: dayOfYear, dailyQuote: dailyQuote, formatClock: formatClock, formatDate: formatDate,
-    analogAngles: analogAngles, fitText: fitText, weatherLine: weatherLine, nextAlarmLine: nextAlarmLine,
+    analogAngles: analogAngles, fitText: fitText, weatherParts: weatherParts, nextAlarmParts: nextAlarmParts,
     forecastItems: forecastItems, bgCss: bgCss, fontStyle: fontStyle, justify: justify,
     photoStyle: photoStyle, nextPhotoIndex: nextPhotoIndex, classifySwipe: classifySwipe, snapMove: snapMove,
   };

@@ -33,7 +33,7 @@ object Weather {
     ) {
         val description get() = describe(code)
         val icon get() = icon(code)
-        fun shortText() = "$icon $temp° · ${description} · ↑$max° ↓$min°" + if (rainProb >= 30) " · lluvia $rainProb%" else ""
+        fun shortText() = "$temp° · ${description} · ↑$max° ↓$min°" + if (rainProb >= 30) " · lluvia $rainProb%" else ""
         fun spoken(city: String) = buildString {
             append("En $city hace $temp grados, ${description.lowercase()}. ")
             append("Hoy máxima de $max y mínima de $min.")
@@ -143,13 +143,14 @@ object Weather {
         else -> "Variable"
     }
 
+    /** Nombre del icono Lucide (lo dibuja el motor de pantallas; sin emojis). */
     fun icon(code: Int): String = when (code) {
-        0, 1 -> "☀"
-        2 -> "⛅"
-        3, 45, 48 -> "☁"
-        in 51..67, in 80..82 -> "☂"
-        in 71..77, 85, 86 -> "❄"
-        in 95..99 -> "⚡"
-        else -> "·"
+        0, 1 -> "sun"
+        2 -> "cloud-sun"
+        45, 48 -> "cloud-fog"
+        in 51..67, in 80..82 -> "cloud-rain"
+        in 71..77, 85, 86 -> "cloud-snow"
+        in 95..99 -> "cloud-lightning"
+        else -> "cloud"
     }
 }

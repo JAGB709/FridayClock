@@ -95,8 +95,8 @@ def test_face_version_endpoint_matches_static_copy(client):
 
 
 def test_face_version_is_sha256_of_the_files_in_order(tmp_path):
-    # "abc" repartido en los cuatro archivos: debe dar el SHA-256 de la concatenación.
-    parts = {"index.html": b"a", "face.css": b"b", "face-core.js": b"c", "face.js": b""}
+    # "abc" repartido en los seis archivos: debe dar el SHA-256 de la concatenación.
+    parts = {"index.html": b"a", "tokens.css": b"b", "face.css": b"c", "icons.js": b"", "face-core.js": b"", "face.js": b""}
     for name in FACE_FILES:
         (tmp_path / name).write_bytes(parts[name])
     assert face_version(tmp_path) == "ba7816bf8f01"

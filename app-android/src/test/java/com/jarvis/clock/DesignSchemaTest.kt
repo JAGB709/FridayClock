@@ -25,6 +25,17 @@ class DesignSchemaTest {
         assertTrue(DesignSchema.validate(base()) is Result.Ok)
     }
 
+    @Test fun `la fuente inter es valida y las antiguas siguen siendolo`() {
+        for (f in listOf("inter", "thin", "normal", "bold", "mono", "digital")) {
+            val d = base()
+            d.getJSONObject("themes").getJSONObject("clasico").put("font", f)
+            assertTrue(f, DesignSchema.validate(d) is Result.Ok)
+        }
+        val d = base()
+        d.getJSONObject("themes").getJSONObject("clasico").put("font", "comic")
+        assertTrue(invalid(d).containsKey("themes.clasico.font"))
+    }
+
     @Test fun `el diseno inicial copia el modo noche de los ajustes`() {
         val p = base().getJSONArray("profiles")
         assertEquals(2, p.length())

@@ -187,7 +187,7 @@ class FaceHost private constructor(private val ctx: Context, private val listene
         private const val LOAD_TIMEOUT_MS = 10_000L
         private const val HOST = "appassets.androidplatform.net"
         private const val PAGE = "https://$HOST/assets/face/index.html"
-        private val FILES = setOf("index.html", "face.css", "face-core.js", "face.js", "tokens.css")
+        private val FILES = setOf("index.html", "tokens.css", "face.css", "icons.js", "face-core.js", "face.js")
         private val FONT_FILES = setOf("Inter-Light.ttf", "Inter-Regular.ttf", "Inter-SemiBold.ttf")
 
         /** null si el dispositivo no tiene WebView o no se puede crear. */

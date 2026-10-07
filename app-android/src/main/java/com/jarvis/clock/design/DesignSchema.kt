@@ -19,7 +19,7 @@ object DesignSchema {
     private val COLOR = Regex("^#[0-9a-fA-F]{6}$")
     private val HM = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
     private val IMAGE = Regex("^[A-Za-z0-9_-]{1,60}\\.(jpg|jpeg|png|webp)$")
-    private val FONTS = setOf("thin", "normal", "bold", "mono", "digital")
+    private val FONTS = setOf("inter", "thin", "normal", "bold", "mono", "digital")
     private val ROLES = setOf("fg", "muted", "accent")
     private val ALIGNS = setOf("left", "center", "right")
     private val FITS = setOf("cover", "contain", "fill")

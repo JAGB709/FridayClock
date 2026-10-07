@@ -48,7 +48,7 @@ class FaceDataTest {
             hours = listOf(Weather.Hour(15, 20, 0)), days = listOf(Weather.Day("mié", 12, 23, 3)),
         )
         val w = FaceData.weatherJson(r) as JSONObject
-        assertEquals(19, w.getInt("temp")); assertEquals("☀", w.getString("icon")); assertEquals("Despejado", w.getString("description"))
+        assertEquals(19, w.getInt("temp")); assertEquals("sun", w.getString("icon")); assertEquals("Despejado", w.getString("description"))
         assertEquals(22, w.getInt("max")); assertEquals(12, w.getInt("min")); assertEquals(10, w.getInt("rain"))
         val f = FaceData.forecastJson(r) as JSONObject
         assertEquals(15, f.getJSONArray("hours").getJSONObject(0).getInt("h"))

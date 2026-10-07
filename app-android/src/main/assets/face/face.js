@@ -167,17 +167,31 @@
   }
 
   // Un elemento de texto: calcula el texto, lo ajusta a su caja y solo toca el DOM si cambia.
+  function iconNode(name, size) {
+    var n = window.FridayIcons ? window.FridayIcons.node(name, size || "1em") : null;
+    if (!n) return null;
+    n.setAttribute("class", "ico");
+    return n;
+  }
+
+  // getText devuelve una cadena, {icon, text} o null (vacio).
   function textBuilder(box, r, getText, mode, onNode) {
     var node = el("div", "txt" + (mode === "block" ? " wrap" : ""));
     box.appendChild(node);
     if (onNode) onNode(node);
     var last = null;
     S.updaters.push(function (now, data) {
-      var s = getText(now, data);
-      if (s === last) return;
-      last = s;
-      node.textContent = s;
-      node.style.fontSize = Core.fitText(s.length, r.width, r.height, 9999, mode) + "px";
+      var v = getText(now, data);
+      var icon = v && typeof v === "object" ? v.icon : "";
+      var s = v === null || v === undefined ? "" : (typeof v === "string" ? v : v.text);
+      var key = icon + "|" + s;
+      if (key === last) return;
+      last = key;
+      node.textContent = "";
+      var ic = icon ? iconNode(icon, "1em") : null;
+      if (ic) node.appendChild(ic);
+      node.appendChild(document.createTextNode(s));
+      node.style.fontSize = Core.fitText(s.length + (ic ? 2 : 0), r.width, r.height, 9999, mode) + "px";
     });
   }
 
@@ -295,12 +309,12 @@
       textBuilder(box, r, function (now) { return Core.formatDate(now, e.format || "long"); }, "line");
     },
     weather_now: function (e, box, r) {
-      textBuilder(box, r, function (now, data) { return Core.weatherLine(data.weather, !!e.detail); }, "line");
+      textBuilder(box, r, function (now, data) { return Core.weatherParts(data.weather, !!e.detail); }, "line");
     },
     next_alarm: function (e, box, r) {
       textBuilder(box, r, function (now, data) {
-        if (data.exact_alarm_missing) return "⚠ Concede el permiso de alarmas exactas";
-        return Core.nextAlarmLine(data.next_alarm, e.show_label);
+        if (data.exact_alarm_missing) return { icon: "alert-triangle", text: "Concede el permiso de alarmas exactas" };
+        return Core.nextAlarmParts(data.next_alarm, e.show_label);
       }, "line", function (node) {
         node.addEventListener("click", function () { if (S.data.exact_alarm_missing) native("permission"); });
       });
@@ -332,7 +346,7 @@
           c.style.width = colW + "px";
           c.style.fontSize = size + "px";
           var a = el("div", "fcl"); a.textContent = items[j].label;
-          var b = el("div"); b.textContent = items[j].icon;
+          var b = el("div"); var ic = iconNode(items[j].icon, "1.4em"); if (ic) b.appendChild(ic);
           var t = el("div"); t.textContent = items[j].text;
           c.appendChild(a); c.appendChild(b); c.appendChild(t);
           wrap.appendChild(c);

@@ -13,7 +13,7 @@ import java.util.Calendar
 /** Los datos que recibe el motor de pantallas (los mismos en el reloj y en la vista previa del panel). */
 object FaceData {
     private val DAY_SHORT = arrayOf("dom", "lun", "mar", "mié", "jue", "vie", "sáb")
-    private val FILES = listOf("index.html", "face.css", "face-core.js", "face.js")
+    private val FILES = listOf("index.html", "tokens.css", "face.css", "icons.js", "face-core.js", "face.js")
 
     private fun startOfDay(ms: Long): Long = Calendar.getInstance().apply {
         timeInMillis = ms

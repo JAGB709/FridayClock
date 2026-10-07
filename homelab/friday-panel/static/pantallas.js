@@ -3,10 +3,10 @@
 // sub-pestañas debajo. Edita form.current (el diseño entero) y se guarda con la barra de siempre.
 
 const SAMPLE_DATA = {
-  weather: { temp: 19, icon: "☀", description: "Despejado", max: 22, min: 12, rain: 10 },
+  weather: { temp: 19, icon: "sun", description: "Despejado", max: 22, min: 12, rain: 10 },
   forecast: {
-    hours: [{ h: 15, temp: 20, icon: "☀" }, { h: 17, temp: 21, icon: "⛅" }, { h: 19, temp: 19, icon: "☁" }, { h: 21, temp: 17, icon: "☂" }, { h: 23, temp: 16, icon: "☁" }],
-    days: [{ d: "mié", min: 12, max: 23, icon: "☁" }, { d: "jue", min: 10, max: 20, icon: "☂" }, { d: "vie", min: 10, max: 18, icon: "☂" }, { d: "sáb", min: 10, max: 20, icon: "⛅" }, { d: "dom", min: 12, max: 21, icon: "☀" }],
+    hours: [{ h: 15, temp: 20, icon: "sun" }, { h: 17, temp: 21, icon: "cloud-sun" }, { h: 19, temp: 19, icon: "cloud" }, { h: 21, temp: 17, icon: "cloud-rain" }, { h: 23, temp: 16, icon: "cloud" }],
+    days: [{ d: "mié", min: 12, max: 23, icon: "cloud" }, { d: "jue", min: 10, max: 20, icon: "cloud-rain" }, { d: "vie", min: 10, max: 18, icon: "cloud-rain" }, { d: "sáb", min: 10, max: 20, icon: "cloud-sun" }, { d: "dom", min: 12, max: 21, icon: "sun" }],
   },
   next_alarm: { label: "Despertar", when: "mañana", time: "07:30" },
 };
@@ -414,7 +414,7 @@ function bindTry() {
 
 // ------------------------------------------------------------------ sub-pestaña Tema
 
-const FONT_OPTIONS = [["thin", "Fina"], ["normal", "Normal"], ["bold", "Negrita"], ["mono", "Monoespaciada"], ["digital", "Digital (7 segmentos)"]];
+const FONT_OPTIONS = [["inter", "Inter (fino, recomendado)"], ["thin", "Fina"], ["normal", "Normal"], ["bold", "Negrita"], ["mono", "Monoespaciada"], ["digital", "Digital (7 segmentos)"]];
 
 function subTheme() {
   const t = form.current.themes[dz.themeId];

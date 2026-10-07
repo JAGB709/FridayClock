@@ -9,7 +9,7 @@ body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color
   color: var(--fg, #fff); font-family: var(--ff, sans-serif); font-weight: var(--fw, 400);
   touch-action: none; font-variant-numeric: tabular-nums;
 }
-#content { position: absolute; left: 0; top: 0; right: 0; bottom: 0; transition: opacity 0.2s; }
+#content { position: absolute; left: 0; top: 0; right: 0; bottom: 0; transition: opacity var(--dur-base) var(--ease); }
 .el { position: absolute; display: flex; align-items: center; box-sizing: border-box; overflow: hidden; }
 .txt { white-space: nowrap; line-height: 1.05; }
 .txt.wrap { white-space: normal; line-height: 1.15; }
@@ -26,7 +26,11 @@ body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color
 .bglayer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; }
 .bgdim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
 .pl { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background-repeat: no-repeat; opacity: 0; }
-.pl.fade { transition: opacity 0.6s; }
+.pl.fade { transition: opacity 0.6s var(--ease); }
 .pl.on { opacity: 1; }
 .photos { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; }
 .el.moving { opacity: 0.55; outline: 2px solid #4fc3f7; }
+.el .ico { display: inline-block; vertical-align: -0.14em; margin-right: 0.3em; }
+@media (prefers-reduced-motion: reduce) {
+  #content, .pl.fade { transition: none; }
+}

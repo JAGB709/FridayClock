@@ -34,7 +34,16 @@ class WeatherParseTest {
         assertEquals(listOf(15, 17, 19, 21, 23), h.map { it.h })
         assertEquals(listOf(20, 21, 20, 18, 16), h.map { it.temp })
         assertEquals(listOf(1, 2, 3, 61, 3), h.map { it.code })
-        assertEquals("☀", h[0].icon)
+        assertEquals("sun", h[0].icon)
+    }
+
+    @Test fun `nombres de icono por codigo de tiempo`() {
+        assertEquals("sun", Weather.icon(0)); assertEquals("sun", Weather.icon(1))
+        assertEquals("cloud-sun", Weather.icon(2)); assertEquals("cloud", Weather.icon(3))
+        assertEquals("cloud-fog", Weather.icon(45)); assertEquals("cloud-fog", Weather.icon(48))
+        assertEquals("cloud-rain", Weather.icon(61)); assertEquals("cloud-rain", Weather.icon(81))
+        assertEquals("cloud-snow", Weather.icon(73)); assertEquals("cloud-snow", Weather.icon(86))
+        assertEquals("cloud-lightning", Weather.icon(95)); assertEquals("cloud", Weather.icon(1234))
     }
 
     @Test fun `previsión por días desde mañana con nombre corto`() {
