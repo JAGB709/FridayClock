@@ -61,6 +61,8 @@ Alarms (`alarm/`) use `AlarmManager.setAlarmClock()` and must never depend on ne
 
 La carátula y la pantalla de alarma las dibuja un motor HTML/JS (`app-android/src/main/assets/face/`, ES2017 por el WebView Chrome 74) a partir de un diseño JSON validado por `design/DesignSchema.kt` y guardado en `design/DesignStore.kt`; el mismo motor, copiado a `homelab/friday-panel/static/face/`, da la vista previa del panel. `ui/FaceHost.kt` aloja el WebView; si falla, `MainActivity` vuelve a la carátula nativa. Las alarmas nunca dependen del WebView.
 
+Sistema de diseño: `design-system/` (tokens.json e iconos Lucide) es la fuente; `tools/gen-tokens.py` y `tools/gen-icons.py` generan tokens.css, icons.js y los recursos nativos, y `--check` en ambos (más `tools/sync-face.sh --check`) lo exige la CI; cero emojis.
+
 Fotos: el reloj reduce a 1600 px al guardar (≤ 8 MB, ≤ 60); gestos: deslizar de izquierda a derecha abre Alarmas, de derecha a izquierda Ajustes, vertical cambia de pantalla.
 
 ### Voice latency: who answers (`/v1/assist`)

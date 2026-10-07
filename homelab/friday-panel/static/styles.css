@@ -1,10 +1,14 @@
+@font-face { font-family: "Inter"; font-weight: 300; src: url("/face/fonts/Inter-Light.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Inter"; font-weight: 400; src: url("/face/fonts/Inter-Regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Inter"; font-weight: 600; src: url("/face/fonts/Inter-SemiBold.ttf") format("truetype"); font-display: swap; }
+/* --bg, --text y --accent vienen de /face/tokens.css; el resto son alias del panel sobre los tokens. */
 :root {
-  --bg: #0b0f14; --card: #151c24; --line: #243040; --text: #e8eef4; --muted: #8fa1b3;
-  --accent: #4fc3f7; --bad: #ef5350; --ok: #66bb6a; --radius: 14px;
+  --card: var(--surface); --line: var(--border); --muted: var(--text-muted);
+  --bad: var(--error); --ok: var(--success); --radius: var(--radius-md);
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, sans-serif; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Inter", system-ui, sans-serif; }
 body { padding: 0 16px calc(140px + env(safe-area-inset-bottom)); }
 #top { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 6px; }
 #top h1 { font-size: 22px; margin: 0; font-weight: 600; }
@@ -18,7 +22,7 @@ h2 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 0 0 10px; t
 .muted { color: var(--muted); }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row.between { justify-content: space-between; flex-wrap: nowrap; }
-button { font: inherit; border: 0; border-radius: 10px; padding: 11px 14px; background: var(--accent); color: #00222f; font-weight: 600; min-height: 44px; }
+button { font: inherit; border: 0; border-radius: 10px; padding: 11px 14px; background: var(--accent); color: var(--on-accent); font-weight: 600; min-height: 44px; }
 button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
 button.danger { background: var(--bad); color: #fff; }
 button.small { padding: 6px 10px; min-height: 36px; font-size: 14px; }
@@ -42,7 +46,7 @@ input[type=time] { font-size: 34px; text-align: center; }
 .switch input { width: 48px; height: 28px; accent-color: var(--accent); flex: none; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { min-width: 42px; padding: 8px 0; text-align: center; border-radius: 99px; background: #0f151c; color: var(--muted); border: 1px solid var(--line); font-weight: 600; }
-.chip.on { background: var(--accent); color: #00222f; border-color: var(--accent); }
+.chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .alarm { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; }
 .alarm:first-of-type { border-top: 0; }
 .alarm .t { font-size: 32px; font-weight: 300; }

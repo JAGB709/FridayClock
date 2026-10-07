@@ -429,7 +429,7 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /design/preview` | `{"design":{…},"seconds":30}` | mostrar un diseño 5–120 s sin guardarlo (`409` si suena una alarma) |
 | `DELETE /design/preview` | — | cancelar la prueba |
 | `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 8 MB, jpg/png/webp; el reloj la reduce a 1600 px al guardar; hasta 60 fotos); `GET /backgrounds/{nombre}` devuelve la imagen, no JSON | fondos de pantalla |
-| `GET /face/data` | — | los datos que recibe el motor: tiempo, previsión y próxima alarma |
+| `GET /face/data` | — | los datos que recibe el motor: tiempo, previsión y próxima alarma (`icon` es un nombre de icono Lucide, no un emoji) |
 | `POST /timer` | `{"minutes":10,"label":"Pasta"}` · `{"action":"cancel"}` | temporizador |
 | `POST /display` | `{"type":"text"/"html"/"image"/"url","content":"…","duration_ms":20000}` · `{"action":"clear"}` | pantalla completa |
 | `POST /speak` | `{"text":"Hola"}` | decir en voz alta |
@@ -437,7 +437,7 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /listen` | — | abre el micro |
 | `POST /briefing` | — | buenos días hablados |
 | `POST /bluetooth` | `{"action":"speaker"/"on"/"off"/"status"}` | modo altavoz Bluetooth |
-| `POST /volume` · `/brightness` | `{"level":40}` | volumen multimedia y brillo |
+| `POST /volume` · `/brightness` | `{"level":40}` | volumen multimedia y brillo (el brillo fija el valor manual del reloj, ver "Sistema de diseño") |
 | `POST /actions` | `{"actions":[{"type":"set_alarm",…},…]}` | lote de acciones |
 
 ```bash
@@ -445,6 +445,19 @@ curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
   -H "Content-Type: application/json" \
   -d '{"action":"set","time":"07:30","label":"Despertar","days":"weekdays"}'
 ```
+
+## Sistema de diseño
+
+Una sola fuente de verdad para colores, tipografía e iconos, compartida por la app del reloj, el motor de pantallas y el panel.
+
+- **Tokens**: `design-system/tokens.json` define colores, espaciados, radios, tamaños de texto y duraciones. `python tools/gen-tokens.py` genera `tokens.css` (y los equivalentes nativos); `python tools/gen-tokens.py --check` verifica que lo generado está al día.
+- **Tipografía**: Inter (Light, Regular y SemiBold, licencia OFL) en `app-android/src/main/assets/face/fonts/`; el panel la sirve desde `/face/fonts/`.
+- **Iconos**: Lucide, en `design-system/icons/`. `python tools/gen-icons.py` genera `icons.js` y los recursos nativos; `--check` verifica que están al día.
+- **Copia al panel**: tras regenerar, ejecuta `bash tools/sync-face.sh` (`--check` lo verifica). La CI ejecuta los tres `--check`.
+- **Cero emojis**: ni en la interfaz, ni en los datos, ni en los textos hablados; todo icono es un icono Lucide por nombre.
+- **Contrato de `/face/data`**: el campo `icon` (por ejemplo en `weather`) pasa a ser un nombre de icono (`sun`, `cloud-rain`...) que el motor dibuja con Lucide; antes era un emoji.
+- **Temas**: el diseño trae por defecto dos temas, Obsidiana Día y Obsidiana Noche, basados en los tokens.
+- **Regla de brillo**: por defecto manda el brillo del panel (el del perfil activo). Si se cambia el brillo en el reloj (Ajustes o `POST /brightness`), ese valor manual manda y se conserva hasta que cambie el perfil activo o hasta que el panel cambie el brillo de un perfil. El botón "Volver al brillo del panel" en Ajustes del reloj borra el valor manual. `POST /brightness` aplica exactamente la misma regla que el deslizador.
 
 ## Estructura del repositorio
 

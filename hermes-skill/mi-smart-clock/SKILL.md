@@ -40,10 +40,11 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
    para que el usuario empareje su móvil y suene por el reloj; `bluetooth off` lo apaga;
    `bluetooth status` informa. Tras `speaker`, dile al usuario que busque "Friday" en el
    Bluetooth de su móvil y acepte el emparejamiento.
-7. Otros: `volume 40`, `brightness 20`, `briefing` (buenos días hablado), `listen` (abre el micro).
+7. Otros: `volume 40`, `brightness 20` (fija el brillo manual del reloj: manda sobre el del panel hasta que cambie el perfil o el panel cambie un brillo de perfil), `briefing` (buenos días hablado), `listen` (abre el micro).
 8. Ver o cambiar ajustes (posponer, subida de volumen, modo noche, brillo, voz, ciudad):
    `clock.py settings` · `clock.py settings-set snooze_min=10 night_brightness=5`.
    Es todo o nada: si un valor no vale, no se cambia ninguno y se devuelve `errors`.
+   En los datos de la carátula (`/face/data`), `weather.icon` es un nombre de icono (por ejemplo `cloud-rain`), no un emoji.
 9. Editar una alarma sin borrarla: `clock.py alarm-update 3 --time 06:45 --max-volume 60`.
 10. Sonidos disponibles para las alarmas: `clock.py sounds`.
 11. Diseño de las pantallas del reloj (temas, rejilla 8×6, perfiles por hora, pantalla de alarma):

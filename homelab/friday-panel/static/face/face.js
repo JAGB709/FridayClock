@@ -166,7 +166,6 @@
     return box;
   }
 
-  // Un elemento de texto: calcula el texto, lo ajusta a su caja y solo toca el DOM si cambia.
   function iconNode(name, size) {
     var n = window.FridayIcons ? window.FridayIcons.node(name, size || "1em") : null;
     if (!n) return null;
@@ -174,6 +173,7 @@
     return n;
   }
 
+  // Un elemento de texto: calcula el texto, lo ajusta a su caja y solo toca el DOM si cambia.
   // getText devuelve una cadena, {icon, text} o null (vacio).
   function textBuilder(box, r, getText, mode, onNode) {
     var node = el("div", "txt" + (mode === "block" ? " wrap" : ""));
