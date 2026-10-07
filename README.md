@@ -374,6 +374,17 @@ web, con una vista previa idéntica a la del reloj y un botón **▶ Probar** qu
 reloj sin guardarlo. Si el `WebView` del reloj fallase, vuelve la carátula nativa de siempre; las
 alarmas no dependen de él.
 
+**Fotos.** Un fondo de imagen y el elemento `photos` aceptan los campos de ajuste `fit`
+(`cover`, `contain` o `fill`), `zoom` (1 a 3) y `pos_x`/`pos_y` (0 a 100, punto de la foto que
+queda centrado). El elemento `photos` es un carrusel: `images` (1 a 20 nombres de fotos subidas),
+`interval_s` (3 a 600 s), `transition` (`fade` o `none`), `order` (`sequential` o `random`) y los
+campos de ajuste; cada pantalla admite un máximo de elementos `photos`. Las fotos se suben desde el
+panel, que las reduce en el navegador antes de enviarlas; el reloj las deja en 1600 px como mucho
+(subida ≤ 8 MB, biblioteca ≤ 60 fotos). En el editor los elementos se mueven arrastrándolos.
+
+**Gestos.** En la carátula, deslizar de izquierda a derecha abre Alarmas y de derecha a
+izquierda abre Ajustes; para cambiar de pantalla del perfil se desliza en vertical.
+
 ### Órdenes que funcionan sin red (y sin Hermes)
 | Dices | Hace |
 |---|---|
@@ -416,7 +427,7 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /design/reset` | — | restaurar el diseño inicial |
 | `POST /design/preview` | `{"design":{…},"seconds":30}` | mostrar un diseño 5–120 s sin guardarlo (`409` si suena una alarma) |
 | `DELETE /design/preview` | — | cancelar la prueba |
-| `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 2 MB, jpg/png/webp, ≤ 2048 px); `GET /backgrounds/{nombre}` devuelve la imagen, no JSON | fondos de pantalla |
+| `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 8 MB, jpg/png/webp; el reloj la reduce a 1600 px al guardar; hasta 60 fotos); `GET /backgrounds/{nombre}` devuelve la imagen, no JSON | fondos de pantalla |
 | `GET /face/data` | — | los datos que recibe el motor: tiempo, previsión y próxima alarma |
 | `POST /timer` | `{"minutes":10,"label":"Pasta"}` · `{"action":"cancel"}` | temporizador |
 | `POST /display` | `{"type":"text"/"html"/"image"/"url","content":"…","duration_ms":20000}` · `{"action":"clear"}` | pantalla completa |
