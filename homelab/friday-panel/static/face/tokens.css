@@ -1,0 +1,39 @@
+/* Generado por tools/gen-tokens.py desde design-system/tokens.json. No editar a mano. */
+
+:root {
+  --bg: #000000;
+  --surface: #111111;
+  --surface-high: #1A1A1A;
+  --border: #2A2A2A;
+  --text: #F2F2F2;
+  --text-muted: #8E8E93;
+  --accent: #FFB454;
+  --on-accent: #000000;
+  --error: #FF6B6B;
+  --success: #5AD19A;
+  --warning: #FFD166;
+  --night-text: #B8A89A;
+  --night-text-muted: #6E625A;
+  --night-accent: #9A5B12;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --fs-1: 12px;
+  --fs-2: 14px;
+  --fs-3: 16px;
+  --fs-4: 20px;
+  --fs-5: 28px;
+  --fs-6: 40px;
+  --fs-7: 56px;
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 250ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
