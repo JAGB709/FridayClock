@@ -11,7 +11,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.Typeface
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.net.Uri
@@ -265,7 +264,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         val alarmsBtn = iconButton(R.drawable.ic_bell, Ui.TEXT, "Alarmas") { openAlarms() }
-        mic = iconButton(R.drawable.ic_mic, Ui.ACCENT, "Micrófono") { assistant.toggleListening() }.apply {
+        mic = iconButton(R.drawable.ic_mic, Ui.ACCENT, "Micrófono", oval = true) { assistant.toggleListening() }.apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Tokens.Color.SURFACE_HIGH)
@@ -343,17 +342,19 @@ class MainActivity : Activity() {
 
     private fun showWeather(w: Weather.Report) = setIconText(weather, w.shortText(), w.icon, Ui.DIM)
 
-    private fun iconButton(icon: Int, tint: Int, description: String, onClick: () -> Unit) = ImageButton(this).apply {
+    private fun iconButton(icon: Int, tint: Int, description: String, oval: Boolean = false, onClick: () -> Unit) = ImageButton(this).apply {
         setImageDrawable(getDrawable(icon)?.mutate()?.also { it.setColorFilter(tint, PorterDuff.Mode.SRC_IN) })
         contentDescription = description
         setBackgroundColor(Color.TRANSPARENT)
         isFocusable = true
         val ring = GradientDrawable().apply {
+            shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
             setColor(Color.TRANSPARENT)
             setStroke(Ui.dp(this@MainActivity, 2), Tokens.Color.ACCENT)
             cornerRadius = Ui.dp(this@MainActivity, Tokens.RADIUS_MD).toFloat()
         }
-        onFocusChangeListener = View.OnFocusChangeListener { v, focused -> v.background = if (focused) ring else ColorDrawable(Color.TRANSPARENT) }
+        // El anillo va en el foreground: no se toca el background (el del microfono es un ovalo propio).
+        onFocusChangeListener = View.OnFocusChangeListener { v, focused -> v.foreground = if (focused) ring else null }
         setOnTouchListener { v, ev ->
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> v.alpha = 0.6f
