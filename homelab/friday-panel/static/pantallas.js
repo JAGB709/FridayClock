@@ -331,9 +331,9 @@ function photoListField(e, f) {
       const files = Array.from(input.files);
       input.value = "";
       for (const one of files) {
-        if ((e.images || []).length >= 20) { toast("Máximo 20 fotos por carrusel", true); break; }
+        if ((e[f.key] || []).length >= 20) { toast("Máximo 20 fotos por carrusel", true); break; }
         const name = await uploadPhoto(one);
-        if (name && !(e.images || []).includes(name)) e.images = (e.images || []).concat([name]);
+        if (name && !(e[f.key] || []).includes(name)) e[f.key] = (e[f.key] || []).concat([name]);
       }
       touch(); paintSub();
     } });
@@ -342,22 +342,22 @@ function photoListField(e, f) {
     return h("label", { class: "thumb" + (on ? " on" : "") },
       h("img", { src: "/api/bg/" + encodeURIComponent(b.name), alt: b.name, loading: "lazy" }),
       h("input", { type: "checkbox", checked: on, onchange: (ev) => {
-        const cur = (e.images || []).filter((n) => n !== b.name);
+        const cur = (e[f.key] || []).filter((n) => n !== b.name);
         if (ev.target.checked) {
           if (cur.length >= 20) { toast("Máximo 20 fotos por carrusel", true); ev.target.checked = false; return; }
           cur.push(b.name);
         }
-        e.images = cur; touch(); paintSub();
+        e[f.key] = cur; touch(); paintSub();
       } }));
   });
-  const missing = (e.images || []).filter((n) => !known.has(n));
+  const missing = (e[f.key] || []).filter((n) => !known.has(n));
   return h("div", { class: "opt" },
-    h("h3", {}, f.label + " (" + (e.images || []).length + ")"),
+    h("h3", {}, f.label + " (" + (e[f.key] || []).length + ")"),
     dz.backgrounds.length ? h("div", { class: "thumbs" }, thumbs) : h("div", { class: "muted" }, "No hay fotos en el reloj: sube alguna."),
     missing.length ? h("div", { class: "warn" }, "Estas fotos ya no están en el reloj y se saltarán:") : null,
     missing.map((n) => h("div", { class: "row between" }, h("span", {}, n),
-      btn("Quitar", () => { e.images = (e.images || []).filter((x) => x !== n); touch(); paintSub(); }, "small ghost"))),
-    !(e.images || []).length ? h("div", { class: "warn" }, "Elige al menos una foto: sin ellas el diseño no se puede guardar.") : null,
+      btn("Quitar", () => { e[f.key] = (e[f.key] || []).filter((x) => x !== n); touch(); paintSub(); }, "small ghost"))),
+    !(e[f.key] || []).length ? h("div", { class: "warn" }, "Elige al menos una foto: sin ellas el diseño no se puede guardar.") : null,
     h("div", { class: "row" }, btn("Subir fotos…", () => file.click(), "small ghost"), file));
 }
 

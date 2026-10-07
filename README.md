@@ -393,8 +393,8 @@ fondo**. Al tocar de nuevo el punto de un elemento ya seleccionado se selecciona
 `interval_s` (3 a 600 s), `transition` (`fade` o `none`), `order` (`sequential` o `random`), los
 campos de ajuste `fit`, `zoom`, `pos_x` y `pos_y`, `dim` (0 a 80, oscurece la foto para que se lea el
 texto) y `color` (color de reserva bajo las fotos). Cada carrusel, de fondo o
-elemento `photos`, libera de memoria la foto saliente al terminar el fundido, de modo que en el
-reloj (1 GB de RAM) solo hay en memoria las fotos visibles.
+elemento `photos`, mantiene en reposo una sola foto decodificada en memoria; durante el fundido de 0,6 s
+sujeta dos, y libera la saliente justo después, para cuidar el reloj (1 GB de RAM).
 
 **Gestos.** En la carátula, deslizar de izquierda a derecha abre Alarmas y de derecha a
 izquierda abre Ajustes; para cambiar de pantalla del perfil se desliza en vertical. En la pantalla de
