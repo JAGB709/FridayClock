@@ -97,7 +97,8 @@ class SettingsActivity : Activity() {
 
         val save = Button(this).apply {
             text = "Guardar"; textSize = 20f; isAllCaps = false
-            setTextColor(Color.WHITE); setBackgroundColor(Color.parseColor("#FF0277BD"))
+            setTextColor(Tokens.Color.ON_ACCENT); setBackgroundColor(Tokens.Color.ACCENT)
+            typeface = Fonts.semibold(this@SettingsActivity)
             setOnClickListener { saveAll(); toast("Guardado"); finish() }
         }
         form.addView(save, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(20) })
@@ -123,16 +124,16 @@ class SettingsActivity : Activity() {
 
     // ------------------------------------------------------------------ helpers de formulario
 
-    private fun title(t: String) = form.addView(TextView(this).apply { text = t; textSize = 28f; setTextColor(Color.WHITE) })
-    private fun info(t: String) = form.addView(TextView(this).apply { text = t; textSize = 16f; setTextColor(Ui.ACCENT); setTextIsSelectable(true) })
+    private fun title(t: String) = form.addView(TextView(this).apply { text = t; textSize = 28f; setTextColor(Ui.TEXT); typeface = Fonts.semibold(this@SettingsActivity) })
+    private fun info(t: String) = form.addView(TextView(this).apply { text = t; textSize = 16f; setTextColor(Ui.ACCENT); typeface = Fonts.regular(this@SettingsActivity); setTextIsSelectable(true) })
 
     private fun section(t: String) = form.addView(TextView(this).apply {
-        text = t; textSize = 18f; setTextColor(Ui.ACCENT)
+        text = t; textSize = 18f; setTextColor(Ui.ACCENT); typeface = Fonts.semibold(this@SettingsActivity)
         setPadding(0, Ui.dp(this@SettingsActivity, 20), 0, Ui.dp(this@SettingsActivity, 4))
     })
 
     private fun field(label: String, value: String, type: Int, hint: String = "", onSave: (String) -> Unit) {
-        form.addView(TextView(this).apply { text = label; textSize = 14f; setTextColor(Ui.DIM) })
+        form.addView(TextView(this).apply { text = label; textSize = 14f; setTextColor(Ui.DIM); typeface = Fonts.regular(this@SettingsActivity) })
         val e = EditText(this).apply {
             setText(value); this.hint = hint; inputType = type; setSingleLine()
             setTextColor(Color.WHITE); setHintTextColor(Color.DKGRAY)

@@ -74,7 +74,6 @@ def test_generated_icons_are_up_to_date():
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-@pytest.mark.xfail(reason="se limpia en las tareas 4 y 5", strict=False)
 def test_no_emojis_in_clock_engine_and_design_system():
     import re
     rx = re.compile("[⌀-⏿■-➿⤀-⥿⬀-⯿️\U0001F000-\U0001FFFF]")

@@ -24,6 +24,7 @@ import com.jarvis.clock.design.darken
 import com.jarvis.clock.design.parseHex
 import com.jarvis.clock.design.readableOn
 import com.jarvis.clock.ui.FaceHost
+import com.jarvis.clock.ui.Fonts
 import com.jarvis.clock.ui.Ui
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -128,9 +129,10 @@ class AlarmActivity : Activity() {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
         val t = TextView(this@AlarmActivity).apply {
-            setTextColor(Color.WHITE)
+            setTextColor(Ui.TEXT)
             textSize = 96f
-            typeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
+            typeface = Fonts.light(this@AlarmActivity)
+            Fonts.tabular(this)
             gravity = Gravity.CENTER
         }
         t.text = fmt.format(Date())

@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
@@ -49,6 +50,9 @@ import com.jarvis.clock.ui.FaceHost
 import org.json.JSONObject
 import com.jarvis.clock.ui.AlarmsActivity
 import com.jarvis.clock.ui.SettingsActivity
+import com.jarvis.clock.ui.Fonts
+import com.jarvis.clock.ui.Icons
+import com.jarvis.clock.ui.Tokens
 import com.jarvis.clock.ui.Ui
 import com.jarvis.clock.weather.Weather
 import java.net.URL
@@ -77,6 +81,7 @@ class MainActivity : Activity() {
     private lateinit var date: TextView
     private lateinit var weather: TextView
     private lateinit var nextAlarm: TextView
+    private var nextAlarmColor = Ui.ACCENT
     private lateinit var bar: LinearLayout
     private lateinit var mic: ImageButton
     private lateinit var panel: LinearLayout
@@ -232,8 +237,9 @@ class MainActivity : Activity() {
         }
         val shortSide = minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
         time = TextView(this).apply {
-            setTextColor(Color.WHITE)
-            typeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
+            setTextColor(Ui.TEXT)
+            typeface = Fonts.light(this@MainActivity)
+            Fonts.tabular(this)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, shortSide * 0.42f)
             includeFontPadding = false
             gravity = Gravity.CENTER
@@ -256,11 +262,15 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val alarmsBtn = iconButton(android.R.drawable.ic_lock_idle_alarm) { openAlarms() }
-        mic = iconButton(android.R.drawable.ic_btn_speak_now) { assistant.toggleListening() }.apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#FF0D47A1")) }
+        val alarmsBtn = iconButton(R.drawable.ic_bell, Ui.TEXT, "Alarmas") { openAlarms() }
+        mic = iconButton(R.drawable.ic_mic, Ui.ACCENT, "Micrófono") { assistant.toggleListening() }.apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Tokens.Color.SURFACE_HIGH)
+                setStroke(dp(2), Tokens.Color.ACCENT)
+            }
         }
-        val settingsBtn = iconButton(android.R.drawable.ic_menu_preferences) { startActivity(Intent(this, SettingsActivity::class.java)) }
+        val settingsBtn = iconButton(R.drawable.ic_settings, Ui.TEXT, "Ajustes") { startActivity(Intent(this, SettingsActivity::class.java)) }
         bar.addView(alarmsBtn, LinearLayout.LayoutParams(dp(56), dp(56)))
         bar.addView(mic, LinearLayout.LayoutParams(dp(64), dp(64)).apply { marginStart = dp(40); marginEnd = dp(40) })
         bar.addView(settingsBtn, LinearLayout.LayoutParams(dp(56), dp(56)))
@@ -270,7 +280,7 @@ class MainActivity : Activity() {
         keyLabel = TextView(this).apply {
             textSize = 26f; setTextColor(Color.WHITE); visibility = View.GONE
             setPadding(dp(18), dp(8), dp(18), dp(8))
-            background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(Color.parseColor("#CC101820")) }
+            background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(((0xCC shl 24) or (Tokens.Color.SURFACE and 0xFFFFFF))) }
         }
         root.addView(keyLabel, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(16) })
 
@@ -278,14 +288,14 @@ class MainActivity : Activity() {
         panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(14), dp(20), dp(14))
-            background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(Color.parseColor("#E6101820")) }
+            background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(((0xE6 shl 24) or (Tokens.Color.SURFACE and 0xFFFFFF))) }
             visibility = View.GONE
             setOnClickListener { assistant.stopAll() }
         }
         panelState = label(16f, Ui.ACCENT).apply { gravity = Gravity.START }
         level = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
         panelHeard = label(20f, Ui.DIM).apply { gravity = Gravity.START }
-        panelReply = label(24f, Color.WHITE).apply { gravity = Gravity.START; maxLines = 6 }
+        panelReply = label(24f, Ui.TEXT).apply { gravity = Gravity.START; maxLines = 6 }
         panel.addView(panelState)
         panel.addView(level, LinearLayout.LayoutParams(-1, dp(6)).apply { topMargin = dp(6); bottomMargin = dp(6) })
         panel.addView(panelHeard)
@@ -315,12 +325,33 @@ class MainActivity : Activity() {
     private fun label(sp: Float, color: Int) = TextView(this).apply {
         textSize = sp
         setTextColor(color)
+        typeface = Fonts.regular(this@MainActivity)
         gravity = Gravity.CENTER
     }
 
-    private fun iconButton(icon: Int, onClick: () -> Unit) = ImageButton(this).apply {
-        setImageResource(icon)
+    /** Texto con un icono Lucide a la izquierda; sin icono, se limpia el compound drawable. */
+    private fun setIconText(tv: TextView, text: String, icon: String?, color: Int) {
+        tv.text = text
+        tv.tag = icon
+        val d = if (icon != null && text.isNotEmpty()) Icons.tinted(this, icon, color) else null
+        d?.setBounds(0, 0, Ui.dp(this, 20), Ui.dp(this, 20))
+        tv.compoundDrawablePadding = Ui.dp(this, 6)
+        tv.setCompoundDrawablesRelative(d, null, null, null)
+    }
+
+    private fun showWeather(w: Weather.Report) = setIconText(weather, w.shortText(), w.icon, Ui.DIM)
+
+    private fun iconButton(icon: Int, tint: Int, description: String, onClick: () -> Unit) = ImageButton(this).apply {
+        setImageDrawable(getDrawable(icon)?.mutate()?.also { it.setColorFilter(tint, PorterDuff.Mode.SRC_IN) })
+        contentDescription = description
         setBackgroundColor(Color.TRANSPARENT)
+        setOnTouchListener { v, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> v.alpha = 0.6f
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> v.alpha = 1f
+            }
+            false
+        }
         scaleType = ImageView.ScaleType.FIT_CENTER
         setPadding(Ui.dp(this@MainActivity, 10), Ui.dp(this@MainActivity, 10), Ui.dp(this@MainActivity, 10), Ui.dp(this@MainActivity, 10))
         setOnClickListener { wakeScreen(); onClick() }
@@ -441,11 +472,13 @@ class MainActivity : Activity() {
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         val awake = System.currentTimeMillis() < wakeUntil
         night = Prefs.isNight(hour) && !awake
-        val color = if (night) Ui.NIGHT else Color.WHITE
+        val color = if (night) Ui.NIGHT else Ui.TEXT
         time.setTextColor(color)
-        date.setTextColor(if (night) Ui.NIGHT else Ui.DIM)
+        date.setTextColor(if (night) Tokens.Night.TEXT_MUTED else Ui.DIM)
         weather.visibility = if (night) View.GONE else View.VISIBLE
-        nextAlarm.setTextColor(if (night) Ui.NIGHT else Ui.ACCENT)
+        val alarmColor = if (night) Ui.NIGHT else nextAlarmColor
+        nextAlarm.setTextColor(alarmColor)
+        (nextAlarm.tag as? String)?.let { setIconText(nextAlarm, nextAlarm.text.toString(), it, alarmColor) }
         bar.alpha = if (night) 0.15f else 1f
         val pct = brightnessOverride ?: if (night) Prefs.nightBrightness else Prefs.dayBrightness
         window.attributes = window.attributes.apply { screenBrightness = pct / 100f }
@@ -459,10 +492,10 @@ class MainActivity : Activity() {
     }
 
     private fun refreshWeather() {
-        Weather.cached()?.let { weather.text = it.shortText() }
+        Weather.cached()?.let { showWeather(it) }
         thread(name = "weather") {
             val w = Weather.get() ?: return@thread
-            runOnUiThread { weather.text = w.shortText(); pushFaceData() }
+            runOnUiThread { showWeather(w); pushFaceData() }
         }
     }
 
@@ -470,22 +503,27 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             !getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
         ) {
-            nextAlarm.text = "⚠ Concede el permiso de alarmas exactas (toca aquí)"
+            nextAlarmColor = Tokens.Color.WARNING
+            nextAlarm.setTextColor(if (night) Ui.NIGHT else nextAlarmColor)
+            setIconText(nextAlarm, "Concede el permiso de alarmas exactas (toca aquí)", "alert-triangle", if (night) Ui.NIGHT else nextAlarmColor)
             nextAlarm.setOnClickListener {
                 startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
             }
             return
         }
         nextAlarm.setOnClickListener { openAlarms() }
+        nextAlarmColor = Ui.ACCENT
+        nextAlarm.setTextColor(if (night) Ui.NIGHT else nextAlarmColor)
         val next = AlarmScheduler.nextAlarm(this)
-        nextAlarm.text = next?.let { (a, at) ->
+        val nextText = next?.let { (a, at) ->
             val c = Calendar.getInstance().apply { timeInMillis = at }
             val today = Calendar.getInstance()
             val day = when (c.get(Calendar.DAY_OF_YEAR) - today.get(Calendar.DAY_OF_YEAR)) {
                 0 -> "hoy"; 1 -> "mañana"; else -> SimpleDateFormat("EEE", es).format(Date(at))
             }
-            "⏰ ${a.label} · $day ${a.timeText()}"
+            "${a.label} · $day ${a.timeText()}"
         } ?: ""
+        setIconText(nextAlarm, nextText, "bell", if (night) Ui.NIGHT else nextAlarmColor)
     }
 
     // ------------------------------------------------------------------ eventos
