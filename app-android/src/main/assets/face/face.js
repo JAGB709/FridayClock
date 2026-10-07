@@ -10,7 +10,7 @@
 
   var S = {
     design: null, opts: {}, data: {}, screens: [], index: 0, rows: 6, rotate: 0,
-    W: 0, H: 0, updaters: [], rotateTimer: null,
+    W: 0, H: 0, updaters: [], rotateTimer: null, timers: [],
   };
   var rootEl, contentEl, resizeTimer, lastMinute = -1;
   var pending = []; // llamadas a render/setData recibidas antes de que exista el DOM
@@ -31,6 +31,16 @@
     var e = document.createElementNS(SVGNS, tag);
     for (var k in attrs) e.setAttribute(k, attrs[k]);
     return e;
+  }
+  function photoUrl(name) { return (S.opts.bgBase || "/bg/") + encodeURIComponent(name); }
+
+  function stylePhoto(node, url, spec) {
+    var st = Core.photoStyle(spec);
+    node.style.backgroundImage = "url(\"" + url + "\")";
+    node.style.backgroundSize = st.size;
+    node.style.backgroundPosition = st.position;
+    node.style.transform = st.transform;
+    node.style.transformOrigin = st.origin;
   }
 
   // ------------------------------------------------------------------ elegir qué se dibuja
@@ -76,6 +86,19 @@
     rootEl.style.setProperty("--ff", f.family);
     rootEl.style.setProperty("--fw", f.weight);
     rootEl.setAttribute("data-digital", f.digital ? "1" : "0");
+    var old = rootEl.querySelector(".bglayer");
+    if (old) rootEl.removeChild(old);
+    var bg = theme.bg || {};
+    if (bg.type === "image" && bg.image) {
+      var layer = el("div", "bglayer");
+      var pic = el("div", "pl on");
+      stylePhoto(pic, photoUrl(bg.image), bg);
+      layer.appendChild(pic);
+      var dim = el("div", "bgdim");
+      dim.style.background = "rgba(0,0,0," + ((bg.dim || 0) / 100) + ")";
+      layer.appendChild(dim);
+      rootEl.insertBefore(layer, contentEl);
+    }
   }
 
   // ------------------------------------------------------------------ dibujo
@@ -97,6 +120,8 @@
   function draw() {
     S.W = rootEl.clientWidth;
     S.H = rootEl.clientHeight;
+    for (var t = 0; t < S.timers.length; t++) clearInterval(S.timers[t]);
+    S.timers = [];
     contentEl.textContent = "";
     S.updaters = [];
     var screen = S.screens[S.index] || { elements: [] };
@@ -216,6 +241,41 @@
   }
 
   var builders = {
+    photos: function (e, box, r) {
+      var names = (e.images || []).slice();
+      var wrap = el("div", "photos");
+      box.appendChild(wrap);
+      var fade = e.transition !== "none";
+      var layers = [el("div", "pl" + (fade ? " fade" : "")), el("div", "pl" + (fade ? " fade" : ""))];
+      wrap.appendChild(layers[0]); wrap.appendChild(layers[1]);
+      var cur = -1, top = 0, busy = false;
+      var order = e.order === "random" ? "random" : "sequential";
+      function show(i, tries) {
+        if (busy) return;
+        if (i < 0 || !names.length) return;
+        busy = true;
+        var img = new Image();
+        img.onload = function () {
+          var next = layers[1 - top];
+          stylePhoto(next, photoUrl(names[i]), e);
+          next.classList.add("on");
+          layers[top].classList.remove("on");
+          top = 1 - top;
+          cur = i;
+          busy = false;
+        };
+        img.onerror = function () {
+          busy = false;
+          if (tries < names.length) show(Core.nextPhotoIndex(names.length, i, order), tries + 1);
+        };
+        img.src = photoUrl(names[i]);
+      }
+      show(Core.nextPhotoIndex(names.length, -1, "sequential"), 1);
+      var iv = Math.max(3, Math.min(600, e.interval_s || 10)) * 1000;
+      if (names.length > 1) {
+        S.timers.push(setInterval(function () { show(Core.nextPhotoIndex(names.length, cur, order), 1); }, iv));
+      }
+    },
     clock: function (e, box, r) {
       if (e.style === "analog") { buildAnalog(e, box, r); return; }
       var node = el("div", "txt");
@@ -319,7 +379,9 @@
     if (!g.down) return;
     g.down = false;
     var dx = ev.clientX - g.x0, dy = ev.clientY - g.y0;
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { go(dx < 0 ? 1 : -1); return; }
+    var swipe = Core.classifySwipe(dx, dy);
+    if (swipe === "left" || swipe === "right") { native("swipe", swipe); return; }
+    if (swipe === "up" || swipe === "down") { go(swipe === "up" ? 1 : -1); return; }
     if (g.moved) return;
     var now = Date.now();
     if (now - g.lastTap < 350) { clearTimeout(g.singleT); g.lastTap = 0; native("doubleTap"); return; }
@@ -330,7 +392,8 @@
 
   // ------------------------------------------------------------------ edición (vista previa)
 
-  var drag = null;
+  var drag = null;      // redimensionando: { id, box, el, w, h }
+  var moving = null;    // moviendo: { id, box, el, x0, y0, cw, ch, dx, dy, moved }
 
   function findElement(id) {
     var list = (S.screens[S.index] || {}).elements || [];
@@ -356,20 +419,48 @@
       ev.preventDefault();
       return;
     }
-    if (box) { post({ type: "face-select", id: box.getAttribute("data-id") }); return; }
+    if (box) {
+      var item = findElement(box.getAttribute("data-id"));
+      if (!item) return;
+      var b = rootEl.getBoundingClientRect();
+      moving = { id: item.id, box: box, el: item, x0: ev.clientX, y0: ev.clientY,
+        cw: b.width / COLS, ch: b.height / S.rows, dx: 0, dy: 0, moved: false };
+      try { rootEl.setPointerCapture(ev.pointerId); } catch (e2) { /* ignorar */ }
+      ev.preventDefault();
+      return;
+    }
     var c = cellAt(ev.clientX, ev.clientY);
     post({ type: "face-empty", x: c.x, y: c.y });
   }
   function editMove(ev) {
+    if (moving) {
+      var px = ev.clientX - moving.x0, py = ev.clientY - moving.y0;
+      if (!moving.moved && Math.abs(px) < 8 && Math.abs(py) < 8) return;
+      moving.moved = true;
+      var snap = Core.snapMove(moving.el, Math.round(px / moving.cw), Math.round(py / moving.ch), S.rows);
+      moving.dx = snap.x; moving.dy = snap.y;
+      var r = Core.cellRect({ x: snap.x, y: snap.y, w: moving.el.w, h: moving.el.h }, S.W, S.H, S.rows);
+      moving.box.classList.add("moving");
+      moving.box.style.left = r.left + "px";
+      moving.box.style.top = r.top + "px";
+      return;
+    }
     if (!drag) return;
     var c = cellAt(ev.clientX, ev.clientY);
     drag.w = Math.max(1, Math.min(COLS - drag.el.x, c.x - drag.el.x + 1));
     drag.h = Math.max(1, Math.min(S.rows - drag.el.y, c.y - drag.el.y + 1));
-    var r = Core.cellRect({ x: drag.el.x, y: drag.el.y, w: drag.w, h: drag.h }, S.W, S.H, S.rows);
-    drag.box.style.width = r.width + "px";
-    drag.box.style.height = r.height + "px";
+    var rr = Core.cellRect({ x: drag.el.x, y: drag.el.y, w: drag.w, h: drag.h }, S.W, S.H, S.rows);
+    drag.box.style.width = rr.width + "px";
+    drag.box.style.height = rr.height + "px";
   }
   function editUp() {
+    if (moving) {
+      var m = moving;
+      moving = null;
+      if (!m.moved) { post({ type: "face-select", id: m.id }); return; }
+      post({ type: "face-move", id: m.id, x: m.dx, y: m.dy });
+      return;
+    }
     if (!drag) return;
     var d = drag;
     drag = null;
@@ -401,7 +492,7 @@
     rootEl.addEventListener("pointerdown", function (ev) { if (S.opts.edit) editDown(ev); else gestureDown(ev); });
     rootEl.addEventListener("pointermove", function (ev) { if (S.opts.edit) editMove(ev); else gestureMove(ev); });
     rootEl.addEventListener("pointerup", function (ev) { if (S.opts.edit) editUp(); else gestureUp(ev); });
-    rootEl.addEventListener("pointercancel", function () { g.down = false; drag = null; clearTimeout(g.longT); });
+    rootEl.addEventListener("pointercancel", function () { g.down = false; drag = null; moving = null; clearTimeout(g.longT); });
     window.addEventListener("resize", function () {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(function () { if (S.design) draw(); }, 150);
