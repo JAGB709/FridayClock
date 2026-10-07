@@ -151,12 +151,18 @@ def test_set_design_saves(clock):
     assert g["saved"] is True and g["design"]["themes"]["clasico"]["name"] == "Mío"
 
 
-def test_set_design_overlap_changes_nothing(clock):
+def test_set_design_out_of_grid_changes_nothing(clock):
+    d = clock.clock_get_design()["design"]
+    d["screens"]["principal"]["elements"][1].update(x=7, w=3)
+    r = clock.clock_set_design(d)
+    assert r["ok"] is False and "screens.principal.elements.fecha.w" in r["errors"]
+    assert clock.clock_get_design()["saved"] is False
+
+
+def test_set_design_overlap_is_accepted(clock):
     d = clock.clock_get_design()["design"]
     d["screens"]["principal"]["elements"][1].update(x=0, y=0, w=8, h=1)
-    r = clock.clock_set_design(d)
-    assert r["ok"] is False and "screens.principal.elements.fecha" in r["errors"]
-    assert clock.clock_get_design()["saved"] is False
+    assert clock.clock_set_design(d)["ok"] is True
 
 
 def test_preview_and_cancel(clock):

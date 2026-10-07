@@ -75,10 +75,61 @@ class DesignSchemaTest {
         assertTrue(DesignSchema.validate(d) is Result.Ok)
     }
 
-    @Test fun `elementos solapados`() {
+    @Test fun `los elementos pueden solaparse y conservan el orden de la lista`() {
         val d = base()
         elements(d).getJSONObject(1).put("x", 0).put("y", 0).put("w", 8).put("h", 1) // la fecha sobre la hora
-        assertEquals("se solapa con hora", invalid(d)["screens.principal.elements.fecha"])
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+        assertEquals("hora", elements(d).getJSONObject(0).getString("id"))
+        assertEquals("fecha", elements(d).getJSONObject(1).getString("id"))
+    }
+
+    private fun fondo(d: JSONObject, bg: JSONObject): JSONObject {
+        d.getJSONObject("themes").getJSONObject("clasico").put("bg", bg)
+        return d
+    }
+    private fun fotos(vararg extra: Pair<String, Any>): JSONObject {
+        val o = JSONObject().put("type", "photos").put("images", JSONArray().put("a.jpg").put("b.png"))
+        for ((k, v) in extra) o.put(k, v)
+        return o
+    }
+
+    @Test fun `fondo de fotos valido con todos los campos`() {
+        val bg = fotos("interval_s" to 5, "transition" to "none", "order" to "random", "fit" to "contain",
+            "zoom" to 1.5, "pos_x" to 20, "pos_y" to 80, "dim" to 40, "color" to "#101010")
+        assertTrue(DesignSchema.validate(fondo(base(), bg)) is Result.Ok)
+        assertTrue(DesignSchema.validate(fondo(base(), fotos())) is Result.Ok) // solo lo obligatorio
+    }
+
+    @Test fun `fondo de fotos exige entre 1 y 20 imagenes validas`() {
+        assertTrue(invalid(fondo(base(), fotos().put("images", JSONArray()))).containsKey("themes.clasico.bg.images"))
+        val muchas = JSONArray(); for (i in 0..20) muchas.put("f$i.jpg")
+        assertTrue(invalid(fondo(base(), fotos().put("images", muchas))).containsKey("themes.clasico.bg.images"))
+        assertTrue(invalid(fondo(base(), fotos().put("images", JSONArray().put("../x.jpg")))).containsKey("themes.clasico.bg.images[0]"))
+        assertTrue(invalid(fondo(base(), fotos().apply { remove("images") })).containsKey("themes.clasico.bg.images"))
+    }
+
+    @Test fun `fondo de fotos valida intervalo transicion orden y oscurecido`() {
+        val e = invalid(fondo(base(), fotos("interval_s" to 2, "transition" to "zoom", "order" to "alfabetico", "dim" to 90)))
+        for (k in listOf("interval_s", "transition", "order", "dim")) assertTrue(k, e.containsKey("themes.clasico.bg.$k"))
+    }
+
+    @Test fun `los campos del carrusel de fondo solo valen con type photos`() {
+        val bg = JSONObject().put("type", "color").put("color", "#000000").put("interval_s", 10).put("images", JSONArray().put("a.jpg"))
+        val e = invalid(fondo(base(), bg))
+        assertTrue(e.containsKey("themes.clasico.bg.interval_s")); assertTrue(e.containsKey("themes.clasico.bg.images"))
+        val img = JSONObject().put("type", "image").put("image", "a.jpg").put("order", "random")
+        assertTrue(invalid(fondo(base(), img)).containsKey("themes.clasico.bg.order"))
+    }
+
+    @Test fun `un tipo de fondo desconocido lo nombra`() {
+        val e = invalid(fondo(base(), JSONObject().put("type", "video")))
+        assertEquals("debe ser color, gradient, image o photos", e["themes.clasico.bg.type"])
+    }
+
+    @Test fun `los fondos antiguos siguen siendo validos`() {
+        assertTrue(DesignSchema.validate(base()) is Result.Ok)
+        assertTrue(DesignSchema.validate(fondo(base(), JSONObject().put("type", "image").put("image", "a.jpg").put("dim", 30))) is Result.Ok)
+        assertTrue(DesignSchema.validate(fondo(base(), JSONObject().put("type", "gradient").put("from", "#000000").put("to", "#ffffff"))) is Result.Ok)
     }
 
     @Test fun `elemento fuera de la rejilla`() {

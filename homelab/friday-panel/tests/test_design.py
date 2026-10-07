@@ -18,10 +18,10 @@ def test_put_design_ok_then_saved(client):
 
 def test_put_design_invalid_is_forwarded_and_changes_nothing(client):
     d = client.get("/api/design").json()["design"]
-    d["screens"]["principal"]["elements"][1].update(x=0, y=0, w=8, h=1)
+    d["screens"]["principal"]["elements"][1].update(x=7, w=3)
     r = client.put("/api/design", json=d)
     assert r.status_code == 400
-    assert r.json()["errors"]["screens.principal.elements.fecha"] == "se solapa con hora"
+    assert r.json()["errors"]["screens.principal.elements.fecha.w"] == "se sale de la rejilla (x + w ≤ 8)"
     assert client.get("/api/design").json()["saved"] is False
 
 

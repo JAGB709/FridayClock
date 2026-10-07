@@ -154,14 +154,11 @@ def _validate_design(d) -> dict:
                 errors[k] = "falta"
         for sid, s in (d.get("screens") or {}).items():
             els = s.get("elements", [])
-            for i, a in enumerate(els):
+            for a in els:
                 if a["x"] + a["w"] > 8:
                     errors[f"screens.{sid}.elements.{a['id']}.w"] = "se sale de la rejilla (x + w ≤ 8)"
                 elif a["y"] + a["h"] > 6:
                     errors[f"screens.{sid}.elements.{a['id']}.h"] = "se sale de la rejilla (y + h ≤ 6)"
-                for b in els[i + 1:]:
-                    if a["x"] < b["x"] + b["w"] and b["x"] < a["x"] + a["w"] and a["y"] < b["y"] + b["h"] and b["y"] < a["y"] + a["h"]:
-                        errors[f"screens.{sid}.elements.{b['id']}"] = f"se solapa con {a['id']}"
         for p in d.get("profiles", []):
             if p.get("theme") not in d.get("themes", {}):
                 errors[f"profiles.{p.get('id')}.theme"] = "el tema no existe"

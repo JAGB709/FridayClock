@@ -45,8 +45,6 @@ object DesignSchema {
         fun err(path: String, msg: String) { if (path !in errors) errors[path] = msg }
     }
 
-    private class Rect(val id: String, val x: Int, val y: Int, val w: Int, val h: Int)
-
     // ------------------------------------------------------------------ validación
 
     fun validate(design: JSONObject): Result {
@@ -113,7 +111,8 @@ object DesignSchema {
         val bg = t.optJSONObject("bg")
         if (bg == null) { c.err("$path.bg", "falta"); return }
         val p = "$path.bg"
-        unknownKeys(c, bg, setOf("type", "color", "from", "to", "angle", "image", "dim", "fit", "zoom", "pos_x", "pos_y"), p)
+        unknownKeys(c, bg, setOf("type", "color", "from", "to", "angle", "image", "dim", "fit", "zoom", "pos_x", "pos_y",
+            "images", "interval_s", "transition", "order"), p)
         when (bg.opt("type")) {
             "color" -> color(c, bg, "color", p, true)
             "gradient" -> {
@@ -128,9 +127,25 @@ object DesignSchema {
                 if (bg.has("color")) color(c, bg, "color", p, false)
                 photoFit(c, bg, p)
             }
-            else -> c.err("$p.type", "debe ser color, gradient o image")
+            "photos" -> {
+                val imgs = bg.optJSONArray("images")
+                if (imgs == null || imgs.length() !in 1..20) c.err("$p.images", "debe ser una lista de 1 a 20 fotos")
+                else for (k in 0 until imgs.length()) {
+                    val s = imgs.opt(k)
+                    if (s !is String || !IMAGE.matches(s)) c.err("$p.images[$k]", "nombre de imagen no válido (jpg, png o webp)")
+                }
+                if (bg.has("interval_s")) int(c, bg, "interval_s", p, 3, 600)
+                oneOf(c, bg, "transition", p, setOf("fade", "none"))
+                oneOf(c, bg, "order", p, setOf("sequential", "random"))
+                photoFit(c, bg, p)
+                if (bg.has("dim")) int(c, bg, "dim", p, 0, 80)
+                if (bg.has("color")) color(c, bg, "color", p, false)
+            }
+            else -> c.err("$p.type", "debe ser color, gradient, image o photos")
         }
-        if (bg.opt("type") != "image") for (k in PHOTO_FIT_KEYS) if (bg.has(k)) c.err("$p.$k", "solo se usa con fondo de imagen")
+        val bgType = bg.opt("type")
+        if (bgType != "image" && bgType != "photos") for (k in PHOTO_FIT_KEYS) if (bg.has(k)) c.err("$p.$k", "solo se usa con fondo de imagen o de fotos")
+        if (bgType != "photos") for (k in listOf("images", "interval_s", "transition", "order")) if (bg.has(k)) c.err("$p.$k", "solo se usa con fondo de fotos")
     }
 
     private fun photoFit(c: Ctx, o: JSONObject, path: String) {
@@ -147,7 +162,6 @@ object DesignSchema {
         if (arr == null) { c.err(path, "falta"); return }
         if (arr.length() > 12) c.err(path, "máximo 12 elementos")
         val ids = HashSet<String>()
-        val rects = ArrayList<Rect>()
         var photoCount = 0
         for (i in 0 until arr.length()) {
             val e = arr.optJSONObject(i)
@@ -168,19 +182,11 @@ object DesignSchema {
             val h = int(c, e, "h", p, 1, rows)
             if (x != null && w != null && x + w > COLS) c.err("$p.w", "se sale de la rejilla (x + w ≤ $COLS)")
             else if (y != null && h != null && y + h > rows) c.err("$p.h", "se sale de la rejilla (y + h ≤ $rows)")
-            else if (x != null && y != null && w != null && h != null && validId) rects += Rect(id!!, x, y, w, h)
             oneOf(c, e, "color", p, ROLES)
             oneOf(c, e, "align", p, ALIGNS)
             validateProps(c, e, type, p)
         }
         if (photoCount > maxPhotos) c.err(path, "máximo $maxPhotos elementos de fotos")
-        for (i in rects.indices) for (j in i + 1 until rects.size) {
-            val a = rects[i]
-            val b = rects[j]
-            if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) {
-                c.err("$path.${b.id}", "se solapa con ${a.id}")
-            }
-        }
     }
 
     private fun validateProps(c: Ctx, e: JSONObject, type: String, p: String) {
