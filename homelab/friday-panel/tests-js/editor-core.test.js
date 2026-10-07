@@ -55,7 +55,7 @@ test("todos los tipos tienen etiqueta, tamaño y campos", () => {
     const d = E.TYPES[t];
     assert.ok(d.label && d.w >= 1 && d.h >= 1 && Array.isArray(d.fields), t);
   }
-  assert.deepEqual(Object.keys(E.TYPES).sort(), ["clock", "date", "forecast", "next_alarm", "text", "weather_now"]);
+  assert.deepEqual(Object.keys(E.TYPES).sort(), ["clock", "date", "forecast", "next_alarm", "photos", "text", "weather_now"]);
 });
 
 test("downscaleSize: reduce el lado largo y no amplia", () => {
