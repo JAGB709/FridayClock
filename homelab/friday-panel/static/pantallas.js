@@ -110,6 +110,7 @@ window.addEventListener("message", (ev) => {
   if (!m || typeof m !== "object") return;
   if (m.type === "face-select") selectElement(m.id);
   else if (m.type === "face-resize") resizeElement(m.id, m.w, m.h);
+  else if (m.type === "face-move") moveElement(m.id, m.x, m.y);
   else if (m.type === "face-empty") { dz.selected = null; paintSub(); pushPreview(); }
 });
 
@@ -255,6 +256,7 @@ function addElement(type) {
   if (!spot) { toast("No hay hueco libre en la rejilla", true); return; }
   const id = EditorCore.uniqueId(t.label, list.map((e) => e.id));
   list.push(EditorCore.newElement(type, id, spot, size));
+  if (type === "photos") list[list.length - 1].images = dz.backgrounds.slice(0, 1).map((b) => b.name);
   dz.selected = id;
   touch(); paintSub();
 }
@@ -289,6 +291,20 @@ function resizeElement(id, w, hh) {
   paintSub();
 }
 
+function moveElement(id, x, y) {
+  const e = currentElements().find((it) => it.id === id);
+  if (!e) return;
+  dz.selected = id;
+  const cand = { x, y, w: e.w, h: e.h };
+  if (EditorCore.inBounds(cand, currentRows()) && !EditorCore.collides(currentElements(), cand, id)) {
+    e.x = x; e.y = y; touch();
+  } else {
+    toast("No cabe ahí: se solaparía", true);
+    pushPreview();
+  }
+  paintSub();
+}
+
 function typedField(e, f) {
   const def = typeInfo(e.type).defaults[f.key];
   const val = e[f.key] === undefined ? def : e[f.key];
@@ -301,8 +317,48 @@ function typedField(e, f) {
     return labeled(f.label, h("textarea", { rows: 5, oninput: (ev) => { e[f.key] = ev.target.value.split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 20); touch(); } },
       (e[f.key] || []).join("\n")));
   }
+  if (f.kind === "photofit") return photoFitBlock(e);
+  if (f.kind === "photolist") return photoListField(e, f);
   return null;
 }
+
+function photoListField(e, f) {
+  const chosen = new Set(e[f.key] || []);
+  const known = new Set(dz.backgrounds.map((b) => b.name));
+  const file = h("input", { type: "file", accept: "image/jpeg,image/png,image/webp", multiple: true, hidden: true,
+    onchange: async (ev) => {
+      const input = ev.target;
+      const files = Array.from(input.files);
+      input.value = "";
+      for (const one of files) {
+        if ((e.images || []).length >= 20) { toast("Máximo 20 fotos por carrusel", true); break; }
+        const name = await uploadPhoto(one);
+        if (name && !(e.images || []).includes(name)) e.images = (e.images || []).concat([name]);
+      }
+      touch(); paintSub();
+    } });
+  const thumbs = dz.backgrounds.map((b) => {
+    const on = chosen.has(b.name);
+    return h("label", { class: "thumb" + (on ? " on" : "") },
+      h("img", { src: "/api/bg/" + encodeURIComponent(b.name), alt: b.name, loading: "lazy" }),
+      h("input", { type: "checkbox", checked: on, onchange: (ev) => {
+        const cur = (e.images || []).filter((n) => n !== b.name);
+        if (ev.target.checked) {
+          if (cur.length >= 20) { toast("Máximo 20 fotos por carrusel", true); ev.target.checked = false; return; }
+          cur.push(b.name);
+        }
+        e.images = cur; touch(); paintSub();
+      } }));
+  });
+  const missing = (e.images || []).filter((n) => !known.has(n));
+  return h("div", { class: "opt" },
+    h("h3", {}, f.label + " (" + (e.images || []).length + ")"),
+    dz.backgrounds.length ? h("div", { class: "thumbs" }, thumbs) : h("div", { class: "muted" }, "No hay fotos en el reloj: sube alguna."),
+    missing.length ? h("div", { class: "warn" }, "Estas fotos ya no están en el reloj y se saltarán: " + missing.join(", ")) : null,
+    !(e.images || []).length ? h("div", { class: "warn" }, "Elige al menos una foto: sin ellas el diseño no se puede guardar.") : null,
+    h("div", { class: "row" }, btn("Subir fotos…", () => file.click(), "small ghost"), file));
+}
+
 
 function elementOptions(e) {
   const rows = currentRows();
@@ -402,6 +458,75 @@ async function refreshBackgrounds() {
   dz.backgrounds = r.ok ? r.data.backgrounds : [];
 }
 
+function loadBitmap(file) {
+  if (window.createImageBitmap) return createImageBitmap(file);
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("no se pudo leer la imagen")); };
+    img.src = url;
+  });
+}
+
+function canvasBlob(canvas, type, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+const BLOB_EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const MAX_UPLOAD = 8 * 1024 * 1024;
+
+/* Reduce la foto en el navegador (lado largo 1600) y la sube. Si no se puede decodificar,
+   la manda tal cual si pesa menos de 8 MB. Devuelve el nombre guardado en el reloj o null. */
+async function uploadPhoto(file) {
+  toast("Preparando la foto…");
+  let blob = file;
+  let name = file.name;
+  try {
+    const bmp = await loadBitmap(file);
+    const size = EditorCore.downscaleSize(bmp.width, bmp.height, EditorCore.PHOTO_SIDE);
+    if (size.w !== bmp.width || size.h !== bmp.height || file.size > MAX_UPLOAD) {
+      const canvas = document.createElement("canvas");
+      canvas.width = size.w; canvas.height = size.h;
+      canvas.getContext("2d").drawImage(bmp, 0, 0, size.w, size.h);
+      const want = file.type === "image/png" ? "image/png" : file.type === "image/webp" ? "image/webp" : "image/jpeg";
+      let out = await canvasBlob(canvas, want, 0.85);
+      if (out && out.size > MAX_UPLOAD && want !== "image/jpeg") out = await canvasBlob(canvas, "image/jpeg", 0.85);
+      if (out && BLOB_EXT[out.type]) {
+        blob = out;
+        name = name.replace(/\.[^.]*$/, "") + "." + BLOB_EXT[out.type];
+      }
+    }
+    if (bmp.close) bmp.close();
+  } catch (err) {
+    if (file.size > MAX_UPLOAD) { toast("No se pudo leer la imagen y supera 8 MB", true); return null; }
+  }
+  if (blob.size > MAX_UPLOAD) { toast("La imagen supera 8 MB", true); return null; }
+  toast("Subiendo…");
+  const r = await api("POST", `/api/backgrounds?name=${encodeURIComponent(name)}`, undefined, blob);
+  if (!r.ok) { toast(errText(r), true); return null; }
+  toast("Foto subida al reloj");
+  await refreshBackgrounds();
+  return r.data.name;
+}
+
+function rangeField(label, val, min, max, step, onInput) {
+  const out = h("span", { class: "muted" }, String(val));
+  const input = h("input", { type: "range", min, max, step, value: val,
+    oninput: (ev) => { const v = Number(ev.target.value); out.textContent = String(v); onInput(v); } });
+  return labeled(label, h("div", { class: "row" }, input, out));
+}
+
+/* Encaje, zoom y posición de una foto (fondo de tema o carrusel); `spec` es el objeto del diseño. */
+function photoFitBlock(spec) {
+  return h("div", { class: "opt" },
+    selectField("Encaje", [["cover", "Rellenar (recorta lo que sobra)"], ["contain", "Entera (con bandas)"], ["fill", "Estirar"]],
+      spec.fit || "cover", (v) => { spec.fit = v; touch(); }),
+    rangeField("Zoom", spec.zoom === undefined ? 1 : spec.zoom, 1, 3, 0.1, (v) => { spec.zoom = v; touch(); }),
+    rangeField("Posición horizontal", spec.pos_x === undefined ? 50 : spec.pos_x, 0, 100, 1, (v) => { spec.pos_x = v; touch(); }),
+    rangeField("Posición vertical", spec.pos_y === undefined ? 50 : spec.pos_y, 0, 100, 1, (v) => { spec.pos_y = v; touch(); }));
+}
+
 function imagePicker(bg) {
   const known = new Set(dz.backgrounds.map((b) => b.name));
   const select = h("select", { onchange: (ev) => { bg.image = ev.target.value; touch(); paintSub(); } },
@@ -414,13 +539,9 @@ function imagePicker(bg) {
       const f = input.files[0];
       input.value = "";
       if (!f) return;
-      if (f.size > 2 * 1024 * 1024) { toast("La imagen supera 2 MB", true); return; }
-      toast("Subiendo…");
-      const r = await api("POST", `/api/backgrounds?name=${encodeURIComponent(f.name)}`, undefined, f);
-      if (!r.ok) { toast(errText(r), true); return; }
-      toast("✓ Imagen subida al reloj");
-      bg.image = r.data.name;
-      await refreshBackgrounds();
+      const name = await uploadPhoto(f);
+      if (!name) return;
+      bg.image = name;
       touch(); paintSub();
     } });
   return h("div", { class: "opt" },
@@ -428,7 +549,8 @@ function imagePicker(bg) {
     !bg.image ? h("div", { class: "muted" }, "Sube una imagen para usar este fondo") : null,
     bg.image && !known.has(bg.image) ? h("div", { class: "warn" }, "⚠ Esa imagen ya no está en el reloj: se verá el color de respaldo.") : null,
     h("div", { class: "row" }, btn("Subir imagen…", () => file.click(), "small ghost"), file),
-    dz.backgrounds.map((b) => h("div", { class: "row between" }, h("span", {}, b.name), btn("Borrar", () => deleteBackground(b.name), "small ghost"))));
+    dz.backgrounds.map((b) => h("div", { class: "row between" }, h("span", {}, b.name), btn("Borrar", () => deleteBackground(b.name), "small ghost"))),
+    bg.image ? photoFitBlock(bg) : null);
 }
 
 async function deleteBackground(name) {

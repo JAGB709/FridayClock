@@ -76,3 +76,10 @@ textarea { width: 100%; box-sizing: border-box; font: inherit; color: var(--text
 input[type=color] { width: 100%; height: 44px; padding: 2px; background: #0f151c; border: 1px solid var(--line); border-radius: 10px; }
 
 #savebar #try { flex: 1.4; }
+
+.thumbs { display: flex; flex-wrap: wrap; }
+.thumb { position: relative; width: 84px; height: 56px; margin: 0 8px 8px 0; border: 2px solid transparent; border-radius: 6px; overflow: hidden; }
+.thumb.on { border-color: #4fc3f7; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb input { position: absolute; right: 4px; top: 4px; }
+input[type=range] { width: 100%; }
