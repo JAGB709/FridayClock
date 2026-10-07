@@ -57,6 +57,11 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
     `pos_x` y `pos_y` (0-100). El elemento `photos` es un carrusel:
     `{"id":"fotos","type":"photos","x":0,"y":0,"w":8,"h":6,"images":["a.jpg","b.jpg"],"interval_s":10,"transition":"fade","order":"sequential"}`
     (1-20 fotos, `interval_s` 3-600). Máximo 2 elementos `photos` por pantalla y 1 en la pantalla de alarma.
+    Los diseños admiten elementos solapados: el orden de la lista `elements` es el orden de dibujo
+    (el último queda delante). El fondo de un tema también puede ser un carrusel:
+    `{"type":"photos","images":["a.jpg","b.jpg"],"interval_s":10,"transition":"fade","order":"random","fit":"cover","dim":30,"color":"#000000"}`
+    (1-20 fotos, `interval_s` 3-600, `transition` `fade`/`none`, `order` `sequential`/`random`, `dim` 0-80,
+    más `fit`/`zoom`/`pos_x`/`pos_y`).
 13. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
    es epoch ms del próximo disparo).
 
