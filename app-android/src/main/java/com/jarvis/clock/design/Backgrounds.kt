@@ -95,8 +95,12 @@ object Backgrounds {
                     "webp" -> @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP to 90
                     else -> Bitmap.CompressFormat.JPEG to 85
                 }
-                tmp.outputStream().use { scaled.compress(format, quality, it) }
-                scaled.recycle()
+                val ok = try {
+                    tmp.outputStream().use { scaled.compress(format, quality, it) }
+                } finally {
+                    scaled.recycle()
+                }
+                if (!ok) throw IllegalArgumentException("no se pudo reducir la imagen")
             }
             if (!tmp.renameTo(File(dir, name))) throw IllegalArgumentException("no se pudo guardar la imagen")
             return name
