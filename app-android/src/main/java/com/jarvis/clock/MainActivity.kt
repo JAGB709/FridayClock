@@ -184,20 +184,24 @@ class MainActivity : Activity() {
     }
 
     // Los botones físicos no hacen nada en el framework de este reloj (los gestionaba el
-    // asistente de Google, deshabilitado): como launcher los recogemos nosotros.
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+    // asistente de Google, deshabilitado): como launcher los recogemos nosotros. Se interceptan
+    // aquí, antes de la jerarquía de vistas: el WebView del motor consume KEYCODE_MUTE y no
+    // llegaría a onKeyDown.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val t0 = SystemClock.uptimeMillis()
-        val handled = when (keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP -> { stepVolume(VOLUME_STEP); true }
-            KeyEvent.KEYCODE_VOLUME_DOWN -> { stepVolume(-VOLUME_STEP); true }
-            KeyEvent.KEYCODE_MUTE -> { toggleMicMute(); true } // KEY_MICMUTE del botón central
-            else -> false
+        val a = HardwareKeys.decide(event.keyCode, event.action, event.repeatCount)
+        when (a) {
+            HardwareKeys.Action.VOLUME_UP -> stepVolume(VOLUME_STEP)
+            HardwareKeys.Action.VOLUME_DOWN -> stepVolume(-VOLUME_STEP)
+            HardwareKeys.Action.MIC_MUTE_TOGGLE -> toggleMicMute() // KEY_MICMUTE del botón central
+            HardwareKeys.Action.NONE -> {}
         }
-        if (handled) {
-            Log.i("Keys", "key=$keyCode repeticion=${event.repeatCount} cola=${t0 - event.eventTime}ms manejo=${SystemClock.uptimeMillis() - t0}ms")
+        if (a != HardwareKeys.Action.NONE) {
+            Log.i("Keys", "key=${event.keyCode} repeticion=${event.repeatCount} cola=${t0 - event.eventTime}ms manejo=${SystemClock.uptimeMillis() - t0}ms")
             return true
         }
-        return super.onKeyDown(keyCode, event)
+        if (HardwareKeys.consumes(event.keyCode)) return true
+        return super.dispatchKeyEvent(event)
     }
 
     private fun stepVolume(delta: Int) {
