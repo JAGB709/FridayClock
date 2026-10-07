@@ -88,16 +88,6 @@ Añadir al final de la clase `DesignSchemaTest` (usan los helpers `base()`, `inv
         assertTrue(invalid(d).containsKey("themes.clasico.bg.zoom"))
     }
 
-    @Test fun `elemento photos valido con valores por defecto`() {
-        val d = base()
-        elements(d, "noche").put(photos("fotos", 0, 5, 2, 1)) // hueco libre a la derecha de la alarma? no: ver nota
-        // la fila 5 de "noche" está ocupada por la alarma (w=8): se coloca en una pantalla nueva
-    }
-```
-
-**Nota para el implementador:** el último test de arriba es solo un esqueleto de cómo montar el elemento; sustitúyelo por estos dos, que sí son completos (crean una pantalla propia con los elementos):
-
-```kotlin
     private fun withScreen(d: JSONObject, vararg els: JSONObject): JSONObject {
         val arr = JSONArray()
         for (e in els) arr.put(e)
@@ -139,8 +129,6 @@ Añadir al final de la clase `DesignSchemaTest` (usan los helpers `base()`, `inv
         assertTrue(invalid(alarma).containsKey("alarm_screen.elements"))
     }
 ```
-
-Borrar del archivo el test esqueleto `elemento photos valido con valores por defecto` (no debe quedar en el commit).
 
 - [ ] **Step 2: Ejecutar para ver que fallan**
 
