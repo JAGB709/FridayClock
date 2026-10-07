@@ -14,3 +14,10 @@ test("icons: un nombre desconocido o vacio no falla", () => {
   assert.equal(Icons.svg(undefined, 24), "");
   assert.equal(Icons.node("no-existe", 24), null);
 });
+
+test("icons: el juego incluye los iconos del panel", () => {
+  for (const n of ["house", "layout-template", "chevron-left", "chevrons-up", "arrow-down", "layers", "wifi-off", "pencil", "copy", "music", "save", "rotate-ccw"]) {
+    assert.ok(Icons.names.includes(n), n);
+    assert.ok(Icons.svg(n, 24).startsWith("<svg"), n);
+  }
+});

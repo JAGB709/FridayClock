@@ -60,7 +60,9 @@ def test_inter_fonts_are_bundled_with_license():
 
 
 ICONS = ("bell mic settings sun cloud cloud-sun cloud-rain cloud-snow cloud-lightning cloud-fog moon clock "
-         "alert-triangle check x trash-2 plus play pause volume-2 image upload chevron-right").split()
+         "alert-triangle check x trash-2 plus play pause volume-2 image upload chevron-right "
+         "house layout-template chevron-left chevron-down chevrons-up chevrons-down arrow-up arrow-down layers wifi "
+         "wifi-off pencil copy info music refresh-cw save rotate-ccw").split()
 
 
 def test_icon_sources_and_generated_files_exist():
