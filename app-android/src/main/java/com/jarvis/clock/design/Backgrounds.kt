@@ -80,10 +80,13 @@ object Backgrounds {
         require(w.toLong() * h <= MAX_PIXELS) { "la imagen es demasiado grande" }
         val tmp = File(dir, ".$name.tmp")
         try {
+            try {
             if (maxOf(w, h) <= TARGET_SIDE) {
                 tmp.writeBytes(bytes)
             } else {
-                val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(w, h) }
+                val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(w, h)
+                    if (name.endsWith(".jpg") || name.endsWith(".jpeg")) inPreferredConfig = Bitmap.Config.RGB_565
+                }
                 val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
                     ?: throw IllegalArgumentException("el reloj no puede leer esa imagen")
                 val (tw, th) = targetSize(w, h)
@@ -101,6 +104,9 @@ object Backgrounds {
                     scaled.recycle()
                 }
                 if (!ok) throw IllegalArgumentException("no se pudo reducir la imagen")
+            }
+            } catch (e: OutOfMemoryError) {
+                throw IllegalArgumentException("la imagen es demasiado grande para el reloj")
             }
             if (!tmp.renameTo(File(dir, name))) throw IllegalArgumentException("no se pudo guardar la imagen")
             return name

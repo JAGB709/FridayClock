@@ -378,12 +378,13 @@ alarmas no dependen de él.
 (`cover`, `contain` o `fill`), `zoom` (1 a 3) y `pos_x`/`pos_y` (0 a 100, punto de la foto que
 queda centrado). El elemento `photos` es un carrusel: `images` (1 a 20 nombres de fotos subidas),
 `interval_s` (3 a 600 s), `transition` (`fade` o `none`), `order` (`sequential` o `random`) y los
-campos de ajuste; cada pantalla admite un máximo de elementos `photos`. Las fotos se suben desde el
+campos de ajuste; cada pantalla admite como máximo 2 elementos `photos` (1 en la pantalla de alarma). Las fotos se suben desde el
 panel, que las reduce en el navegador antes de enviarlas; el reloj las deja en 1600 px como mucho
 (subida ≤ 8 MB, biblioteca ≤ 60 fotos). En el editor los elementos se mueven arrastrándolos.
 
 **Gestos.** En la carátula, deslizar de izquierda a derecha abre Alarmas y de derecha a
-izquierda abre Ajustes; para cambiar de pantalla del perfil se desliza en vertical.
+izquierda abre Ajustes; para cambiar de pantalla del perfil se desliza en vertical. En la pantalla de
+alarma sonando, deslizar no hace nada.
 
 ### Órdenes que funcionan sin red (y sin Hermes)
 | Dices | Hace |

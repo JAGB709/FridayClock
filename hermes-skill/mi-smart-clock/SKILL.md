@@ -55,7 +55,7 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
     Un fondo de imagen y el elemento `photos` admiten `fit` (`cover`/`contain`/`fill`), `zoom` (1-3),
     `pos_x` y `pos_y` (0-100). El elemento `photos` es un carrusel:
     `{"id":"fotos","type":"photos","x":0,"y":0,"w":8,"h":6,"images":["a.jpg","b.jpg"],"interval_s":10,"transition":"fade","order":"sequential"}`
-    (1-20 fotos, `interval_s` 3-600).
+    (1-20 fotos, `interval_s` 3-600). Máximo 2 elementos `photos` por pantalla y 1 en la pantalla de alarma.
 13. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
    es epoch ms del próximo disparo).
 
