@@ -10,7 +10,7 @@
 
   var S = {
     design: null, opts: {}, data: {}, screens: [], index: 0, rows: 6, rotate: 0,
-    W: 0, H: 0, updaters: [], rotateTimer: null, timers: [],
+    W: 0, H: 0, updaters: [], rotateTimer: null, timers: [], bgTimers: [],
   };
   var rootEl, contentEl, resizeTimer, lastMinute = -1;
   var pending = []; // llamadas a render/setData recibidas antes de que exista el DOM
@@ -78,6 +78,8 @@
   }
 
   function applyTheme(theme, bgBase) {
+    for (var bt = 0; bt < S.bgTimers.length; bt++) clearInterval(S.bgTimers[bt]);
+    S.bgTimers = [];
     var f = Core.fontStyle(theme.font);
     rootEl.style.background = Core.bgCss(theme.bg, bgBase);
     rootEl.style.setProperty("--fg", theme.fg);
@@ -98,6 +100,13 @@
       dim.style.background = "rgba(0,0,0," + ((bg.dim || 0) / 100) + ")";
       layer.appendChild(dim);
       rootEl.insertBefore(layer, contentEl);
+    } else if (bg.type === "photos" && bg.images && bg.images.length) {
+      var pl = el("div", "bglayer");
+      startCarousel(pl, bg.images, bg, S.bgTimers);
+      var pdim = el("div", "bgdim");
+      pdim.style.background = "rgba(0,0,0," + ((bg.dim || 0) / 100) + ")";
+      pl.appendChild(pdim);
+      rootEl.insertBefore(pl, contentEl);
     }
   }
 
@@ -254,41 +263,51 @@
     });
   }
 
+  // Carrusel compartido (elemento de fotos y fondo de tema). Dos capas con fundido;
+  // la capa saliente suelta su imagen al terminar el fundido para no acumular memoria.
+  function startCarousel(container, names, opts, timers) {
+    names = (names || []).slice();
+    var fade = opts.transition !== "none";
+    var layers = [el("div", "pl" + (fade ? " fade" : "")), el("div", "pl" + (fade ? " fade" : ""))];
+    container.appendChild(layers[0]); container.appendChild(layers[1]);
+    var cur = -1, top = 0, busy = false;
+    var order = opts.order === "random" ? "random" : "sequential";
+    function show(i, tries) {
+      if (busy) return;
+      if (i < 0 || !names.length) return;
+      busy = true;
+      var img = new Image();
+      img.onload = function () {
+        var out = layers[top];
+        var next = layers[1 - top];
+        stylePhoto(next, photoUrl(names[i]), opts);
+        next.classList.add("on");
+        out.classList.remove("on");
+        // Memoria: la capa saliente suelta su imagen cuando termina el fundido.
+        if (fade) setTimeout(function () { if (!out.classList.contains("on")) out.style.backgroundImage = "none"; }, 700);
+        else out.style.backgroundImage = "none";
+        top = 1 - top;
+        cur = i;
+        busy = false;
+      };
+      img.onerror = function () {
+        busy = false;
+        if (tries < names.length) show(Core.nextPhotoIndex(names.length, i, order), tries + 1);
+      };
+      img.src = photoUrl(names[i]);
+    }
+    show(Core.nextPhotoIndex(names.length, -1, "sequential"), 1);
+    var iv = Math.max(3, Math.min(600, opts.interval_s || 10)) * 1000;
+    if (names.length > 1) {
+      timers.push(setInterval(function () { show(Core.nextPhotoIndex(names.length, cur, order), 1); }, iv));
+    }
+  }
+
   var builders = {
     photos: function (e, box, r) {
-      var names = (e.images || []).slice();
       var wrap = el("div", "photos");
       box.appendChild(wrap);
-      var fade = e.transition !== "none";
-      var layers = [el("div", "pl" + (fade ? " fade" : "")), el("div", "pl" + (fade ? " fade" : ""))];
-      wrap.appendChild(layers[0]); wrap.appendChild(layers[1]);
-      var cur = -1, top = 0, busy = false;
-      var order = e.order === "random" ? "random" : "sequential";
-      function show(i, tries) {
-        if (busy) return;
-        if (i < 0 || !names.length) return;
-        busy = true;
-        var img = new Image();
-        img.onload = function () {
-          var next = layers[1 - top];
-          stylePhoto(next, photoUrl(names[i]), e);
-          next.classList.add("on");
-          layers[top].classList.remove("on");
-          top = 1 - top;
-          cur = i;
-          busy = false;
-        };
-        img.onerror = function () {
-          busy = false;
-          if (tries < names.length) show(Core.nextPhotoIndex(names.length, i, order), tries + 1);
-        };
-        img.src = photoUrl(names[i]);
-      }
-      show(Core.nextPhotoIndex(names.length, -1, "sequential"), 1);
-      var iv = Math.max(3, Math.min(600, e.interval_s || 10)) * 1000;
-      if (names.length > 1) {
-        S.timers.push(setInterval(function () { show(Core.nextPhotoIndex(names.length, cur, order), 1); }, iv));
-      }
+      startCarousel(wrap, e.images, e, S.timers);
     },
     clock: function (e, box, r) {
       if (e.style === "analog") { buildAnalog(e, box, r); return; }
@@ -425,6 +444,21 @@
     var t = ev.target;
     var handle = t.closest ? t.closest(".handle") : null;
     var box = t.closest ? t.closest(".el") : null;
+    // Elementos solapados: pulsar de nuevo en el mismo punto elige el de debajo.
+    if (box && !handle && document.elementsFromPoint) {
+      var stack = document.elementsFromPoint(ev.clientX, ev.clientY);
+      var ids = [];
+      for (var si = 0; si < stack.length; si++) {
+        var cand = stack[si].closest ? stack[si].closest(".el") : null;
+        var cid = cand ? cand.getAttribute("data-id") : null;
+        if (cid && ids.indexOf(cid) < 0) ids.push(cid);
+      }
+      var pickId = Core.pickUnder(ids, S.opts.selected);
+      if (pickId) {
+        var pbox = contentEl.querySelector('.el[data-id="' + pickId + '"]');
+        if (pbox) box = pbox;
+      }
+    }
     if (handle && box) {
       var data = findElement(box.getAttribute("data-id"));
       if (!data) return;
