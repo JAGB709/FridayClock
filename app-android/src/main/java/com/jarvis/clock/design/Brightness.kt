@@ -34,6 +34,9 @@ object Brightness {
         return v.coerceIn(1, 100)
     }
 
+    /** Porcentaje del manual si existe, si no el de reserva (carátula nativa), acotado a 1..100. */
+    fun manualOr(manual: Manual?, fallback: Int): Int = (manual?.percent ?: fallback).coerceIn(1, 100)
+
     /** Guarda un valor manual para el perfil programado ahora, con el sello del diseño guardado. */
     fun setManual(ctx: Context, percent: Int, minuteOfDay: Int) {
         val design = DesignStore.load(ctx).design

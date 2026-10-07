@@ -62,4 +62,10 @@ class BrightnessTest {
     @Test fun `valid sin manual devuelve nulo`() {
         assertNull(Brightness.valid(null, "dia", design(Triple("dia", 70, false))))
     }
+
+    @Test fun `manualOr usa el manual o la reserva y acota`() {
+        assertEquals(40, Brightness.manualOr(Manual(40, "dia", 1), 70))
+        assertEquals(70, Brightness.manualOr(null, 70))
+        assertEquals(100, Brightness.manualOr(null, 500))
+    }
 }

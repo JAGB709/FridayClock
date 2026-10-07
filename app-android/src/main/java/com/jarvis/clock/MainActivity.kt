@@ -490,7 +490,12 @@ class MainActivity : Activity() {
         nextAlarm.setTextColor(alarmColor)
         (nextAlarm.tag as? String)?.let { setIconText(nextAlarm, nextAlarm.text.toString(), it, alarmColor) }
         bar.alpha = if (night) 0.15f else 1f
-        val pct = Prefs.manualBrightness?.percent ?: if (night) Prefs.nightBrightness else Prefs.dayBrightness
+        val saved = cachedDesign ?: DesignStore.load(this).design.also { cachedDesign = it }
+        val scheduledId = DesignSchema.activeProfile(saved, minuteOfDay())?.optString("id").orEmpty()
+        val stored = Prefs.manualBrightness
+        val manual = Brightness.valid(stored, scheduledId, saved)
+        if (stored != null && manual == null && previewDesign == null) Brightness.clearManual()
+        val pct = Brightness.manualOr(manual, if (night) Prefs.nightBrightness else Prefs.dayBrightness)
         window.attributes = window.attributes.apply { screenBrightness = pct / 100f }
     }
 
