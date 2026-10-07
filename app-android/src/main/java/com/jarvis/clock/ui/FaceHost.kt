@@ -34,6 +34,7 @@ class FaceHost private constructor(private val ctx: Context, private val listene
         fun onTap()
         fun onDoubleTap()
         fun onLongPress()
+        fun onSwipe(direction: String)
         fun onPermission()
         /** [kind] es uno de REASON_*: solo REASON_RENDERER merece un reintento. */
         fun onFailure(kind: String, reason: String)
@@ -141,6 +142,7 @@ class FaceHost private constructor(private val ctx: Context, private val listene
         @JavascriptInterface fun tap() { main.post { listener.onTap() } }
         @JavascriptInterface fun doubleTap() { main.post { listener.onDoubleTap() } }
         @JavascriptInterface fun longPress() { main.post { listener.onLongPress() } }
+        @JavascriptInterface fun swipe(direction: String) { main.post { listener.onSwipe(direction) } }
         @JavascriptInterface fun permission() { main.post { listener.onPermission() } }
         @JavascriptInterface fun error(msg: String) { Log.w(TAG, "motor: $msg") }
     }

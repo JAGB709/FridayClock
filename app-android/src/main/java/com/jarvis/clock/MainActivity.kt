@@ -101,6 +101,7 @@ class MainActivity : Activity() {
         override fun onTap() { wakeScreen() }
         override fun onDoubleTap() { assistant.listen() }
         override fun onLongPress() { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+        override fun onSwipe(direction: String) { handleSwipe(direction) }
         override fun onPermission() {
             startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
         }
@@ -299,6 +300,14 @@ class MainActivity : Activity() {
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean { wakeScreen(); return true }
             override fun onDoubleTap(e: MotionEvent): Boolean { assistant.listen(); return true }
             override fun onLongPress(e: MotionEvent) { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+                if (e1 == null) return false
+                val dx = e2.x - e1.x
+                val dy = e2.y - e1.y
+                if (Math.abs(dx) < dp(60).toFloat() || Math.abs(dx) < Math.abs(dy) * 1.5f) return false
+                handleSwipe(if (dx > 0) "right" else "left")
+                return true
+            }
         })
         face.setOnTouchListener { _, ev -> gd.onTouchEvent(ev) }
     }
@@ -315,6 +324,14 @@ class MainActivity : Activity() {
         scaleType = ImageView.ScaleType.FIT_CENTER
         setPadding(Ui.dp(this@MainActivity, 10), Ui.dp(this@MainActivity, 10), Ui.dp(this@MainActivity, 10), Ui.dp(this@MainActivity, 10))
         setOnClickListener { wakeScreen(); onClick() }
+    }
+
+    /** Izquierda a derecha abre Alarmas; derecha a izquierda abre Ajustes. */
+    private fun handleSwipe(direction: String) {
+        when (direction) {
+            "right" -> openAlarms()
+            "left" -> startActivity(Intent(this, SettingsActivity::class.java))
+        }
     }
 
     private fun openAlarms() = startActivity(Intent(this, AlarmsActivity::class.java))

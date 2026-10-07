@@ -52,6 +52,7 @@ class AlarmActivity : Activity() {
         override fun onTap() {}
         override fun onDoubleTap() {}
         override fun onLongPress() {}
+        override fun onSwipe(direction: String) {}
         override fun onPermission() {}
         override fun onFailure(kind: String, reason: String) { runOnUiThread { rebuildNative() } }
     }
