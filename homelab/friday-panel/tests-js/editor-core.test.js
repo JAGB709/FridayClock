@@ -77,3 +77,26 @@ test("photos: plantilla por defecto", () => {
   assert.equal(e.w, 4);
   assert.equal(e.h, 3);
 });
+
+const ids = (l) => l.map((e) => e.id).join(",");
+const L = () => [{ id: "a" }, { id: "b" }, { id: "c" }];
+
+test("capas: traer al frente, enviar al fondo, subir y bajar", () => {
+  assert.equal(ids(E.bringToFront(L(), "a")), "b,c,a");
+  assert.equal(ids(E.bringToFront(L(), "c")), "a,b,c");
+  assert.equal(ids(E.sendToBack(L(), "c")), "c,a,b");
+  assert.equal(ids(E.sendToBack(L(), "a")), "a,b,c");
+  assert.equal(ids(E.moveUp(L(), "a")), "b,a,c");
+  assert.equal(ids(E.moveUp(L(), "c")), "a,b,c");
+  assert.equal(ids(E.moveDown(L(), "c")), "a,c,b");
+  assert.equal(ids(E.moveDown(L(), "a")), "a,b,c");
+});
+
+test("capas: no mutan la entrada y toleran ids desconocidos o un solo elemento", () => {
+  const l = L();
+  E.bringToFront(l, "a"); E.sendToBack(l, "c"); E.moveUp(l, "a"); E.moveDown(l, "c");
+  assert.equal(ids(l), "a,b,c");
+  assert.equal(ids(E.bringToFront(l, "zz")), "a,b,c");
+  assert.equal(ids(E.moveUp([{ id: "solo" }], "solo")), "solo");
+  assert.equal(ids(E.moveDown([], "x")), "");
+});

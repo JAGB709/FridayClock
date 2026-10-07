@@ -155,3 +155,18 @@ test("snapMove: se limita a la rejilla", () => {
   assert.deepEqual(C.snapMove(e, -99, -99, 6), { x: 0, y: 0 });
   assert.deepEqual(C.snapMove(e, 0, 0, 4), { x: 2, y: 1 });
 });
+
+test("pickUnder: cicla por los elementos bajo el puntero", () => {
+  assert.equal(C.pickUnder([], "a"), null);
+  assert.equal(C.pickUnder(["a", "b", "c"], null), "a");
+  assert.equal(C.pickUnder(["a", "b", "c"], "x"), "a");
+  assert.equal(C.pickUnder(["a", "b", "c"], "a"), "b");
+  assert.equal(C.pickUnder(["a", "b", "c"], "b"), "c");
+  assert.equal(C.pickUnder(["a", "b", "c"], "c"), "a");
+  assert.equal(C.pickUnder(["a"], "a"), "a");
+});
+
+test("bgCss: fondo de fotos devuelve el color de respaldo", () => {
+  assert.equal(C.bgCss({ type: "photos", images: ["a.jpg"], color: "#102030" }), "#102030");
+  assert.equal(C.bgCss({ type: "photos", images: ["a.jpg"] }), "#000000");
+});

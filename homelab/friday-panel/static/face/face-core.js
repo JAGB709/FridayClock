@@ -172,11 +172,19 @@
     };
   }
 
+  /* ids ordenados de arriba a abajo: devuelve el que sigue al seleccionado (cicla); sin seleccionado, el de arriba. */
+  function pickUnder(ids, selectedId) {
+    if (!ids || !ids.length) return null;
+    var i = ids.indexOf(selectedId);
+    return i < 0 ? ids[0] : ids[(i + 1) % ids.length];
+  }
+
   return {
     COLS: COLS, cellRect: cellRect, minutesOf: minutesOf, activeProfile: activeProfile,
     dayOfYear: dayOfYear, dailyQuote: dailyQuote, formatClock: formatClock, formatDate: formatDate,
     analogAngles: analogAngles, fitText: fitText, weatherParts: weatherParts, nextAlarmParts: nextAlarmParts,
     forecastItems: forecastItems, bgCss: bgCss, fontStyle: fontStyle, justify: justify,
     photoStyle: photoStyle, nextPhotoIndex: nextPhotoIndex, classifySwipe: classifySwipe, snapMove: snapMove,
+    pickUnder: pickUnder,
   };
 });

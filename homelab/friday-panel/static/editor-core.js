@@ -117,9 +117,32 @@
     return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
   }
 
+  function indexOfId(list, id) {
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return i;
+    return -1;
+  }
+
+  /* Devuelve una lista nueva con el elemento `id` movido a la posición `to` (0..n-1); si no cambia nada, la misma lista copiada. */
+  function relocate(list, id, to) {
+    var out = list.slice();
+    var i = indexOfId(out, id);
+    if (i < 0) return out;
+    var t = Math.max(0, Math.min(out.length - 1, to));
+    if (t === i) return out;
+    var item = out.splice(i, 1)[0];
+    out.splice(t, 0, item);
+    return out;
+  }
+
+  function bringToFront(list, id) { return relocate(list, id, list.length - 1); }
+  function sendToBack(list, id) { return relocate(list, id, 0); }
+  function moveUp(list, id) { var i = indexOfId(list, id); return i < 0 ? list.slice() : relocate(list, id, i + 1); }
+  function moveDown(list, id) { var i = indexOfId(list, id); return i < 0 ? list.slice() : relocate(list, id, i - 1); }
+
   return {
     PHOTO_SIDE: PHOTO_SIDE, downscaleSize: downscaleSize,
     COLS: COLS, TYPES: TYPES, COLOR_OPTIONS: COLOR_OPTIONS, overlaps: overlaps, inBounds: inBounds,
     collides: collides, findFreeSpot: findFreeSpot, slug: slug, uniqueId: uniqueId, newElement: newElement,
+    bringToFront: bringToFront, sendToBack: sendToBack, moveUp: moveUp, moveDown: moveDown,
   };
 });
