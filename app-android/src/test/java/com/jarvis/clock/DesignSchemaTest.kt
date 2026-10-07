@@ -219,4 +219,85 @@ class DesignSchemaTest {
         assertEquals(0xFF112233.toInt(), parseHex("#112233"))
         assertEquals(0xFF0A141E.toInt(), darken(0xFF285078.toInt(), 0.25f))
     }
+
+    private fun photos(id: String, x: Int, y: Int, w: Int = 2, h: Int = 1, vararg extra: Pair<String, Any>): JSONObject {
+        val o = JSONObject().put("id", id).put("type", "photos").put("x", x).put("y", y).put("w", w).put("h", h)
+            .put("images", JSONArray().put("a.jpg").put("b.png"))
+        for ((k, v) in extra) o.put(k, v)
+        return o
+    }
+
+    @Test fun `un diseno anterior a las fotos ajustables sigue siendo valido`() {
+        val d = base()
+        d.getJSONObject("themes").getJSONObject("clasico").put("bg",
+            JSONObject().put("type", "image").put("image", "playa.jpg").put("dim", 30).put("color", "#000000"))
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+    }
+
+    @Test fun `fondo de imagen acepta fit zoom y posicion`() {
+        val d = base()
+        d.getJSONObject("themes").getJSONObject("clasico").put("bg",
+            JSONObject().put("type", "image").put("image", "playa.jpg").put("fit", "contain")
+                .put("zoom", 1.5).put("pos_x", 20).put("pos_y", 80))
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+    }
+
+    @Test fun `ajuste de foto fuera de rango se rechaza con su ruta`() {
+        val d = base()
+        d.getJSONObject("themes").getJSONObject("clasico").put("bg",
+            JSONObject().put("type", "image").put("image", "playa.jpg").put("fit", "raro")
+                .put("zoom", 4).put("pos_x", 101).put("pos_y", 1.5))
+        val e = invalid(d)
+        assertTrue(e.containsKey("themes.clasico.bg.fit"))
+        assertTrue(e.containsKey("themes.clasico.bg.zoom"))
+        assertTrue(e.containsKey("themes.clasico.bg.pos_x"))
+        assertTrue(e.containsKey("themes.clasico.bg.pos_y"))
+    }
+
+    @Test fun `el ajuste de foto no vale en fondos de color`() {
+        val d = base()
+        d.getJSONObject("themes").getJSONObject("clasico").getJSONObject("bg").put("zoom", 2)
+        assertTrue(invalid(d).containsKey("themes.clasico.bg.zoom"))
+    }
+
+    private fun withScreen(d: JSONObject, vararg els: JSONObject): JSONObject {
+        val arr = JSONArray()
+        for (e in els) arr.put(e)
+        d.getJSONObject("screens").put("fotos", JSONObject().put("name", "Fotos").put("elements", arr))
+        return d
+    }
+
+    @Test fun `elemento photos valido`() {
+        val d = withScreen(base(), photos("galeria", 0, 0, 4, 3, "interval_s" to 5, "transition" to "none", "order" to "random", "fit" to "cover", "zoom" to 2, "pos_x" to 10, "pos_y" to 90))
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+    }
+
+    @Test fun `photos exige entre 1 y 20 imagenes con nombre valido`() {
+        val vacio = withScreen(base(), photos("galeria", 0, 0, 4, 3).put("images", JSONArray()))
+        assertTrue(invalid(vacio).containsKey("screens.fotos.elements.galeria.images"))
+        val mala = withScreen(base(), photos("galeria", 0, 0, 4, 3).put("images", JSONArray().put("../x.jpg")))
+        assertTrue(invalid(mala).containsKey("screens.fotos.elements.galeria.images[0]"))
+        val muchas = JSONArray(); for (i in 0..20) muchas.put("f$i.jpg")
+        assertTrue(invalid(withScreen(base(), photos("galeria", 0, 0, 4, 3).put("images", muchas))).containsKey("screens.fotos.elements.galeria.images"))
+        val sin = withScreen(base(), photos("galeria", 0, 0, 4, 3).apply { remove("images") })
+        assertTrue(invalid(sin).containsKey("screens.fotos.elements.galeria.images"))
+    }
+
+    @Test fun `photos valida intervalo transicion y orden`() {
+        val d = withScreen(base(), photos("galeria", 0, 0, 4, 3, "interval_s" to 2, "transition" to "zoom", "order" to "alfabetico"))
+        val e = invalid(d)
+        assertTrue(e.containsKey("screens.fotos.elements.galeria.interval_s"))
+        assertTrue(e.containsKey("screens.fotos.elements.galeria.transition"))
+        assertTrue(e.containsKey("screens.fotos.elements.galeria.order"))
+    }
+
+    @Test fun `maximo 2 photos por pantalla y 1 en la de alarma`() {
+        val tres = withScreen(base(), photos("a", 0, 0), photos("b", 2, 0), photos("c", 4, 0))
+        assertTrue(invalid(tres).containsKey("screens.fotos.elements"))
+        val dos = withScreen(base(), photos("a", 0, 0), photos("b", 2, 0))
+        assertTrue(DesignSchema.validate(dos) is Result.Ok)
+        val alarma = base()
+        alarma.getJSONObject("alarm_screen").put("elements", JSONArray().put(photos("a", 0, 0)).put(photos("b", 2, 0)))
+        assertTrue(invalid(alarma).containsKey("alarm_screen.elements"))
+    }
 }

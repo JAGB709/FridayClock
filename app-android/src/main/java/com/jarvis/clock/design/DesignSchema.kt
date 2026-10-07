@@ -22,6 +22,8 @@ object DesignSchema {
     private val FONTS = setOf("thin", "normal", "bold", "mono", "digital")
     private val ROLES = setOf("fg", "muted", "accent")
     private val ALIGNS = setOf("left", "center", "right")
+    private val FITS = setOf("cover", "contain", "fill")
+    private val PHOTO_FIT_KEYS = listOf("fit", "zoom", "pos_x", "pos_y")
     private val COMMON = setOf("id", "type", "x", "y", "w", "h", "color", "align")
     private val ELEMENT_PROPS = mapOf(
         "clock" to setOf("style", "seconds", "hour12"),
@@ -30,6 +32,7 @@ object DesignSchema {
         "forecast" to setOf("mode", "count"),
         "next_alarm" to setOf("show_label"),
         "text" to setOf("mode", "text", "quotes"),
+        "photos" to setOf("images", "interval_s", "transition", "order", "fit", "zoom", "pos_x", "pos_y"),
     )
 
     sealed class Result {
@@ -77,7 +80,7 @@ object DesignSchema {
                 if (s == null) { c.err(p, "debe ser un objeto"); continue }
                 unknownKeys(c, s, setOf("name", "elements"), p)
                 text(c, s, "name", p, 1, 30, true)
-                validateElements(c, s.optJSONArray("elements"), "$p.elements", ROWS)
+                validateElements(c, s.optJSONArray("elements"), "$p.elements", ROWS, 2)
             }
         }
 
@@ -94,7 +97,7 @@ object DesignSchema {
             unknownKeys(c, alarm, setOf("theme", "elements", "snooze_label", "dismiss_label"), "alarm_screen")
             val th = alarm.opt("theme") as? String
             if (th == null || th !in themeIds) c.err("alarm_screen.theme", "el tema no existe")
-            validateElements(c, alarm.optJSONArray("elements"), "alarm_screen.elements", ALARM_ROWS)
+            validateElements(c, alarm.optJSONArray("elements"), "alarm_screen.elements", ALARM_ROWS, 1)
             if (alarm.has("snooze_label")) text(c, alarm, "snooze_label", "alarm_screen", 1, 20, false)
             if (alarm.has("dismiss_label")) text(c, alarm, "dismiss_label", "alarm_screen", 1, 20, false)
         }
@@ -110,7 +113,7 @@ object DesignSchema {
         val bg = t.optJSONObject("bg")
         if (bg == null) { c.err("$path.bg", "falta"); return }
         val p = "$path.bg"
-        unknownKeys(c, bg, setOf("type", "color", "from", "to", "angle", "image", "dim"), p)
+        unknownKeys(c, bg, setOf("type", "color", "from", "to", "angle", "image", "dim", "fit", "zoom", "pos_x", "pos_y"), p)
         when (bg.opt("type")) {
             "color" -> color(c, bg, "color", p, true)
             "gradient" -> {
@@ -123,16 +126,29 @@ object DesignSchema {
                 if (img !is String || !IMAGE.matches(img)) c.err("$p.image", "nombre de imagen no válido (jpg, png o webp)")
                 if (bg.has("dim")) int(c, bg, "dim", p, 0, 80)
                 if (bg.has("color")) color(c, bg, "color", p, false)
+                photoFit(c, bg, p)
             }
             else -> c.err("$p.type", "debe ser color, gradient o image")
         }
+        if (bg.opt("type") != "image") for (k in PHOTO_FIT_KEYS) if (bg.has(k)) c.err("$p.$k", "solo se usa con fondo de imagen")
     }
 
-    private fun validateElements(c: Ctx, arr: JSONArray?, path: String, rows: Int) {
+    private fun photoFit(c: Ctx, o: JSONObject, path: String) {
+        oneOf(c, o, "fit", path, FITS)
+        if (o.has("zoom")) {
+            val z = (o.opt("zoom") as? Number)?.toDouble()
+            if (z == null || z < 1.0 || z > 3.0) c.err("$path.zoom", "debe ser un número entre 1 y 3")
+        }
+        if (o.has("pos_x")) int(c, o, "pos_x", path, 0, 100)
+        if (o.has("pos_y")) int(c, o, "pos_y", path, 0, 100)
+    }
+
+    private fun validateElements(c: Ctx, arr: JSONArray?, path: String, rows: Int, maxPhotos: Int) {
         if (arr == null) { c.err(path, "falta"); return }
         if (arr.length() > 12) c.err(path, "máximo 12 elementos")
         val ids = HashSet<String>()
         val rects = ArrayList<Rect>()
+        var photoCount = 0
         for (i in 0 until arr.length()) {
             val e = arr.optJSONObject(i)
             if (e == null) { c.err("$path[$i]", "debe ser un objeto"); continue }
@@ -144,6 +160,7 @@ object DesignSchema {
             val type = e.opt("type") as? String
             val props = ELEMENT_PROPS[type]
             if (type == null || props == null) { c.err("$p.type", "tipo desconocido"); continue }
+            if (type == "photos") photoCount++
             unknownKeys(c, e, COMMON + props, p)
             val x = int(c, e, "x", p, 0, COLS - 1)
             val y = int(c, e, "y", p, 0, rows - 1)
@@ -156,6 +173,7 @@ object DesignSchema {
             oneOf(c, e, "align", p, ALIGNS)
             validateProps(c, e, type, p)
         }
+        if (photoCount > maxPhotos) c.err(path, "máximo $maxPhotos elementos de fotos")
         for (i in rects.indices) for (j in i + 1 until rects.size) {
             val a = rects[i]
             val b = rects[j]
@@ -172,6 +190,18 @@ object DesignSchema {
             "weather_now" -> bool(c, e, "detail", p)
             "forecast" -> { oneOf(c, e, "mode", p, setOf("hours", "days")); if (e.has("count")) int(c, e, "count", p, 2, 5) }
             "next_alarm" -> bool(c, e, "show_label", p)
+            "photos" -> {
+                val imgs = e.optJSONArray("images")
+                if (imgs == null || imgs.length() !in 1..20) c.err("$p.images", "debe ser una lista de 1 a 20 fotos")
+                else for (k in 0 until imgs.length()) {
+                    val s = imgs.opt(k)
+                    if (s !is String || !IMAGE.matches(s)) c.err("$p.images[$k]", "nombre de imagen no válido (jpg, png o webp)")
+                }
+                if (e.has("interval_s")) int(c, e, "interval_s", p, 3, 600)
+                oneOf(c, e, "transition", p, setOf("fade", "none"))
+                oneOf(c, e, "order", p, setOf("sequential", "random"))
+                photoFit(c, e, p)
+            }
             "text" -> {
                 oneOf(c, e, "mode", p, setOf("fixed", "daily", "alarm_label"))
                 if (e.has("text")) text(c, e, "text", p, 0, 120, false)
