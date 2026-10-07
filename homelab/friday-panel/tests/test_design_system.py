@@ -3,6 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 TOKENS = ROOT / "design-system" / "tokens.json"
 
@@ -55,3 +57,38 @@ def test_inter_fonts_are_bundled_with_license():
         assert f.is_file() and f.stat().st_size > 1000, name
     for name in ("Inter-Light.ttf", "Inter-Regular.ttf", "Inter-SemiBold.ttf"):
         assert (fonts / name).read_bytes()[:4] in (b"\x00\x01\x00\x00", b"true", b"OTTO")
+
+
+ICONS = ("bell mic settings sun cloud cloud-sun cloud-rain cloud-snow cloud-lightning cloud-fog moon clock "
+         "alert-triangle check x trash-2 plus play pause volume-2 image upload chevron-right").split()
+
+
+def test_icon_sources_and_generated_files_exist():
+    for n in ICONS:
+        assert (ROOT / "design-system/icons" / f"{n}.svg").is_file(), n
+        assert (ROOT / "app-android/src/main/res/drawable" / f"ic_{n.replace('-', '_')}.xml").is_file(), n
+
+
+def test_generated_icons_are_up_to_date():
+    r = subprocess.run([sys.executable, str(ROOT / "tools" / "gen-icons.py"), "--check"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.xfail(reason="se limpia en las tareas 4 y 5", strict=False)
+def test_no_emojis_in_clock_engine_and_design_system():
+    import re
+    rx = re.compile("[⌀-⏿■-➿⤀-⥿⬀-⯿️\U0001F000-\U0001FFFF]")
+    roots = [ROOT / "app-android/src/main", ROOT / "design-system"]
+    hits = []
+    for base in roots:
+        for f in base.rglob("*"):
+            if not f.is_file() or f.suffix in (".ttf", ".png", ".webp", ".jpg", ".apk"):
+                continue
+            try:
+                text = f.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for i, line in enumerate(text.split("\n"), 1):
+                if rx.search(line):
+                    hits.append(f"{f.relative_to(ROOT)}:{i}")
+    assert not hits, "emojis encontrados: " + ", ".join(hits)
