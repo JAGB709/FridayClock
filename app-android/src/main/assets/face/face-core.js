@@ -118,11 +118,6 @@
     if (bg.type === "gradient") {
       return "linear-gradient(" + (bg.angle == null ? 160 : bg.angle) + "deg, " + bg.from + ", " + bg.to + ")";
     }
-    if (bg.type === "image" && bg.image) {
-      var dim = (bg.dim || 0) / 100;
-      var url = (base || "/bg/") + encodeURIComponent(bg.image);
-      return "linear-gradient(rgba(0,0,0," + dim + "), rgba(0,0,0," + dim + ")), url(\"" + url + "\") center / cover no-repeat, " + fallback;
-    }
     return fallback;
   }
 
@@ -138,10 +133,48 @@
     return align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center";
   }
 
+  function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+  function photoStyle(spec) {
+    spec = spec || {};
+    var fit = spec.fit === "contain" ? "contain" : spec.fit === "fill" ? "100% 100%" : "cover";
+    var zoom = clamp(typeof spec.zoom === "number" ? spec.zoom : 1, 1, 3);
+    var px = clamp(typeof spec.pos_x === "number" ? spec.pos_x : 50, 0, 100);
+    var py = clamp(typeof spec.pos_y === "number" ? spec.pos_y : 50, 0, 100);
+    var pos = px + "% " + py + "%";
+    return { size: fit, position: pos, transform: zoom === 1 ? "none" : "scale(" + zoom + ")", origin: pos };
+  }
+
+  function nextPhotoIndex(count, current, order, rnd) {
+    if (!(count > 0)) return -1;
+    if (count === 1) return 0;
+    if (order === "random") {
+      var r = Math.floor((rnd ? rnd() : Math.random()) * (count - 1));
+      if (r >= current && current >= 0) r += 1;
+      return Math.min(r, count - 1);
+    }
+    return current < 0 ? 0 : (current + 1) % count;
+  }
+
+  function classifySwipe(dx, dy) {
+    var ax = Math.abs(dx), ay = Math.abs(dy);
+    if (ax > 60 && ax > ay * 1.5) return dx > 0 ? "right" : "left";
+    if (ay > 60 && ay > ax * 1.5) return dy > 0 ? "down" : "up";
+    return null;
+  }
+
+  function snapMove(el, dxCells, dyCells, rows) {
+    return {
+      x: clamp(el.x + dxCells, 0, COLS - el.w),
+      y: clamp(el.y + dyCells, 0, rows - el.h),
+    };
+  }
+
   return {
     COLS: COLS, cellRect: cellRect, minutesOf: minutesOf, activeProfile: activeProfile,
     dayOfYear: dayOfYear, dailyQuote: dailyQuote, formatClock: formatClock, formatDate: formatDate,
     analogAngles: analogAngles, fitText: fitText, weatherLine: weatherLine, nextAlarmLine: nextAlarmLine,
     forecastItems: forecastItems, bgCss: bgCss, fontStyle: fontStyle, justify: justify,
+    photoStyle: photoStyle, nextPhotoIndex: nextPhotoIndex, classifySwipe: classifySwipe, snapMove: snapMove,
   };
 });

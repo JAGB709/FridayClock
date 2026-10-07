@@ -87,10 +87,8 @@ test("bgCss: color, degradado e imagen con color de respaldo", () => {
   assert.equal(C.bgCss({ type: "color", color: "#112233" }), "#112233");
   assert.equal(C.bgCss({ type: "gradient", from: "#000000", to: "#ffffff", angle: 90 }), "linear-gradient(90deg, #000000, #ffffff)");
   const img = C.bgCss({ type: "image", image: "mi playa.jpg", dim: 40, color: "#102030" }, "/bg/");
-  assert.ok(img.indexOf('url("/bg/mi%20playa.jpg")') >= 0);
-  assert.ok(img.indexOf("rgba(0,0,0,0.4)") >= 0);
-  assert.ok(img.endsWith(", #102030")); // si la imagen falta, se ve el color
-  assert.ok(C.bgCss({ type: "image", image: "x.jpg" }).endsWith(", #000000"));
+  assert.equal(img, "#102030"); // la foto va en una capa aparte; aqui solo el color de respaldo
+  assert.equal(C.bgCss({ type: "image", image: "x.jpg" }), "#000000");
   assert.equal(C.bgCss(undefined), "#000000");
 });
 
@@ -102,4 +100,50 @@ test("fontStyle y justify", () => {
   assert.equal(C.justify("left"), "flex-start");
   assert.equal(C.justify("right"), "flex-end");
   assert.equal(C.justify(undefined), "center");
+});
+
+test("photoStyle: valores por defecto y ajustes", () => {
+  assert.deepEqual(C.photoStyle({}), { size: "cover", position: "50% 50%", transform: "none", origin: "50% 50%" });
+  assert.deepEqual(C.photoStyle(undefined), { size: "cover", position: "50% 50%", transform: "none", origin: "50% 50%" });
+  assert.deepEqual(C.photoStyle({ fit: "contain", zoom: 1.5, pos_x: 20, pos_y: 80 }),
+    { size: "contain", position: "20% 80%", transform: "scale(1.5)", origin: "20% 80%" });
+  assert.equal(C.photoStyle({ fit: "fill" }).size, "100% 100%");
+  assert.equal(C.photoStyle({ fit: "raro" }).size, "cover");
+  assert.equal(C.photoStyle({ zoom: 9, pos_x: -5, pos_y: 500 }).transform, "scale(3)");
+  assert.equal(C.photoStyle({ zoom: 9, pos_x: -5, pos_y: 500 }).position, "0% 100%");
+});
+
+test("nextPhotoIndex: secuencial, aleatorio sin repetir y casos vacios", () => {
+  assert.equal(C.nextPhotoIndex(0, -1, "sequential", Math.random), -1);
+  assert.equal(C.nextPhotoIndex(1, 0, "random", Math.random), 0);
+  assert.equal(C.nextPhotoIndex(3, -1, "sequential"), 0);
+  assert.equal(C.nextPhotoIndex(3, 0, "sequential"), 1);
+  assert.equal(C.nextPhotoIndex(3, 2, "sequential"), 0);
+  for (let i = 0; i < 50; i++) {
+    const n = C.nextPhotoIndex(4, 2, "random", Math.random);
+    assert.ok(n >= 0 && n < 4 && n !== 2);
+  }
+  assert.equal(C.nextPhotoIndex(3, 1, "random", () => 0), 0);
+  assert.equal(C.nextPhotoIndex(3, 1, "random", () => 0.999), 2);
+  assert.equal(C.nextPhotoIndex(3, 1, "random", () => 0.5), 2);
+});
+
+test("classifySwipe: eje dominante, sentido y umbrales", () => {
+  assert.equal(C.classifySwipe(120, 10), "right");
+  assert.equal(C.classifySwipe(-120, 10), "left");
+  assert.equal(C.classifySwipe(10, -120), "up");
+  assert.equal(C.classifySwipe(10, 120), "down");
+  assert.equal(C.classifySwipe(100, 100), null);   // diagonal
+  assert.equal(C.classifySwipe(100, 70), null);    // no domina 1,5x
+  assert.equal(C.classifySwipe(40, 0), null);      // corto
+  assert.equal(C.classifySwipe(0, 0), null);
+  assert.equal(C.classifySwipe(61, 40), "right");
+});
+
+test("snapMove: se limita a la rejilla", () => {
+  const e = { x: 2, y: 1, w: 3, h: 2 };
+  assert.deepEqual(C.snapMove(e, 1, 1, 6), { x: 3, y: 2 });
+  assert.deepEqual(C.snapMove(e, 99, 99, 6), { x: 5, y: 4 });
+  assert.deepEqual(C.snapMove(e, -99, -99, 6), { x: 0, y: 0 });
+  assert.deepEqual(C.snapMove(e, 0, 0, 4), { x: 2, y: 1 });
 });
