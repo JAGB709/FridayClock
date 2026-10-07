@@ -41,4 +41,25 @@ class BackgroundsTest {
         assertEquals("image/png", Backgrounds.mimeOf("a.png"))
         assertEquals("image/webp", Backgrounds.mimeOf("a.webp"))
     }
+
+    @Test fun `sampleSize elige la mayor potencia de 2 que no baja del objetivo`() {
+        assertEquals(1, Backgrounds.sampleSize(1600, 900))
+        assertEquals(1, Backgrounds.sampleSize(3199, 2000))
+        assertEquals(2, Backgrounds.sampleSize(3200, 2000))
+        assertEquals(4, Backgrounds.sampleSize(6400, 4800))
+        assertEquals(1, Backgrounds.sampleSize(500, 300))
+        assertEquals(8, Backgrounds.sampleSize(12800, 3000))
+    }
+
+    @Test fun `targetSize reduce conservando proporcion y nunca amplia`() {
+        assertEquals(1600 to 1200, Backgrounds.targetSize(4000, 3000))
+        assertEquals(900 to 1600, Backgrounds.targetSize(2250, 4000))
+        assertEquals(800 to 480, Backgrounds.targetSize(800, 480))
+        assertEquals(1600 to 1, Backgrounds.targetSize(20000, 5))
+    }
+
+    @Test fun `limites nuevos`() {
+        assertEquals(8 * 1024 * 1024, Backgrounds.MAX_BYTES)
+        assertEquals(60, Backgrounds.MAX_FILES)
+    }
 }

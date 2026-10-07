@@ -1,6 +1,7 @@
 package com.jarvis.clock.design
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import org.json.JSONArray
 import org.json.JSONObject
@@ -8,8 +9,10 @@ import java.io.File
 
 /** Imágenes de fondo subidas desde el panel (en filesDir/backgrounds, así se ven sin red). */
 object Backgrounds {
-    const val MAX_BYTES = 2 * 1024 * 1024
-    private const val MAX_SIDE = 2048
+    const val MAX_BYTES = 8 * 1024 * 1024
+    const val MAX_FILES = 60
+    const val TARGET_SIDE = 1600
+    const val MAX_PIXELS = 100_000_000L
     private val EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
 
     /** Nombre seguro para disco (solo [A-Za-z0-9_-] + extensión admitida) o null. */
@@ -44,19 +47,57 @@ object Backgrounds {
         return out
     }
 
-    /** Guarda una imagen subida de forma atómica y comprueba que se puede leer. Devuelve su nombre. */
+    /** Potencia de 2 para `inSampleSize`: la mayor que deja el lado largo en `target` o más. */
+    fun sampleSize(w: Int, h: Int, target: Int = TARGET_SIDE): Int {
+        var s = 1
+        val side = maxOf(w, h)
+        while (side / (s * 2) >= target) s *= 2
+        return s
+    }
+
+    /** Tamaño final: lado largo a `target` como máximo, misma proporción, nunca amplía. */
+    fun targetSize(w: Int, h: Int, target: Int = TARGET_SIDE): Pair<Int, Int> {
+        val side = maxOf(w, h)
+        if (side <= target) return w to h
+        val k = target.toDouble() / side
+        return maxOf(1, Math.round(w * k).toInt()) to maxOf(1, Math.round(h * k).toInt())
+    }
+
+    /** Guarda una imagen subida (reducida a [TARGET_SIDE] px) de forma atómica. Devuelve su nombre. */
     fun save(ctx: Context, rawName: String, bytes: ByteArray): String {
         val name = sanitizeName(rawName) ?: throw IllegalArgumentException("nombre no válido: usa jpg, png o webp")
         require(bytes.isNotEmpty()) { "archivo vacío" }
-        require(bytes.size <= MAX_BYTES) { "la imagen supera 2 MB" }
+        require(bytes.size <= MAX_BYTES) { "la imagen supera 8 MB" }
         val dir = dir(ctx)
+        val existing = File(dir, name).isFile
+        val count = dir.listFiles()?.count { !it.name.startsWith(".") } ?: 0
+        require(existing || count < MAX_FILES) { "la biblioteca está llena ($MAX_FILES fotos): borra alguna" }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val w = bounds.outWidth
+        val h = bounds.outHeight
+        require(w > 0 && h > 0) { "el reloj no puede leer esa imagen" }
+        require(w.toLong() * h <= MAX_PIXELS) { "la imagen es demasiado grande" }
         val tmp = File(dir, ".$name.tmp")
         try {
-            tmp.writeBytes(bytes)
-            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(tmp.path, o)
-            require(o.outWidth > 0 && o.outHeight > 0) { "el reloj no puede leer esa imagen" }
-            require(maxOf(o.outWidth, o.outHeight) <= MAX_SIDE) { "la imagen es demasiado grande (máx. $MAX_SIDE px)" }
+            if (maxOf(w, h) <= TARGET_SIDE) {
+                tmp.writeBytes(bytes)
+            } else {
+                val opts = BitmapFactory.Options().apply { inSampleSize = sampleSize(w, h) }
+                val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                    ?: throw IllegalArgumentException("el reloj no puede leer esa imagen")
+                val (tw, th) = targetSize(w, h)
+                val scaled = if (decoded.width == tw && decoded.height == th) decoded
+                    else Bitmap.createScaledBitmap(decoded, tw, th, true)
+                if (scaled !== decoded) decoded.recycle()
+                val (format, quality) = when (name.substringAfterLast('.')) {
+                    "png" -> Bitmap.CompressFormat.PNG to 100
+                    "webp" -> @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP to 90
+                    else -> Bitmap.CompressFormat.JPEG to 85
+                }
+                tmp.outputStream().use { scaled.compress(format, quality, it) }
+                scaled.recycle()
+            }
             if (!tmp.renameTo(File(dir, name))) throw IllegalArgumentException("no se pudo guardar la imagen")
             return name
         } finally {
