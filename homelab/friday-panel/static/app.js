@@ -5,7 +5,17 @@
 const $ = (sel, el = document) => el.querySelector(sel);
 const view = $("#view");
 // replaceChildren convierte null en el texto "null": se descartan los huecos.
-const setView = (...kids) => view.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
+// Tras cambiar de sección, la primera vista con contenido entra con una animación breve
+// (los refrescos periódicos de la misma vista no se animan).
+let enterNext = false;
+const setView = (...kids) => {
+  view.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
+  if (!enterNext) return;
+  enterNext = false;
+  view.classList.remove("view-in");
+  void view.offsetWidth; // reinicia la animación
+  view.classList.add("view-in");
+};
 const DAYS = [["mon", "L"], ["tue", "M"], ["wed", "X"], ["thu", "J"], ["fri", "V"], ["sat", "S"], ["sun", "D"]];
 const PRESETS = [
   ["Laborables", ["mon", "tue", "wed", "thu", "fri"]],
@@ -24,29 +34,13 @@ let form = null; // { original, current, onSave, isNew, errors }
 
 // ------------------------------------------------------------------ utilidades
 
-function h(tag, attrs = {}, ...kids) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-    else if (k === "class") el.className = v;
-    else if (k === "checked" || k === "disabled" || k === "selected") el[k] = v;
-    else if (k === "value" && v != null) el[k] = v;
-    else if (v !== false && v != null) el.setAttribute(k, v === true ? "" : v);
-  }
-  for (const kid of kids.flat()) {
-    if (kid == null || kid === false) continue;
-    el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
-  }
-  return el;
-}
-
 async function api(method, path, body, raw) {
   const opt = { method, headers: { "X-Friday": "1" }, credentials: "same-origin" };
   if (raw !== undefined) { opt.body = raw; opt.headers["Content-Type"] = "application/octet-stream"; }
   else if (body !== undefined) { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
   let res;
   try { res = await fetch(path, opt); } catch {
-    setConn(false, "● Sin conexión con el panel");
+    setConn(false, "Sin conexión con el panel");
     return { ok: false, status: 0, data: { error: "Sin conexión con el panel" } };
   }
   const data = await res.json().catch(() => ({}));
@@ -60,36 +54,9 @@ const errText = (r) => r.data.login_required ? "Inicia sesión" : (r.data.error 
 // Si hace falta login, la pantalla de login manda: no la tapamos con un error.
 function showError(r) {
   if (r.data.login_required) return;
-  setView(h("div", { class: "card bad" }, errText(r)));
+  setView(errorState(errText(r), () => render(route)));
 }
 
-function setConn(on, msg) {
-  const p = $("#conn");
-  p.textContent = on ? "● Conectado" : (msg || "● El reloj no responde");
-  p.className = "pill " + (on ? "on" : "off");
-}
-
-let toastTimer;
-function toast(msg, bad = false) {
-  const t = $("#toast");
-  t.textContent = msg; t.className = bad ? "bad" : ""; t.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), bad ? 6000 : 3000);
-}
-
-function confirmInPage(msg, okLabel = "Aceptar") {
-  return new Promise((resolve) => {
-    const close = (v) => { dlg.remove(); resolve(v); };
-    const dlg = h("div", { class: "modal" },
-      h("div", { class: "card" }, h("p", {}, msg),
-        h("div", { class: "row between" },
-          h("button", { class: "ghost", onclick: () => close(false) }, "Cancelar"),
-          h("button", { class: "danger", onclick: () => close(true) }, okLabel))));
-    document.body.append(dlg);
-  });
-}
-
-const btn = (label, onclick, cls = "") => h("button", { class: cls, onclick }, label);
 const daysText = (days) => {
   const set = new Set(days || []);
   for (const [name, list] of PRESETS) if (list.length === set.size && list.every((d) => set.has(d))) return name === "Una vez" ? "Una vez" : name;
@@ -127,11 +94,12 @@ function updateSaveBar() { $("#savebar").hidden = !dirty(); }
 $("#save").addEventListener("click", async () => {
   if (!form || !dirty()) return;
   const b = $("#save");
-  b.disabled = true; b.textContent = "Guardando…";
+  const lbl = b.querySelector(".lbl");
+  b.disabled = true; b.setAttribute("aria-busy", "true"); lbl.textContent = "Guardando…";
   const r = await form.onSave(form.isNew ? form.current : changes());
-  b.disabled = false; b.textContent = "Guardar";
+  b.disabled = false; b.removeAttribute("aria-busy"); lbl.textContent = "Guardar";
   if (r.ok) {
-    toast("✓ Aplicado en el reloj");
+    toast("Aplicado en el reloj");
     form = null; updateSaveBar();
     render(r.next || route);
   } else {
@@ -153,12 +121,10 @@ function markErrors() {
     const msg = form && form.errors[el.dataset.key];
     el.classList.toggle("error", !!msg);
     el.querySelector(".err")?.remove();
+    if (el.classList.contains("switch") && el.nextElementSibling?.classList.contains("err")) el.nextElementSibling.remove();
     if (msg) {
-      if (el.classList.contains("switch")) {
-        el.after(h("div", { class: "err" }, msg));
-      } else {
-        el.append(h("div", { class: "err" }, msg));
-      }
+      const err = h("div", { class: "err" }, icon("alert-triangle", 16), h("span", {}, msg));
+      if (el.classList.contains("switch")) el.after(err); else el.append(err);
     }
   });
 }
@@ -169,11 +135,44 @@ async function go(next) {
   render(next);
 }
 
+const TITLES = { home: "Inicio", alarms: "Alarmas", design: "Pantallas", settings: "Ajustes" };
+
+function titleFor(r) {
+  if (r.tab === "alarms" && r.edit != null) return r.edit === "new" ? "Nueva alarma" : "Editar alarma";
+  return TITLES[r.tab] || "Friday";
+}
+
+function setTitle(text) {
+  $("#title").textContent = text;
+  document.title = text === "Friday" ? "Friday" : `${text} · Friday`;
+}
+
+// Los iconos de la barra inferior y de la barra de guardado salen del sprite: se ponen una vez.
+let chromeReady = false;
+function fillChrome() {
+  if (chromeReady) return;
+  chromeReady = true;
+  document.querySelectorAll("#tabs button").forEach((b) => b.prepend(icon(b.dataset.icon, 24)));
+  $("#discard").prepend(icon("rotate-ccw"));
+  $("#try").prepend(icon("play"));
+  $("#save").prepend(icon("save"));
+}
+
 function render(next) {
   route = next;
+  fillChrome();
+  if (loginShown) return; // la pantalla de login manda hasta que se entra
+  document.body.classList.remove("login");
+  setTitle(titleFor(route));
   $("#try").hidden = route.tab !== "design";
-  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === route.tab));
+  document.querySelectorAll("#tabs button").forEach((b) => {
+    const on = b.dataset.tab === route.tab;
+    b.classList.toggle("active", on);
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
   window.scrollTo(0, 0);
+  view.replaceChildren(loadingState());
+  enterNext = true;
   if (route.tab === "home") return renderHome();
   if (route.tab === "alarms") return route.edit != null ? renderAlarmEdit(route.edit) : renderAlarms();
   if (route.tab === "design") return renderDesign();
@@ -188,22 +187,37 @@ function showLogin() {
   if (loginShown) return; // no borrar la contraseña a medio escribir
   loginShown = true;
   form = null; updateSaveBar();
-  const pass = h("input", { type: "password", autocomplete: "current-password" });
+  fillChrome();
+  document.body.classList.add("login");
+  setTitle("Entrar");
+  const pass = h("input", { id: "pass", type: "password", autocomplete: "current-password", required: true });
+  const field = h("label", { class: "field" }, h("span", {}, "Contraseña del panel"), pass);
+  const go_ = h("button", { type: "submit", class: "primary" }, icon("chevron-right"), h("span", { class: "lbl" }, "Entrar"));
   const submit = async (ev) => {
     ev.preventDefault();
+    go_.disabled = true;
     const r = await api("POST", "/login", { password: pass.value });
-    if (r.ok) { loginShown = false; render(route); } else toast(errText(r), true);
+    go_.disabled = false;
+    if (r.ok) { loginShown = false; render(route); return; }
+    field.classList.add("error");
+    field.querySelector(".err")?.remove();
+    field.append(h("div", { class: "err" }, icon("alert-triangle", 16), h("span", {}, errText(r))));
+    pass.select();
   };
-  setView(h("form", { class: "card stack", onsubmit: submit },
-    h("h2", {}, "Entrar"), h("label", { class: "field" }, h("span", {}, "Contraseña del panel"), pass),
-    h("button", { type: "submit" }, "Entrar")));
+  enterNext = true;
+  setView(h("form", { class: "card login-card", onsubmit: submit },
+    h("div", { class: "login-ico" }, icon("clock", 28)),
+    h("h2", {}, "Entrar"),
+    h("p", { class: "muted" }, "Escribe la contraseña del panel de Friday."),
+    field, go_));
+  pass.focus();
 }
 
 // ------------------------------------------------------------------ Inicio
 
 async function doAction(name, body) {
   const r = await api("POST", `/api/do/${name}`, body);
-  toast(r.ok ? "✓ Hecho" : errText(r), !r.ok);
+  toast(r.ok ? "Hecho" : errText(r), !r.ok);
   if (route.tab === "home") renderHome();
   return r.ok;
 }
@@ -251,7 +265,7 @@ async function renderAlarms() {
       onchange: async (ev) => {
         const r2 = await api("PUT", `/api/alarms/${a.id}`, { enabled: ev.target.checked });
         if (!r2.ok) { ev.target.checked = !ev.target.checked; toast(errText(r2), true); }
-        else { toast(ev.target.checked ? "✓ Alarma activada" : "✓ Alarma desactivada"); ev.target.closest(".alarm").classList.toggle("disabled", !ev.target.checked); }
+        else { toast(ev.target.checked ? "Alarma activada" : "Alarma desactivada"); ev.target.closest(".alarm").classList.toggle("disabled", !ev.target.checked); }
       },
     });
     const label = h("label", { class: "switch", onclick: (ev) => ev.stopPropagation() }, toggle);
@@ -269,7 +283,7 @@ async function renderAlarms() {
         h("span", {}, `${a.label} · ${a.time || ""}`),
         btn("Cancelar", async () => {
           const r2 = await api("DELETE", `/api/alarms/${a.id}`);
-          toast(r2.ok ? "✓ Cancelado" : errText(r2), !r2.ok); renderAlarms();
+          toast(r2.ok ? "Cancelado" : errText(r2), !r2.ok); renderAlarms();
         }, "small ghost")))) : null,
   );
 }
@@ -308,7 +322,7 @@ function soundPicker(sounds, reload) {
       toast("Subiendo…");
       const r = await api("POST", `/api/sounds?name=${encodeURIComponent(f.name)}`, undefined, f);
       if (!r.ok) { toast(errText(r), true); return; }
-      toast("✓ Sonido subido al reloj");
+      toast("Sonido subido al reloj");
       setField("sound", r.data.id);
       reload();
     } });
@@ -329,7 +343,7 @@ async function renderAlarmEdit(id) {
   if (!ra.ok) { showError(ra); return; }
   const isNew = id === "new";
   const found = (ra.data.alarms || []).find((a) => a.id === id);
-  if (!isNew && !found) { setView(h("div", { class: "card bad" }, "Esa alarma ya no existe.")); return; }
+  if (!isNew && !found) { setView(errorState("Esa alarma ya no existe.", () => render({ tab: "alarms" }), "Volver a Alarmas")); return; }
   const src = isNew ? NEW_ALARM : found;
   const fields = ["time", "label", "days", "enabled", "sound", "max_volume", "ramp_s", "snooze_min", "briefing"];
   const original = Object.fromEntries(fields.map((k) => [k, src[k] ?? NEW_ALARM[k]]));
@@ -378,7 +392,7 @@ function paintAlarmEdit(id, isNew, sounds) {
     isNew ? null : h("div", { class: "card" }, btn("Borrar alarma", async () => {
       if (!(await confirmInPage("¿Borrar esta alarma?", "Borrar"))) return;
       const r = await api("DELETE", `/api/alarms/${id}`);
-      if (r.ok) { form = null; updateSaveBar(); toast("✓ Alarma borrada"); render({ tab: "alarms" }); }
+      if (r.ok) { form = null; updateSaveBar(); toast("Alarma borrada"); render({ tab: "alarms" }); }
       else toast(errText(r), true);
     }, "danger")),
   );
@@ -418,7 +432,7 @@ async function renderSettings() {
         btn("Borrar", async () => {
           if (!(await confirmInPage(`¿Borrar ${s.name}? Las alarmas que lo usen sonarán con el tono por defecto.`, "Borrar"))) return;
           const r2 = await api("DELETE", `/api/sounds/${encodeURIComponent(s.name)}`);
-          toast(r2.ok ? "✓ Sonido borrado" : errText(r2), !r2.ok);
+          toast(r2.ok ? "Sonido borrado" : errText(r2), !r2.ok);
           if (r2.ok && !dirty()) renderSettings();
         }, "small ghost"))) : h("p", { class: "muted" }, "Ninguno. Súbelos desde la ficha de una alarma.")),
   );

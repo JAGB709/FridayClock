@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
   <title>Friday</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -11,20 +12,25 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header id="top"><h1>Friday</h1><span id="conn" class="pill">…</span></header>
+  <header id="top">
+    <h1 id="title">Friday</h1>
+    <span id="conn" class="pill" role="status" aria-live="polite"><span>Conectando…</span></span>
+  </header>
   <main id="view"></main>
   <div id="savebar" hidden>
-    <button id="discard" class="ghost">Descartar</button>
-    <button id="try" class="ghost" hidden>▶ Probar</button>
-    <button id="save">Guardar</button>
+    <button id="discard" type="button" class="ghost" aria-label="Descartar cambios"><span class="lbl">Descartar</span></button>
+    <button id="try" type="button" class="ghost" aria-label="Probar en el reloj" hidden><span class="lbl">Probar<span class="lbl-x"> en el reloj</span></span></button>
+    <button id="save" type="button" class="primary"><span class="lbl">Guardar</span></button>
   </div>
-  <div id="toast" hidden></div>
-  <nav id="tabs">
-    <button data-tab="home"><span class="ico">🏠</span>Inicio</button>
-    <button data-tab="alarms"><span class="ico">⏰</span>Alarmas</button>
-    <button data-tab="design"><span class="ico">🖼️</span>Pantallas</button>
-    <button data-tab="settings"><span class="ico">⚙️</span>Ajustes</button>
+  <div id="toast" hidden role="status" aria-live="polite"></div>
+  <nav id="tabs" aria-label="Secciones">
+    <button type="button" data-tab="home" data-icon="house"><span class="lbl">Inicio</span></button>
+    <button type="button" data-tab="alarms" data-icon="bell"><span class="lbl">Alarmas</span></button>
+    <button type="button" data-tab="design" data-icon="layout-template"><span class="lbl">Pantallas</span></button>
+    <button type="button" data-tab="settings" data-icon="settings"><span class="lbl">Ajustes</span></button>
   </nav>
+  <script src="/face/icons.js"></script>
+  <script src="ui.js"></script>
   <script src="editor-core.js"></script>
   <script src="pantallas.js"></script>
   <script src="app.js"></script>
