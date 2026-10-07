@@ -440,25 +440,27 @@
     return { x: Math.max(0, Math.min(COLS - 1, cx)), y: Math.max(0, Math.min(S.rows - 1, cy)) };
   }
 
+  // ids de los elementos bajo el punto, de delante hacia atrás según la lista del diseño.
+  function idsAt(x, y) {
+    var found = [];
+    if (document.elementsFromPoint) {
+      var stack = document.elementsFromPoint(x, y);
+      for (var si = 0; si < stack.length; si++) {
+        var cand = stack[si].closest ? stack[si].closest(".el") : null;
+        var cid = cand ? cand.getAttribute("data-id") : null;
+        if (cid && found.indexOf(cid) < 0) found.push(cid);
+      }
+    }
+    var list = (S.screens[S.index] || {}).elements || [];
+    var order = [];
+    for (var i = 0; i < list.length; i++) order.push(list[i].id);
+    return Core.sortFrontToBack(found, order);
+  }
+
   function editDown(ev) {
     var t = ev.target;
     var handle = t.closest ? t.closest(".handle") : null;
     var box = t.closest ? t.closest(".el") : null;
-    // Elementos solapados: pulsar de nuevo en el mismo punto elige el de debajo.
-    if (box && !handle && document.elementsFromPoint) {
-      var stack = document.elementsFromPoint(ev.clientX, ev.clientY);
-      var ids = [];
-      for (var si = 0; si < stack.length; si++) {
-        var cand = stack[si].closest ? stack[si].closest(".el") : null;
-        var cid = cand ? cand.getAttribute("data-id") : null;
-        if (cid && ids.indexOf(cid) < 0) ids.push(cid);
-      }
-      var pickId = Core.pickUnder(ids, S.opts.selected);
-      if (pickId) {
-        var pbox = contentEl.querySelector('.el[data-id="' + pickId + '"]');
-        if (pbox) box = pbox;
-      }
-    }
     if (handle && box) {
       var data = findElement(box.getAttribute("data-id"));
       if (!data) return;
@@ -467,12 +469,27 @@
       ev.preventDefault();
       return;
     }
-    if (box) {
-      var item = findElement(box.getAttribute("data-id"));
-      if (!item) return;
+    // Elementos solapados: se ordenan por la lista del diseño (el último va delante).
+    var ids = idsAt(ev.clientX, ev.clientY);
+    var selId = S.opts.selected;
+    var pressed = null;
+    if (selId) {
+      var sb = contentEl.querySelector('.el[data-id="' + selId + '"]');
+      if (sb) {
+        var sr = sb.getBoundingClientRect();
+        if (ev.clientX >= sr.left && ev.clientX <= sr.right && ev.clientY >= sr.top && ev.clientY <= sr.bottom) pressed = selId;
+      }
+    }
+    if (!pressed && ids.length) pressed = ids[0];
+    if (!pressed && box) pressed = box.getAttribute("data-id");
+    if (pressed) {
+      var pbox = contentEl.querySelector('.el[data-id="' + pressed + '"]');
+      var item = findElement(pressed);
+      if (!item || !pbox) return;
       var b = rootEl.getBoundingClientRect();
-      moving = { id: item.id, box: box, el: item, x0: ev.clientX, y0: ev.clientY,
-        cw: b.width / COLS, ch: b.height / S.rows, dx: 0, dy: 0, moved: false };
+      moving = { id: item.id, box: pbox, el: item, x0: ev.clientX, y0: ev.clientY,
+        cw: b.width / COLS, ch: b.height / S.rows, dx: 0, dy: 0, moved: false,
+        ids: ids, wasSelected: pressed === selId };
       try { rootEl.setPointerCapture(ev.pointerId); } catch (e2) { /* ignorar */ }
       ev.preventDefault();
       return;
@@ -505,7 +522,13 @@
     if (moving) {
       var m = moving;
       moving = null;
-      if (!m.moved) { post({ type: "face-select", id: m.id }); return; }
+      if (!m.moved) {
+        // Clic sin mover: si ya estaba seleccionado, pasa al de debajo; si no, selecciona el pulsado.
+        var target = m.id;
+        if (m.wasSelected && m.ids.length > 1) target = Core.pickUnder(m.ids, S.opts.selected) || m.id;
+        post({ type: "face-select", id: target });
+        return;
+      }
       post({ type: "face-move", id: m.id, x: m.dx, y: m.dy });
       return;
     }

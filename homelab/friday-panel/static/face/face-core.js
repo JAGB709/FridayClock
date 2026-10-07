@@ -179,12 +179,26 @@
     return i < 0 ? ids[0] : ids[(i + 1) % ids.length];
   }
 
+  /* ids ordenados de delante hacia atrás según la lista del diseño (el último de la lista va delante); los desconocidos, al final. */
+  function sortFrontToBack(ids, order) {
+    var out = (ids || []).slice();
+    function rank(id) { return (order || []).indexOf(id); }
+    out.sort(function (a, b) {
+      var ra = rank(a), rb = rank(b);
+      if (ra < 0 && rb < 0) return 0;
+      if (ra < 0) return 1;
+      if (rb < 0) return -1;
+      return rb - ra;
+    });
+    return out;
+  }
+
   return {
     COLS: COLS, cellRect: cellRect, minutesOf: minutesOf, activeProfile: activeProfile,
     dayOfYear: dayOfYear, dailyQuote: dailyQuote, formatClock: formatClock, formatDate: formatDate,
     analogAngles: analogAngles, fitText: fitText, weatherParts: weatherParts, nextAlarmParts: nextAlarmParts,
     forecastItems: forecastItems, bgCss: bgCss, fontStyle: fontStyle, justify: justify,
     photoStyle: photoStyle, nextPhotoIndex: nextPhotoIndex, classifySwipe: classifySwipe, snapMove: snapMove,
-    pickUnder: pickUnder,
+    pickUnder: pickUnder, sortFrontToBack: sortFrontToBack,
   };
 });

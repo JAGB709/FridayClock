@@ -170,3 +170,17 @@ test("bgCss: fondo de fotos devuelve el color de respaldo", () => {
   assert.equal(C.bgCss({ type: "photos", images: ["a.jpg"], color: "#102030" }), "#102030");
   assert.equal(C.bgCss({ type: "photos", images: ["a.jpg"] }), "#000000");
 });
+
+test("sortFrontToBack: delante es el último de la lista; desconocidos al final", () => {
+  assert.deepEqual(C.sortFrontToBack(["a", "c", "b"], ["a", "b", "c"]), ["c", "b", "a"]);
+  assert.deepEqual(C.sortFrontToBack(["x", "a", "b"], ["a", "b"]), ["b", "a", "x"]);
+  assert.deepEqual(C.sortFrontToBack(null, ["a"]), []);
+});
+
+test("pickUnder: con 3 elementos recorre todos y vuelve al primero", () => {
+  const ids = C.sortFrontToBack(["a", "b", "c"], ["a", "b", "c"]); // c, b, a
+  let sel = null;
+  const seen = [];
+  for (let i = 0; i < 4; i++) { sel = C.pickUnder(ids, sel); seen.push(sel); }
+  assert.deepEqual(seen, ["c", "b", "a", "c"]);
+});
