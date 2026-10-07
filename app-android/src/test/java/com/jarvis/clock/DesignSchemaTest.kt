@@ -25,6 +25,24 @@ class DesignSchemaTest {
         assertTrue(DesignSchema.validate(base()) is Result.Ok)
     }
 
+    @Test fun `el diseno inicial usa los temas Obsidiana y conserva los antiguos`() {
+        val d = base()
+        val themes = d.getJSONObject("themes")
+        for (id in listOf("obsidiana_dia", "obsidiana_noche", "clasico", "noche_roja", "amanecer", "minimal", "digital_verde")) {
+            assertTrue(id, themes.has(id))
+        }
+        val dia = themes.getJSONObject("obsidiana_dia")
+        assertEquals("Obsidiana Día", dia.getString("name")); assertEquals("inter", dia.getString("font"))
+        assertEquals("#000000", dia.getJSONObject("bg").getString("color")); assertEquals("#FFB454", dia.getString("accent"))
+        val noche = themes.getJSONObject("obsidiana_noche")
+        assertEquals("#9A5B12", noche.getString("accent")); assertEquals("#B8A89A", noche.getString("fg"))
+        val p = d.getJSONArray("profiles")
+        assertEquals("obsidiana_dia", p.getJSONObject(0).getString("theme"))
+        assertEquals("obsidiana_noche", p.getJSONObject(1).getString("theme"))
+        assertEquals("obsidiana_dia", d.getJSONObject("alarm_screen").getString("theme"))
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+    }
+
     @Test fun `la fuente inter es valida y las antiguas siguen siendolo`() {
         for (f in listOf("inter", "thin", "normal", "bold", "mono", "digital")) {
             val d = base()

@@ -320,6 +320,8 @@ object DesignSchema {
         val end = nightEnd.coerceIn(0, 23)
 
         val themes = JSONObject()
+            .put("obsidiana_dia", theme("Obsidiana Día", solid("#000000"), "#F2F2F2", "#8E8E93", "#FFB454", "inter"))
+            .put("obsidiana_noche", theme("Obsidiana Noche", solid("#000000"), "#B8A89A", "#6E625A", "#9A5B12", "inter"))
             .put("clasico", theme("Clásico", solid("#000000"), "#ffffff", "#90a4ae", "#4fc3f7", "thin"))
             .put("noche_roja", theme("Noche roja", solid("#000000"), "#8b0000", "#8b0000", "#8b0000", "thin"))
             .put("amanecer", theme("Amanecer", gradient("#1a2a4a", "#ff8a65", 160), "#ffffff", "#cfd8dc", "#ffd180", "thin"))
@@ -340,13 +342,13 @@ object DesignSchema {
             .put("noche", JSONObject().put("name", "Noche").put("elements", noche))
 
         val profiles = JSONArray()
-        profiles.put(profile("dia", "Día", if (start == end) "00:00" else hm(end), "clasico", "principal", day, false))
-        if (start != end) profiles.put(profile("noche", "Noche", hm(start), "noche_roja", "noche", night, true))
+        profiles.put(profile("dia", "Día", if (start == end) "00:00" else hm(end), "obsidiana_dia", "principal", day, false))
+        if (start != end) profiles.put(profile("noche", "Noche", hm(start), "obsidiana_noche", "noche", night, true))
 
         val alarmElements = JSONArray()
             .put(el("hora", "clock", 0, 0, 8, 3, "style" to "digital"))
             .put(el("nombre", "text", 0, 3, 8, 1, "mode" to "alarm_label", "color" to "accent"))
-        val alarm = JSONObject().put("theme", "clasico").put("elements", alarmElements)
+        val alarm = JSONObject().put("theme", "obsidiana_dia").put("elements", alarmElements)
             .put("snooze_label", "Posponer {min} min").put("dismiss_label", "Descartar")
 
         return JSONObject().put("version", 1).put("themes", themes).put("screens", screens)
