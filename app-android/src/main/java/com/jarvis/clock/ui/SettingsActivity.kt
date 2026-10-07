@@ -202,11 +202,15 @@ class SettingsActivity : Activity() {
         }
         val initial = currentBrightness()
         value.text = "$initial %"
+        applyNow(initial)
         val bar = SeekBar(this).apply {
             max = 99 // 0..99 equivale a 1..100 %
             progress = initial - 1
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) { value.text = "${p + 1} %" }
+                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                    value.text = "${p + 1} %"
+                    if (fromUser) applyNow(p + 1)
+                }
                 override fun onStartTrackingTouch(sb: SeekBar) {}
                 override fun onStopTrackingTouch(sb: SeekBar) {
                     val pct = sb.progress + 1

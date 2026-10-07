@@ -11,6 +11,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.net.Uri
@@ -346,6 +347,13 @@ class MainActivity : Activity() {
         setImageDrawable(getDrawable(icon)?.mutate()?.also { it.setColorFilter(tint, PorterDuff.Mode.SRC_IN) })
         contentDescription = description
         setBackgroundColor(Color.TRANSPARENT)
+        isFocusable = true
+        val ring = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT)
+            setStroke(Ui.dp(this@MainActivity, 2), Tokens.Color.ACCENT)
+            cornerRadius = Ui.dp(this@MainActivity, Tokens.RADIUS_MD).toFloat()
+        }
+        onFocusChangeListener = View.OnFocusChangeListener { v, focused -> v.background = if (focused) ring else ColorDrawable(Color.TRANSPARENT) }
         setOnTouchListener { v, ev ->
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> v.alpha = 0.6f
@@ -484,9 +492,9 @@ class MainActivity : Activity() {
         night = Prefs.isNight(hour) && !awake
         val color = if (night) Ui.NIGHT else Ui.TEXT
         time.setTextColor(color)
-        date.setTextColor(if (night) Tokens.Night.TEXT_MUTED else Ui.DIM)
+        date.setTextColor(if (night) Tokens.Night.TEXT else Ui.DIM)
         weather.visibility = if (night) View.GONE else View.VISIBLE
-        val alarmColor = if (night) Ui.NIGHT else nextAlarmColor
+        val alarmColor = if (night) Tokens.Night.TEXT else nextAlarmColor
         nextAlarm.setTextColor(alarmColor)
         (nextAlarm.tag as? String)?.let { setIconText(nextAlarm, nextAlarm.text.toString(), it, alarmColor) }
         bar.alpha = if (night) 0.15f else 1f

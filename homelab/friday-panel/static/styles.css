@@ -24,7 +24,7 @@ h2 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 0 0 10px; t
 .row.between { justify-content: space-between; flex-wrap: nowrap; }
 button { font: inherit; border: 0; border-radius: 10px; padding: 11px 14px; background: var(--accent); color: var(--on-accent); font-weight: 600; min-height: 44px; }
 button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
-button.danger { background: var(--bad); color: #fff; }
+button.danger { background: var(--bad); color: var(--on-accent); }
 button.small { padding: 6px 10px; min-height: 36px; font-size: 14px; }
 button:disabled { opacity: .5; }
 .stack > * + * { margin-top: 10px; }

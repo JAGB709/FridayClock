@@ -454,10 +454,10 @@ Una sola fuente de verdad para colores, tipografía e iconos, compartida por la 
 - **Tipografía**: Inter (Light, Regular y SemiBold, licencia OFL) en `app-android/src/main/assets/face/fonts/`; el panel la sirve desde `/face/fonts/`.
 - **Iconos**: Lucide, en `design-system/icons/`. `python tools/gen-icons.py` genera `icons.js` y los recursos nativos; `--check` verifica que están al día.
 - **Copia al panel**: tras regenerar, ejecuta `bash tools/sync-face.sh` (`--check` lo verifica). La CI ejecuta los tres `--check`.
-- **Cero emojis**: ni en la interfaz, ni en los datos, ni en los textos hablados; todo icono es un icono Lucide por nombre.
+- **Cero emojis**: se aplica al reloj, al motor y al sistema de diseño (interfaz, datos y textos hablados; todo icono es un icono Lucide por nombre). El panel web aún conserva algunos emojis hasta el subproyecto 4c.
 - **Contrato de `/face/data`**: el campo `icon` (por ejemplo en `weather`) pasa a ser un nombre de icono (`sun`, `cloud-rain`...) que el motor dibuja con Lucide; antes era un emoji.
 - **Temas**: el diseño trae por defecto dos temas, Obsidiana Día y Obsidiana Noche, basados en los tokens.
-- **Regla de brillo**: por defecto manda el brillo del panel (el del perfil activo). Si se cambia el brillo en el reloj (Ajustes o `POST /brightness`), ese valor manual manda y se conserva hasta que cambie el perfil activo o hasta que el panel cambie el brillo de un perfil. El botón "Volver al brillo del panel" en Ajustes del reloj borra el valor manual. `POST /brightness` aplica exactamente la misma regla que el deslizador.
+- **Regla de brillo**: por defecto manda el brillo del panel (el del perfil activo). Si se cambia el brillo en el reloj (Ajustes o `POST /brightness`), ese valor manual manda y se conserva hasta que cambie el perfil activo o hasta que el panel cambie el brillo de un perfil. El botón "Volver al brillo del panel" en Ajustes del reloj borra el valor manual. `POST /brightness` aplica exactamente la misma regla que el deslizador. Una vista previa no borra el valor manual: solo lo ignora mientras el perfil previsualizado difiere del programado. Con un perfil de noche, tocar la pantalla la despierta al brillo del primer perfil que no sea de noche, salvo que haya un valor manual vigente para el perfil de noche. La rampa de amanecer de la alarma no cambia.
 
 ## Estructura del repositorio
 
