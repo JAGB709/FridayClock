@@ -292,6 +292,7 @@ function resizeElement(id, w, hh) {
 }
 
 function moveElement(id, x, y) {
+  if (!Number.isInteger(x) || !Number.isInteger(y)) { pushPreview(); return; }
   const e = currentElements().find((it) => it.id === id);
   if (!e) return;
   dz.selected = id;
@@ -354,7 +355,9 @@ function photoListField(e, f) {
   return h("div", { class: "opt" },
     h("h3", {}, f.label + " (" + (e.images || []).length + ")"),
     dz.backgrounds.length ? h("div", { class: "thumbs" }, thumbs) : h("div", { class: "muted" }, "No hay fotos en el reloj: sube alguna."),
-    missing.length ? h("div", { class: "warn" }, "Estas fotos ya no están en el reloj y se saltarán: " + missing.join(", ")) : null,
+    missing.length ? h("div", { class: "warn" }, "Estas fotos ya no están en el reloj y se saltarán:") : null,
+    missing.map((n) => h("div", { class: "row between" }, h("span", {}, n),
+      btn("Quitar", () => { e.images = (e.images || []).filter((x) => x !== n); touch(); paintSub(); }, "small ghost"))),
     !(e.images || []).length ? h("div", { class: "warn" }, "Elige al menos una foto: sin ellas el diseño no se puede guardar.") : null,
     h("div", { class: "row" }, btn("Subir fotos…", () => file.click(), "small ghost"), file));
 }
@@ -484,6 +487,7 @@ async function uploadPhoto(file) {
   let name = file.name;
   try {
     const bmp = await loadBitmap(file);
+    try {
     const size = EditorCore.downscaleSize(bmp.width, bmp.height, EditorCore.PHOTO_SIDE);
     if (size.w !== bmp.width || size.h !== bmp.height || file.size > MAX_UPLOAD) {
       const canvas = document.createElement("canvas");
@@ -497,7 +501,7 @@ async function uploadPhoto(file) {
         name = name.replace(/\.[^.]*$/, "") + "." + BLOB_EXT[out.type];
       }
     }
-    if (bmp.close) bmp.close();
+    } finally { if (bmp.close) bmp.close(); }
   } catch (err) {
     if (file.size > MAX_UPLOAD) { toast("No se pudo leer la imagen y supera 8 MB", true); return null; }
   }
@@ -555,7 +559,13 @@ function imagePicker(bg) {
 
 async function deleteBackground(name) {
   const used = Object.values(form.current.themes).filter((t) => t.bg.type === "image" && t.bg.image === name).map((t) => t.name);
-  const msg = used.length ? `¿Borrar ${name}? Lo usan los temas: ${used.join(", ")}. Se verá su color de respaldo.` : `¿Borrar ${name}?`;
+  const carousels = [];
+  const scanPhotos = (label, els) => (els || []).forEach((el) => { if (el.type === "photos" && (el.images || []).includes(name)) carousels.push(`${label} (${el.id})`); });
+  Object.values(form.current.screens).forEach((sc) => scanPhotos(sc.name, sc.elements));
+  scanPhotos("pantalla de alarma", form.current.alarm_screen && form.current.alarm_screen.elements);
+  let msg = `¿Borrar ${name}?`;
+  if (used.length) msg += ` Lo usan los temas: ${used.join(", ")}. Se verá su color de respaldo.`;
+  if (carousels.length) msg += ` Lo usan los carruseles de las pantallas: ${carousels.join(", ")}. Se saltará su foto.`;
   if (!(await confirmInPage(msg, "Borrar"))) return;
   const r = await api("DELETE", `/api/backgrounds/${encodeURIComponent(name)}`);
   toast(r.ok ? "✓ Imagen borrada" : errText(r), !r.ok);
