@@ -1,0 +1,6 @@
+services:
+  friday-panel:
+    build: .
+    env_file: .env
+    network_mode: host   # para escuchar en la IP de Tailscale del homelab y llegar al reloj
+    restart: unless-stopped

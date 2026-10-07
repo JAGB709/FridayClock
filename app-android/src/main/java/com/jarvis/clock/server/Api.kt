@@ -7,8 +7,12 @@ import com.jarvis.clock.Prefs
 import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.alarm.AlarmStore
+import com.jarvis.clock.alarm.Sounds
 import com.jarvis.clock.assistant.Actions
 import com.jarvis.clock.assistant.Assistant
+import com.jarvis.clock.design.Backgrounds
+import com.jarvis.clock.design.FaceData
+import com.jarvis.clock.weather.Weather
 import com.jarvis.clock.server.HttpServer.Request
 import com.jarvis.clock.server.HttpServer.Response
 import org.json.JSONArray
@@ -25,6 +29,26 @@ class Api(private val ctx: Context) {
             return Response.error(503, "reloj sin token configurado; ponlo en Ajustes o por ADB")
         }
         if (!authorized(r)) return Response.error(401, "token inválido")
+        if (r.method == "DELETE" && r.path.startsWith("/sounds/")) {
+            val name = try {
+                java.net.URLDecoder.decode(r.path.removePrefix("/sounds/"), "UTF-8")
+            } catch (e: IllegalArgumentException) {
+                return Response.error(400, "nombre no válido")
+            }
+            return if (Sounds.delete(ctx, name)) Response.ok() else Response.error(404, "no existe el sonido $name")
+        }
+        if (r.method in setOf("GET", "DELETE") && r.path.startsWith("/backgrounds/")) {
+            val name = try {
+                java.net.URLDecoder.decode(r.path.removePrefix("/backgrounds/"), "UTF-8")
+            } catch (e: IllegalArgumentException) {
+                return Response.error(400, "nombre no válido")
+            }
+            if (r.method == "DELETE") {
+                return if (Backgrounds.delete(ctx, name)) Response.ok() else Response.error(404, "no existe el fondo $name")
+            }
+            val f = Backgrounds.fileFor(Backgrounds.dir(ctx), name) ?: return Response.error(404, "no existe el fondo $name")
+            return Response(200, f.readBytes(), Backgrounds.mimeOf(f.name))
+        }
         return when (r.method to r.path) {
             "GET" to "/status" -> Response.ok(status())
             "GET" to "/alarms" -> Response.ok(JSONObject().put("alarms", alarms()))
@@ -57,6 +81,39 @@ class Api(private val ctx: Context) {
                 Response.ok()
             }
             "POST" to "/actions" -> Response.ok(JSONObject().put("results", Actions.executeAll(ctx, r.json().optJSONArray("actions"))))
+            "GET" to "/settings" -> result(Actions.execute(ctx, JSONObject().put("type", "get_settings")))
+            "PUT" to "/settings" -> result(Actions.execute(ctx, JSONObject().put("type", "set_settings").put("settings", r.json())))
+            "GET" to "/sounds" -> Response.ok(JSONObject().put("sounds", Sounds.list(ctx)))
+            "POST" to "/sounds" -> try {
+                Response.ok(JSONObject().put("id", Sounds.save(ctx, r.query["name"].orEmpty(), r.body)))
+            } catch (e: IllegalArgumentException) {
+                Response.error(400, e.message ?: "sonido no válido")
+            }
+            "POST" to "/sounds/preview" -> try {
+                val id = r.json().optString("id").ifEmpty { null }
+                if (Sounds.preview(ctx, id)) Response.ok() else Response.error(409, "hay una alarma sonando")
+            } catch (e: IllegalArgumentException) {
+                Response.error(400, e.message ?: "no se pudo reproducir")
+            }
+            "GET" to "/design" -> result(Actions.execute(ctx, JSONObject().put("type", "get_design")))
+            "PUT" to "/design" -> result(Actions.execute(ctx, JSONObject().put("type", "set_design").put("design", r.json())))
+            "POST" to "/design/reset" -> result(Actions.execute(ctx, JSONObject().put("type", "reset_design")))
+            "POST" to "/design/preview" -> {
+                if (AlarmRingService.ringing) Response.error(409, "hay una alarma sonando")
+                else {
+                    val j = r.json()
+                    result(Actions.execute(ctx, JSONObject().put("type", "preview_design")
+                        .put("design", j.optJSONObject("design")).put("seconds", j.optInt("seconds", 30))))
+                }
+            }
+            "DELETE" to "/design/preview" -> { Events.post(Events.Event.DesignPreviewCancel); Response.ok() }
+            "GET" to "/backgrounds" -> Response.ok(JSONObject().put("backgrounds", Backgrounds.list(ctx)))
+            "POST" to "/backgrounds" -> try {
+                Response.ok(JSONObject().put("name", Backgrounds.save(ctx, r.query["name"].orEmpty(), r.body)))
+            } catch (e: IllegalArgumentException) {
+                Response.error(400, e.message ?: "imagen no válida")
+            }
+            "GET" to "/face/data" -> { Weather.get(); Response.ok(FaceData.build(ctx)) }
             else -> Response.error(404, "no existe ${r.method} ${r.path}")
         }
     }
@@ -66,6 +123,7 @@ class Api(private val ctx: Context) {
         if (action == "list") return Response.ok(JSONObject().put("alarms", alarms()))
         val type = when (action) {
             "set" -> "set_alarm"
+            "update" -> "update_alarm"
             "cancel", "delete" -> "cancel_alarm"
             "enable" -> "enable_alarm"
             "disable" -> "disable_alarm"
@@ -73,7 +131,17 @@ class Api(private val ctx: Context) {
             "snooze" -> "snooze_alarm"
             else -> return Response.error(400, "action desconocida: $action")
         }
-        return result(Actions.execute(ctx, JSONObject(j.toString()).put("type", type)))
+        if (action == "update" && AlarmStore.get(ctx, j.optInt("id", -1)) == null) {
+            return Response.error(404, "no existe la alarma ${j.optInt("id")}")
+        }
+        // require()/error() de Actions y Alarm son errores del cliente, no del reloj.
+        return try {
+            result(Actions.execute(ctx, JSONObject(j.toString()).put("type", type)))
+        } catch (e: IllegalArgumentException) {
+            Response.error(400, e.message ?: "petición no válida")
+        } catch (e: IllegalStateException) {
+            Response.error(400, e.message ?: "petición no válida")
+        }
     }
 
     private fun timer(j: JSONObject): Response {
@@ -89,6 +157,7 @@ class Api(private val ctx: Context) {
 
     private fun status() = JSONObject().apply {
         put("version", BuildConfig.VERSION_NAME)
+        put("face_version", FaceData.faceVersion(ctx))
         put("time", System.currentTimeMillis())
         put("ringing", AlarmRingService.ringing)
         AlarmRingService.currentLabel?.let { put("ringing_label", it) }

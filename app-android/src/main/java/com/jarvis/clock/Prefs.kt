@@ -23,6 +23,11 @@ object Prefs {
         set(v) = sp.edit().putString(K_TOKEN, v.trim()).apply()
 
     /** Enlazar el servidor solo a la IP de Tailscale si existe (si no, a todas con token). */
+    /** Escucha continua: Friday se activa al oír su nombre, sin pulsar el micro. */
+    var wakeWord: Boolean
+        get() = sp.getBoolean("wake_word", true)
+        set(v) = sp.edit().putBoolean("wake_word", v).apply()
+
     var bindTailscaleOnly: Boolean
         get() = sp.getBoolean("bind_ts_only", false)
         set(v) = sp.edit().putBoolean("bind_ts_only", v).apply()
@@ -62,7 +67,7 @@ object Prefs {
 
     /** Segundos que tarda la alarma en subir de volumen mínimo a máximo. */
     var alarmRampSeconds: Int
-        get() = sp.getInt("alarm_ramp_s", 45)
+        get() = sp.getInt("alarm_ramp_s", 20)
         set(v) = sp.edit().putInt("alarm_ramp_s", v.coerceIn(0, 600)).apply()
 
     /** Minutos que suena la alarma antes de posponerse sola. */
@@ -92,6 +97,22 @@ object Prefs {
     var dayBrightness: Int
         get() = sp.getInt("day_brightness", 70)
         set(v) = sp.edit().putInt("day_brightness", v.coerceIn(1, 100)).apply()
+
+    /** Brillo fijado a mano en el reloj (persistente); ver [com.jarvis.clock.design.Brightness]. */
+    var manualBrightness: com.jarvis.clock.design.Brightness.Manual?
+        get() {
+            if (!sp.contains("manual_brightness")) return null
+            return com.jarvis.clock.design.Brightness.Manual(
+                sp.getInt("manual_brightness", 70), sp.getString("manual_brightness_profile", "") ?: "",
+                sp.getInt("manual_brightness_stamp", 0))
+        }
+        set(v) {
+            val e = sp.edit()
+            if (v == null) e.remove("manual_brightness").remove("manual_brightness_profile").remove("manual_brightness_stamp")
+            else e.putInt("manual_brightness", v.percent.coerceIn(1, 100)).putString("manual_brightness_profile", v.profileId)
+                .putInt("manual_brightness_stamp", v.stamp)
+            e.apply()
+        }
 
     /** Tras una respuesta que acaba en pregunta, vuelve a escuchar sin pulsar. */
     var followUp: Boolean

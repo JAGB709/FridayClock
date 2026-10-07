@@ -1,0 +1,143 @@
+import mock_clock_server as mock
+
+TOKEN = "secreto-del-reloj"  # el mismo que en conftest.py
+
+
+def test_status_proxied_and_token_never_leaks(client):
+    r = client.get("/api/status")
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert TOKEN not in r.text
+
+
+def test_alarm_create_update_delete(client):
+    r = client.post("/api/alarms", json={"time": "07:30", "label": "Trabajo", "days": ["mon"], "max_volume": 70})
+    assert r.status_code == 200
+    a = r.json()["alarm"]
+    assert a["max_volume"] == 70
+    r = client.put(f"/api/alarms/{a['id']}", json={"time": "06:45", "max_volume": None})
+    assert r.status_code == 200 and r.json()["alarm"]["time"] == "06:45" and r.json()["alarm"]["max_volume"] is None
+    assert client.delete(f"/api/alarms/{a['id']}").status_code == 200
+    assert client.get("/api/alarms").json()["alarms"] == []
+
+
+def test_clock_4xx_is_forwarded(client):
+    r = client.put("/api/alarms/999", json={"label": "x"})
+    assert r.status_code == 404 and "no existe" in r.json()["error"]
+    r = client.post("/api/alarms", json={"time": "7:3"})
+    assert r.status_code == 400
+
+
+def test_settings_get_put_and_all_or_nothing(client):
+    s = client.get("/api/settings").json()
+    assert s["settings"]["snooze_min"] == 5 and s["schema"]
+    r = client.put("/api/settings", json={"snooze_min": 12})
+    assert r.status_code == 200 and r.json()["settings"]["snooze_min"] == 12
+    r = client.put("/api/settings", json={"snooze_min": 3, "day_brightness": "50"})
+    assert r.status_code == 400 and "day_brightness" in r.json()["errors"]
+    assert mock.SETTINGS["snooze_min"] == 12
+
+
+def test_clock_down_is_502_quickly(make_client):
+    import time
+    c = make_client(clock_url="http://127.0.0.1:9", timeout_s=1.0)
+    t0 = time.monotonic()
+    r = c.get("/api/status")
+    assert r.status_code == 502 and r.json() == {"ok": False, "error": "El reloj no responde"}
+    assert time.monotonic() - t0 < 3
+
+
+def test_wrong_clock_token_is_explained(make_client):
+    r = make_client(clock_token="malo").get("/api/status")
+    assert r.status_code == 502 and "CLOCK_TOKEN" in r.json()["error"]
+
+
+def test_sound_upload_validation(client):
+    r = client.post("/api/sounds", params={"name": "virus.exe"}, content=b"x")
+    assert r.status_code == 400
+    r = client.post("/api/sounds", params={"name": "gallo.mp3"}, content=b"")
+    assert r.status_code == 400
+    r = client.post("/api/sounds", params={"name": "grande.mp3"}, content=b"x" * (5 * 1024 * 1024 + 1))
+    assert r.status_code == 413
+    r = client.post("/api/sounds", params={"name": "gallo.mp3"}, content=b"ID3fake")
+    assert r.status_code == 200 and r.json()["id"] == "file:gallo.mp3"
+    assert any(s["id"] == "file:gallo.mp3" for s in client.get("/api/sounds").json()["sounds"])
+    assert client.delete("/api/sounds/gallo.mp3").status_code == 200
+    assert client.delete("/api/sounds/gallo.mp3").status_code == 404
+
+
+def test_do_actions(client):
+    assert client.post("/api/do/stop").status_code == 200
+    assert client.post("/api/do/test").status_code == 200
+    assert any(a.get("label") == "Prueba de alarma" for a in mock.ALARMS)
+    assert client.post("/api/do/speak", json={"text": "  "}).status_code == 400
+    assert client.post("/api/do/speak", json={"text": "Hola"}).status_code == 200
+    assert client.post("/api/do/nada").status_code == 404
+
+
+def test_password_login(make_client):
+    c = make_client(password="abrete")
+    r = c.get("/api/status")
+    assert r.status_code == 401 and r.json()["login_required"] is True
+    assert c.post("/login", json={"password": "mal"}).status_code == 401
+    assert c.post("/login", json={"password": "abrete"}).status_code == 200
+    assert c.get("/api/status").status_code == 200
+    assert "abrete" not in c.cookies.get("friday_panel", "")
+
+
+def test_health_and_static(client):
+    h = client.get("/health").json()
+    assert h == {"ok": True, "clock": True}
+    r = client.get("/")
+    assert r.status_code == 200 and "Friday" in r.text
+
+
+def test_password_login_with_nonascii_chars(make_client):
+    # I1: contraseña con caracteres no-ASCII (ñ, á, etc.) debe funcionar
+    c = make_client(password="contraseña")
+    r = c.get("/api/status")
+    assert r.status_code == 401 and r.json()["login_required"] is True
+    # Login correcto con contraseña no-ASCII
+    assert c.post("/login", json={"password": "contraseña"}).status_code == 200
+    # Ahora /api/status debe funcionar
+    assert c.get("/api/status").status_code == 200
+    # Password incorrecta sigue siendo 401
+    assert c.post("/login", json={"password": "mal"}).status_code == 401
+
+
+def test_invalid_content_length(client):
+    # m2: Content-Length no válido debe devolver 400, no 500
+    r = client.post("/api/sounds", params={"name": "test.mp3"}, content=b"x",
+                    headers={"Content-Length": "invalid"})
+    assert r.status_code == 400 and "Content-Length" in r.json()["error"]
+
+
+def test_invalid_request_format(client):
+    # m3: Petición con formato inválido debe devolver 400, no 422
+    r = client.put("/api/alarms/abc", json={"label": "test"})
+    assert r.status_code == 400 and r.json()["ok"] is False
+    r = client.post("/api/alarms", json="not a dict")
+    assert r.status_code == 400 and r.json()["ok"] is False
+
+
+def test_alarm_created_disabled_stays_disabled(client):
+    r = client.post("/api/alarms", json={"time": "07:30", "enabled": False})
+    assert r.status_code == 200 and r.json()["alarm"]["enabled"] is False
+    r = client.post("/api/alarms", json={"time": "07:30", "enabled": "no"})
+    assert r.status_code == 400 and "enabled" in r.json()["error"]
+
+
+def test_update_with_invalid_days_rejected(client):
+    a = client.post("/api/alarms", json={"time": "07:30", "days": ["mon"]}).json()["alarm"]
+    r = client.put(f"/api/alarms/{a['id']}", json={"days": "lunes,martes"})
+    assert r.status_code == 400 and "days" in r.json()["error"]
+
+
+def test_post_without_csrf_header_is_forbidden(clock_url):
+    from fastapi.testclient import TestClient
+    from app import Config, create_app
+
+    bare = TestClient(create_app(Config(clock_url=clock_url, clock_token=TOKEN)))
+    r = bare.post("/api/do/stop")
+    assert r.status_code == 403 and r.json() == {"ok": False, "error": "Petición no permitida"}
+    assert bare.post("/login", json={}).status_code == 403
+    assert bare.get("/api/status").status_code == 200

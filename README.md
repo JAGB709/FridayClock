@@ -30,7 +30,7 @@ Agent + Qwen (Ollama)** en tu homelab. Reloj y homelab se hablan por **Tailscale
 > **Índice**
 > 1. [Qué necesitas](#qué-necesitas)
 > 2. [Parte A — Montar el cerebro en el homelab](#parte-a--montar-el-cerebro-en-el-homelab)
->    (Ollama+Qwen · Hermes · voz Whisper/Piper · Tailscale · skill)
+>    (Ollama+Qwen · Hermes · voz Whisper/Piper · Tailscale · skill · panel web)
 > 3. [Parte B — Liberar el reloj e instalar Friday](#parte-b--liberar-el-reloj-e-instalar-friday)
 >    (GSI/root · Tailscale · app · voz del reloj · Bluetooth)
 > 4. [Parte C — Conectarlo todo y probar](#parte-c--conectarlo-todo-y-probar)
@@ -209,6 +209,36 @@ JSON
 
 La skill usa el toolset `terminal` de Hermes.
 
+### A8. Panel web para el móvil (`homelab/friday-panel`)
+
+Para configurar alarmas y ajustes desde el móvil. El token del reloj se queda en el
+homelab. Ver [`homelab/friday-panel/README.md`](homelab/friday-panel/README.md):
+
+Variables de entorno (`.env`):
+
+| Variable | Valor |
+|---|---|
+| `CLOCK_URL` | obligatoria, `http://100.x.y.z:8080` (IP Tailscale del reloj) |
+| `CLOCK_TOKEN` | obligatoria, el token del reloj |
+| `PANEL_BIND` | por defecto `127.0.0.1`; pon la IP de Tailscale del homelab (`tailscale ip -4`) |
+| `PANEL_PORT` | `8770` |
+| `PANEL_PASSWORD` | opcional; si la pones, el panel pide contraseña |
+| `CLOCK_TIMEOUT_S` | `5` |
+
+    cd homelab/friday-panel
+    cat > .env <<'FIN'
+    CLOCK_URL=http://100.x.y.z:8080
+    CLOCK_TOKEN=
+    PANEL_BIND=100.a.b.c
+    PANEL_PORT=8770
+    PANEL_PASSWORD=
+    CLOCK_TIMEOUT_S=5
+    FIN
+    docker compose up -d --build
+
+Abre `http://<ip-tailscale-homelab>:8770` en el móvil. Si el reloj está apagado o sin
+red, el panel lo dice y no guarda nada; las alarmas siguen sonando igual.
+
 **Fin de la Parte A.** Ya tienes cerebro (Qwen+Hermes), voz (Whisper+Piper) y red (Tailscale).
 
 ---
@@ -334,6 +364,42 @@ Si algo no responde, empieza por `clock.py status` y por `curl .../health` del p
 - **Modo noche** (rojo tenue, brillo mínimo) y anti-quemado.
 - Capa `/display` para texto, HTML, imágenes o una web.
 
+### Pantallas y temas
+
+La carátula y la pantalla de alarma se describen en un diseño (JSON): **temas** (colores, letra,
+fondo liso, degradado o imagen), **pantallas** en una rejilla de 8×6 con hora, fecha, tiempo,
+previsión, próxima alarma y texto o frase del día, y **perfiles** por hora (Mañana, Día, Noche…)
+con su tema, sus pantallas, rotación y brillo. Se edita desde la pestaña **Pantallas** del panel
+web, con una vista previa idéntica a la del reloj y un botón **▶ Probar** que lo muestra 30 s en el
+reloj sin guardarlo. Si el `WebView` del reloj fallase, vuelve la carátula nativa de siempre; las
+alarmas no dependen de él.
+
+**Fotos.** Un fondo de imagen y el elemento `photos` aceptan los campos de ajuste `fit`
+(`cover`, `contain` o `fill`), `zoom` (1 a 3) y `pos_x`/`pos_y` (0 a 100, punto de la foto que
+queda centrado). El elemento `photos` es un carrusel: `images` (1 a 20 nombres de fotos subidas),
+`interval_s` (3 a 600 s), `transition` (`fade` o `none`), `order` (`sequential` o `random`) y los
+campos de ajuste; cada pantalla admite como máximo 2 elementos `photos` (1 en la pantalla de alarma). Las fotos se suben desde el
+panel, que las reduce en el navegador antes de enviarlas; el reloj las deja en 1600 px como mucho
+(subida ≤ 8 MB, biblioteca ≤ 60 fotos). En el editor los elementos se mueven arrastrándolos.
+
+**Capas y solapes.** Los elementos de una pantalla pueden solaparse: el orden de la lista de
+elementos es el orden de dibujo (el último queda delante). En el editor, el panel de opciones del
+elemento tiene los botones **Traer al frente**, **Subir una capa**, **Bajar una capa** y **Enviar al
+fondo**. Al tocar de nuevo el punto de un elemento ya seleccionado se selecciona el que hay debajo
+(se va rotando entre los solapados); arrastrar el elemento seleccionado lo mueve.
+
+**Fondo de fotos.** Además de liso, degradado e imagen, el fondo de un tema puede ser
+`{"type":"photos"}`: un carrusel a pantalla completa con `images` (1 a 20 fotos subidas),
+`interval_s` (3 a 600 s), `transition` (`fade` o `none`), `order` (`sequential` o `random`), los
+campos de ajuste `fit`, `zoom`, `pos_x` y `pos_y`, `dim` (0 a 80, oscurece la foto para que se lea el
+texto) y `color` (color de reserva bajo las fotos). Cada carrusel, de fondo o
+elemento `photos`, mantiene en reposo una sola foto decodificada en memoria; durante el fundido de 0,6 s
+sujeta dos, y libera la saliente justo después, para cuidar el reloj (1 GB de RAM).
+
+**Gestos.** En la carátula, deslizar de izquierda a derecha abre Alarmas y de derecha a
+izquierda abre Ajustes; para cambiar de pantalla del perfil se desliza en vertical. En la pantalla de
+alarma sonando, deslizar no hace nada.
+
 ### Órdenes que funcionan sin red (y sin Hermes)
 | Dices | Hace |
 |---|---|
@@ -359,11 +425,25 @@ Sin token configurado, el servidor responde 503 a todo.
 | Método y ruta | Cuerpo | Qué hace |
 |---|---|---|
 | `GET /health` | — | vivo (sin token) |
-| `GET /status` | — | hora, próxima alarma, si suena, estado del asistente, Bluetooth, alarmas |
+| `GET /status` | — | hora, próxima alarma, si suena, estado del asistente, Bluetooth, alarmas, `face_version` (versión del motor de pantallas) |
 | `GET /alarms` | — | lista de alarmas y temporizadores |
 | `POST /alarm` | `{"action":"set","time":"07:30","label":"Trabajo","days":"weekdays"}` | crear (`days`: `""`, `daily`, `weekdays`, `weekend`, `["mon","fri"]`) |
 | `POST /alarm` | `{"action":"cancel","id":3}` · `{"time":"07:30"}` · `{"all":true}` | borrar |
 | `POST /alarm` | `{"action":"enable"/"disable","id":3}` · `{"action":"stop"/"snooze"}` | activar, desactivar, apagar o posponer |
+| `POST /alarm` | `{"action":"update","id":3,"time":"06:45","max_volume":60}` | editar solo lo enviado; opciones por alarma: `sound`, `max_volume` (1–100), `ramp_s` (0–600), `snooze_min` (1–60), `briefing`; `null` = ajuste general; `sound` = `file:<nombre>` o `system:content://…` (tonos del reloj; otras URLs se rechazan). El panel devuelve los errores como `{"ok":false,"error":…}` |
+| `GET /settings` | — | ajustes (despertador, carátula de respaldo, voz, ubicación) y su esquema |
+| `PUT /settings` | `{"snooze_min":10,"night_brightness":5}` | cambiar ajustes; todo o nada (`400` con `errors` por clave); se aplican al instante |
+| `GET /sounds` | — | tonos del sistema y sonidos subidos |
+| `POST /sounds?name=gallo.mp3` | audio en crudo (≤ 5 MB; mp3/ogg/wav/m4a) | subir un sonido de alarma |
+| `DELETE /sounds/{nombre}` | — | borrar un sonido subido |
+| `POST /sounds/preview` | `{"id":"file:gallo.mp3"}` | escuchar 5 s (`409` si suena una alarma) |
+| `GET /design` | — | diseño de pantallas (temas, pantallas en rejilla 8×6, perfiles, pantalla de alarma) y `saved` |
+| `PUT /design` | el diseño entero | validar y guardar (todo o nada: `400` con `errors` por ruta); se aplica al instante |
+| `POST /design/reset` | — | restaurar el diseño inicial |
+| `POST /design/preview` | `{"design":{…},"seconds":30}` | mostrar un diseño 5–120 s sin guardarlo (`409` si suena una alarma) |
+| `DELETE /design/preview` | — | cancelar la prueba |
+| `GET /backgrounds` · `POST /backgrounds?name=x.jpg` · `GET /backgrounds/{nombre}` · `DELETE /backgrounds/{nombre}` | imagen en crudo (≤ 8 MB, jpg/png/webp; el reloj la reduce a 1600 px al guardar; hasta 60 fotos); `GET /backgrounds/{nombre}` devuelve la imagen, no JSON | fondos de pantalla |
+| `GET /face/data` | — | los datos que recibe el motor: tiempo, previsión y próxima alarma (`icon` es un nombre de icono Lucide, no un emoji) |
 | `POST /timer` | `{"minutes":10,"label":"Pasta"}` · `{"action":"cancel"}` | temporizador |
 | `POST /display` | `{"type":"text"/"html"/"image"/"url","content":"…","duration_ms":20000}` · `{"action":"clear"}` | pantalla completa |
 | `POST /speak` | `{"text":"Hola"}` | decir en voz alta |
@@ -371,7 +451,7 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /listen` | — | abre el micro |
 | `POST /briefing` | — | buenos días hablados |
 | `POST /bluetooth` | `{"action":"speaker"/"on"/"off"/"status"}` | modo altavoz Bluetooth |
-| `POST /volume` · `/brightness` | `{"level":40}` | volumen multimedia y brillo |
+| `POST /volume` · `/brightness` | `{"level":40}` | volumen multimedia y brillo (el brillo fija el valor manual del reloj, ver "Sistema de diseño") |
 | `POST /actions` | `{"actions":[{"type":"set_alarm",…},…]}` | lote de acciones |
 
 ```bash
@@ -380,12 +460,27 @@ curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
   -d '{"action":"set","time":"07:30","label":"Despertar","days":"weekdays"}'
 ```
 
+## Sistema de diseño
+
+Una sola fuente de verdad para colores, tipografía e iconos, compartida por la app del reloj, el motor de pantallas y el panel.
+
+- **Tokens**: `design-system/tokens.json` define colores, espaciados, radios, tamaños de texto y duraciones. `python tools/gen-tokens.py` genera `tokens.css` (y los equivalentes nativos); `python tools/gen-tokens.py --check` verifica que lo generado está al día.
+- **Tipografía**: Inter (Light, Regular y SemiBold, licencia OFL) en `app-android/src/main/assets/face/fonts/`; el panel la sirve desde `/face/fonts/`.
+- **Iconos**: Lucide, en `design-system/icons/`. `python tools/gen-icons.py` genera `icons.js` y los recursos nativos; `--check` verifica que están al día.
+- **Copia al panel**: tras regenerar, ejecuta `bash tools/sync-face.sh` (`--check` lo verifica). La CI ejecuta los tres `--check`.
+- **Cero emojis**: se aplica al reloj, al motor y al sistema de diseño (interfaz, datos y textos hablados; todo icono es un icono Lucide por nombre). El panel web aún conserva algunos emojis hasta el subproyecto 4c.
+- **Contrato de `/face/data`**: el campo `icon` (por ejemplo en `weather`) pasa a ser un nombre de icono (`sun`, `cloud-rain`...) que el motor dibuja con Lucide; antes era un emoji.
+- **Temas**: el diseño trae por defecto dos temas, Obsidiana Día y Obsidiana Noche, basados en los tokens.
+- **Regla de brillo**: por defecto manda el brillo del panel (el del perfil activo). Si se cambia el brillo en el reloj (Ajustes o `POST /brightness`), ese valor manual manda y se conserva hasta que cambie el perfil activo o hasta que el panel cambie el brillo de un perfil. El botón "Volver al brillo del panel" en Ajustes del reloj borra el valor manual. `POST /brightness` aplica exactamente la misma regla que el deslizador. Una vista previa no borra el valor manual: solo lo ignora mientras el perfil previsualizado difiere del programado. Con un perfil de noche, tocar la pantalla la despierta al brillo del primer perfil que no sea de noche, salvo que haya un valor manual vigente para el perfil de noche. La rampa de amanecer de la alarma no cambia.
+
 ## Estructura del repositorio
 
 ```
 app-android/     App Friday del reloj (Kotlin, sin dependencias de runtime)
+app-android/src/main/assets/face/  motor de pantallas (HTML/JS), copiado a homelab/friday-panel/static/face/ con tools/sync-face.sh
 hermes-skill/    Skill y tools de Hermes para controlar el reloj + tests
 homelab/         clock-bridge: Whisper (STT) -> Hermes -> Piper (TTS)
+homelab/friday-panel/  panel web (FastAPI + web móvil) para alarmas y ajustes
 device-kit/      Scripts para rootear/liberar el reloj (DRY_RUN por defecto)
 docs/            research-notes, decisions, voz-friday, altavoz-bluetooth
 RUNBOOK.md       Liberar el reloj: pasos con el reloj delante

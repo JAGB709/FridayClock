@@ -1,8 +1,11 @@
 package com.jarvis.clock
 
 import com.jarvis.clock.alarm.Alarm
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
@@ -79,6 +82,15 @@ class AlarmTest {
         assertEquals(0, Alarm.parseDays(""))
     }
 
+    @Test fun `days no validos en update se rechazan`() {
+        val rep = Alarm(1, 7, 0, Alarm.WEEKDAYS)
+        val e = assertThrows(IllegalArgumentException::class.java) { rep.withPatch(JSONObject("""{"days":"lunes,martes"}""")) }
+        assertTrue(e.message!!.startsWith("days no válido"))
+        assertEquals(0, rep.withPatch(JSONObject("""{"days":[]}""")).days)
+        assertEquals(0, rep.withPatch(JSONObject("""{"days":""}""")).days)
+        assertEquals(1, rep.withPatch(JSONObject("""{"days":["mon"]}""")).days)
+    }
+
     @Test fun `serializacion ida y vuelta`() {
         val a = Alarm(7, 6, 45, Alarm.WEEKDAYS, "Trabajo", true, kind = Alarm.Kind.ALARM)
         val b = Alarm.fromStorage(a.toStorage())
@@ -88,5 +100,84 @@ class AlarmTest {
     @Test fun `bit de dia por Calendar`() {
         assertEquals(1 shl 0, Alarm.dayBit(Calendar.MONDAY))
         assertEquals(1 shl 6, Alarm.dayBit(Calendar.SUNDAY))
+    }
+
+    // ------------------------------------------------------------ opciones por alarma
+
+    @Test fun `alarma antigua sin opciones se lee con opciones nulas`() {
+        val old = JSONObject("""{"id":4,"h":7,"m":15,"d":31,"l":"Trabajo","e":true,"t":0,"k":"ALARM"}""")
+        val a = Alarm.fromStorage(old)
+        assertEquals(7, a.hour); assertEquals(Alarm.WEEKDAYS, a.days); assertEquals("Trabajo", a.label)
+        assertNull(a.sound); assertNull(a.maxVolume); assertNull(a.rampSeconds)
+        assertNull(a.snoozeMinutes); assertNull(a.briefing)
+    }
+
+    @Test fun `opciones sobreviven al guardado`() {
+        val a = Alarm(2, 6, 45, sound = "file:gallo.mp3", maxVolume = 60, rampSeconds = 30, snoozeMinutes = 9, briefing = false)
+        assertEquals(a, Alarm.fromStorage(a.toStorage()))
+    }
+
+    @Test fun `toJson expone opciones nulas como null`() {
+        val j = Alarm(1, 7, 0).toJson()
+        assertTrue(j.has("sound") && j.isNull("sound"))
+        assertTrue(j.isNull("max_volume")); assertTrue(j.isNull("ramp_s"))
+        assertTrue(j.isNull("snooze_min")); assertTrue(j.isNull("briefing"))
+        assertEquals(60, Alarm(1, 7, 0, maxVolume = 60).toJson().getInt("max_volume"))
+    }
+
+    @Test fun `withPatch cambia solo lo enviado`() {
+        val a = Alarm(3, 7, 0, Alarm.WEEKDAYS, "Trabajo", maxVolume = 80)
+        val b = a.withPatch(JSONObject("""{"time":"06:30","snooze_min":10}"""))
+        assertEquals(6, b.hour); assertEquals(30, b.minute)
+        assertEquals(10, b.snoozeMinutes)
+        assertEquals("Trabajo", b.label); assertEquals(Alarm.WEEKDAYS, b.days); assertEquals(80, b.maxVolume)
+    }
+
+    @Test fun `withPatch con null vuelve al ajuste general`() {
+        val a = Alarm(3, 7, 0, sound = "file:x.mp3", maxVolume = 80, briefing = true)
+        val b = a.withPatch(JSONObject("""{"sound":null,"max_volume":null,"briefing":null}"""))
+        assertNull(b.sound); assertNull(b.maxVolume); assertNull(b.briefing)
+    }
+
+    @Test fun `withPatch dias, nombre y activa`() {
+        val b = Alarm(3, 7, 0).withPatch(JSONObject("""{"days":["sat","sun"],"label":"  Finde ","enabled":false}"""))
+        assertEquals(Alarm.WEEKEND, b.days); assertEquals("Finde", b.label); assertFalse(b.enabled)
+    }
+
+    @Test fun `withPatch rechaza valores fuera de rango o de tipo`() {
+        val a = Alarm(3, 7, 0)
+        val e = assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"max_volume":150}""")) }
+        assertEquals("max_volume debe estar entre 1 y 100", e.message)
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"snooze_min":5.5}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"snooze_min":"5"}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"time":"25:00"}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"label":""}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"enabled":"true"}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"briefing":1}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"sound":"http://x/y.mp3"}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"sound":"system:http://homelab/a.mp3"}""")) }
+        assertThrows(IllegalArgumentException::class.java) { a.withPatch(JSONObject("""{"sound":"file:"}""")) }
+        assertEquals("system:content://media/internal/audio/media/1",
+            a.withPatch(JSONObject("""{"sound":"system:content://media/internal/audio/media/1"}""")).sound)
+    }
+
+    @Test fun `withOptions ignora hora y nombre`() {
+        val b = Alarm(3, 7, 0, label = "A").withOptions(JSONObject("""{"time":"09:00","label":"B","ramp_s":0}"""))
+        assertEquals(7, b.hour); assertEquals("A", b.label); assertEquals(0, b.rampSeconds)
+    }
+
+    @Test fun `la pospuesta hereda las opciones`() {
+        val src = Alarm(3, 7, 0, sound = "file:gallo.mp3", maxVolume = 40, rampSeconds = 5, snoozeMinutes = 7, briefing = false)
+        val snooze = Alarm(9, 7, 7, triggerAt = 123L, kind = Alarm.Kind.SNOOZE).withOptionsOf(src)
+        assertEquals("file:gallo.mp3", snooze.sound); assertEquals(40, snooze.maxVolume)
+        assertEquals(5, snooze.rampSeconds); assertEquals(7, snooze.snoozeMinutes); assertEquals(false, snooze.briefing)
+        assertEquals(Alarm.Kind.SNOOZE, snooze.kind); assertEquals(9, snooze.id)
+    }
+
+    @Test fun `parseTime acepta formatos y rechaza horas imposibles`() {
+        assertEquals(7 to 30, Alarm.parseTime("07:30"))
+        assertEquals(7 to 30, Alarm.parseTime("7.30"))
+        assertNull(Alarm.parseTime("24:00"))
+        assertNull(Alarm.parseTime("nope"))
     }
 }

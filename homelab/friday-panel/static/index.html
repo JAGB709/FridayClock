@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Friday</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/face/tokens.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="top"><h1>Friday</h1><span id="conn" class="pill">…</span></header>
+  <main id="view"></main>
+  <div id="savebar" hidden>
+    <button id="discard" class="ghost">Descartar</button>
+    <button id="try" class="ghost" hidden>▶ Probar</button>
+    <button id="save">Guardar</button>
+  </div>
+  <div id="toast" hidden></div>
+  <nav id="tabs">
+    <button data-tab="home"><span class="ico">🏠</span>Inicio</button>
+    <button data-tab="alarms"><span class="ico">⏰</span>Alarmas</button>
+    <button data-tab="design"><span class="ico">🖼️</span>Pantallas</button>
+    <button data-tab="settings"><span class="ico">⚙️</span>Ajustes</button>
+  </nav>
+  <script src="editor-core.js"></script>
+  <script src="pantallas.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

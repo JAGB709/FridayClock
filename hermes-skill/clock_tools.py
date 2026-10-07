@@ -118,7 +118,62 @@ def clock_bluetooth(action: str = "speaker") -> dict:
     return _call("POST", "/bluetooth", {"action": action})
 
 
+def clock_get_settings() -> dict:
+    """Ajustes del despertador, pantalla, voz y ubicación, con su esquema (tipo y rango)."""
+    return _call("GET", "/settings")
+
+
+def clock_set_settings(settings: dict) -> dict:
+    """Cambia ajustes, p.ej. {"snooze_min": 10, "night_brightness": 5}. Todo o nada:
+    si alguno no vale, no cambia ninguno y devuelve "errors" por clave."""
+    return _call("PUT", "/settings", settings)
+
+
+def clock_update_alarm(id: int, changes: dict) -> dict:
+    """Edita una alarma. changes puede llevar time, label, days, enabled y opciones
+    propias: sound, max_volume (1-100), ramp_s (0-600), snooze_min (1-60), briefing.
+    Una opción a None vuelve al ajuste general."""
+    return _call("POST", "/alarm", {**changes, "action": "update", "id": id})
+
+
+def clock_list_sounds() -> dict:
+    """Sonidos de alarma disponibles en el reloj (del sistema y subidos)."""
+    return _call("GET", "/sounds")
+
+
+def clock_get_design() -> dict:
+    """Diseño de pantallas del reloj: temas, pantallas (rejilla 8×6), perfiles por hora y pantalla de alarma."""
+    return _call("GET", "/design")
+
+
+def clock_set_design(design: dict) -> dict:
+    """Guarda el diseño entero. Todo o nada: si algo no vale devuelve "errors" por ruta y no cambia nada."""
+    return _call("PUT", "/design", design)
+
+
+def clock_preview_design(design: dict, seconds: int = 30) -> dict:
+    """Muestra un diseño en el reloj `seconds` segundos (5-120) sin guardarlo."""
+    return _call("POST", "/design/preview", {"design": design, "seconds": seconds})
+
+
+def clock_cancel_preview() -> dict:
+    """Cancela la prueba de diseño en curso."""
+    return _call("DELETE", "/design/preview")
+
+
+def clock_reset_design() -> dict:
+    """Restaura el diseño inicial (borra el diseño guardado)."""
+    return _call("POST", "/design/reset", {})
+
+
+def clock_list_backgrounds() -> dict:
+    """Imágenes de fondo subidas al reloj."""
+    return _call("GET", "/backgrounds")
+
+
 TOOLS = [
     clock_status, clock_list_alarms, clock_set_alarm, clock_cancel_alarm,
     clock_set_timer, clock_say, clock_display, clock_set_volume, clock_bluetooth,
+    clock_get_settings, clock_set_settings, clock_update_alarm, clock_list_sounds,
+    clock_get_design, clock_set_design, clock_preview_design, clock_cancel_preview, clock_reset_design, clock_list_backgrounds,
 ]

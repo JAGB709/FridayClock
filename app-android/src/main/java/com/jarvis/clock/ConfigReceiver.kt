@@ -28,6 +28,7 @@ class ConfigReceiver : BroadcastReceiver() {
         if (intent.hasExtra("lat")) Prefs.latitude = intent.getDoubleExtra("lat", Prefs.latitude)
         if (intent.hasExtra("lon")) Prefs.longitude = intent.getDoubleExtra("lon", Prefs.longitude)
         if (intent.hasExtra("port")) { Prefs.httpPort = intent.getIntExtra("port", Prefs.httpPort); changedServer = true }
+        if (intent.hasExtra("wake_word")) Prefs.wakeWord = intent.getBooleanExtra("wake_word", true)
         if (intent.hasExtra("bind_tailscale_only")) {
             Prefs.bindTailscaleOnly = intent.getBooleanExtra("bind_tailscale_only", false); changedServer = true
         }

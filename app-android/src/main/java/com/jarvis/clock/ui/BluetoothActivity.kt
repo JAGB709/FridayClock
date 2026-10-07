@@ -73,7 +73,7 @@ class BluetoothActivity : Activity() {
         state.text = buildString {
             append(if (on) "Bluetooth encendido" else "Bluetooth apagado")
             if (vis) append(" · visible")
-            append(if (conn) " · móvil conectado ✓" else " · sin móvil conectado")
+            append(if (conn) " · móvil conectado" else " · sin móvil conectado")
         }
         val arr = s.optJSONArray("paired")
         paired.text = if (arr == null || arr.length() == 0) "Sin dispositivos emparejados." else buildString {

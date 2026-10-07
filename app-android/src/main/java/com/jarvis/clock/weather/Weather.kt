@@ -13,6 +13,14 @@ import kotlin.math.roundToInt
  */
 object Weather {
 
+    data class Hour(val h: Int, val temp: Int, val code: Int) {
+        val icon get() = Weather.icon(code)
+    }
+
+    data class Day(val d: String, val min: Int, val max: Int, val code: Int) {
+        val icon get() = Weather.icon(code)
+    }
+
     data class Report(
         val temp: Int,
         val code: Int,
@@ -20,10 +28,12 @@ object Weather {
         val min: Int,
         val rainProb: Int,
         val fetchedAt: Long,
+        val hours: List<Hour> = emptyList(),
+        val days: List<Day> = emptyList(),
     ) {
         val description get() = describe(code)
         val icon get() = icon(code)
-        fun shortText() = "$icon $temp° · ${description} · ↑$max° ↓$min°" + if (rainProb >= 30) " · lluvia $rainProb%" else ""
+        fun shortText() = "$temp° · ${description} · ↑$max° ↓$min°" + if (rainProb >= 30) " · lluvia $rainProb%" else ""
         fun spoken(city: String) = buildString {
             append("En $city hace $temp grados, ${description.lowercase()}. ")
             append("Hoy máxima de $max y mínima de $min.")
@@ -45,28 +55,75 @@ object Weather {
         val url = String.format(
             Locale.US,
             "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f" +
-                "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
-                "&timezone=auto&forecast_days=1",
+                "&current=temperature_2m,weather_code" +
+                "&hourly=temperature_2m,weather_code&forecast_hours=12" +
+                "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&forecast_days=6" +
+                "&timezone=auto",
             Prefs.latitude, Prefs.longitude,
         )
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 8000
         c.readTimeout = 8000
         try {
-            val o = JSONObject(c.inputStream.bufferedReader().readText())
-            val cur = o.getJSONObject("current")
-            val d = o.getJSONObject("daily")
-            return Report(
-                temp = cur.getDouble("temperature_2m").roundToInt(),
-                code = cur.getInt("weather_code"),
-                max = d.getJSONArray("temperature_2m_max").getDouble(0).roundToInt(),
-                min = d.getJSONArray("temperature_2m_min").getDouble(0).roundToInt(),
-                rainProb = d.optJSONArray("precipitation_probability_max")?.optInt(0) ?: 0,
-                fetchedAt = System.currentTimeMillis(),
-            )
+            return parse(c.inputStream.bufferedReader().readText())
         } finally {
             c.disconnect()
         }
+    }
+
+    /**
+     * Interpreta la respuesta de Open-Meteo. Las horas son las siguientes cada dos horas
+     * (la primera entrada es la hora actual) y los días empiezan mañana.
+     */
+    fun parse(body: String, now: Long = System.currentTimeMillis()): Report {
+        val o = JSONObject(body)
+        val cur = o.getJSONObject("current")
+        val d = o.getJSONObject("daily")
+        val dTimes = d.getJSONArray("time")
+        val dMax = d.getJSONArray("temperature_2m_max")
+        val dMin = d.getJSONArray("temperature_2m_min")
+        val dCode = d.optJSONArray("weather_code")
+        // La previsión es opcional: una entrada nula solo pierde la previsión, no el tiempo actual.
+        val days = runCatching {
+            val l = ArrayList<Day>()
+            for (i in 1 until dTimes.length()) {
+                l += Day(dayName(dTimes.getString(i)), dMin.getDouble(i).roundToInt(), dMax.getDouble(i).roundToInt(), dCode?.optInt(i) ?: 0)
+            }
+            l.toList()
+        }.getOrDefault(emptyList())
+        val hours = runCatching {
+            val l = ArrayList<Hour>()
+            o.optJSONObject("hourly")?.let { hr ->
+                val t = hr.getJSONArray("time")
+                val temp = hr.getJSONArray("temperature_2m")
+                val code = hr.optJSONArray("weather_code")
+                var i = 1
+                while (i < t.length() && l.size < 5) {
+                    l += Hour(t.getString(i).substring(11, 13).toInt(), temp.getDouble(i).roundToInt(), code?.optInt(i) ?: 0)
+                    i += 2
+                }
+            }
+            l.toList()
+        }.getOrDefault(emptyList())
+        return Report(
+            temp = cur.getDouble("temperature_2m").roundToInt(),
+            code = cur.getInt("weather_code"),
+            max = dMax.getDouble(0).roundToInt(),
+            min = dMin.getDouble(0).roundToInt(),
+            rainProb = d.optJSONArray("precipitation_probability_max")?.optInt(0) ?: 0,
+            fetchedAt = now,
+            hours = hours,
+            days = days,
+        )
+    }
+
+    private val DAY_SHORT = arrayOf("dom", "lun", "mar", "mié", "jue", "vie", "sáb")
+
+    /** "2026-10-07" -> "mié" (sin depender del idioma de la JVM). */
+    private fun dayName(date: String): String {
+        val (y, m, d) = date.split("-").map { it.toInt() }
+        val dow = java.util.GregorianCalendar(y, m - 1, d).get(java.util.Calendar.DAY_OF_WEEK)
+        return DAY_SHORT[dow - 1]
     }
 
     fun describe(code: Int): String = when (code) {
@@ -86,13 +143,14 @@ object Weather {
         else -> "Variable"
     }
 
-    private fun icon(code: Int): String = when (code) {
-        0, 1 -> "☀"
-        2 -> "⛅"
-        3, 45, 48 -> "☁"
-        in 51..67, in 80..82 -> "☂"
-        in 71..77, 85, 86 -> "❄"
-        in 95..99 -> "⚡"
-        else -> "·"
+    /** Nombre del icono Lucide (lo dibuja el motor de pantallas; sin emojis). */
+    fun icon(code: Int): String = when (code) {
+        0, 1 -> "sun"
+        2 -> "cloud-sun"
+        45, 48 -> "cloud-fog"
+        in 51..67, in 80..82 -> "cloud-rain"
+        in 71..77, 85, 86 -> "cloud-snow"
+        in 95..99 -> "cloud-lightning"
+        else -> "cloud"
     }
 }

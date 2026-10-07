@@ -11,25 +11,37 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.jarvis.clock.Events
 import com.jarvis.clock.Prefs
+import com.jarvis.clock.design.DesignStore
+import com.jarvis.clock.design.FaceData
+import com.jarvis.clock.design.darken
+import com.jarvis.clock.design.parseHex
+import com.jarvis.clock.design.readableOn
+import com.jarvis.clock.ui.FaceHost
+import com.jarvis.clock.ui.Fonts
 import com.jarvis.clock.ui.Ui
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Pantalla de alarma. El brillo sube poco a poco (efecto amanecer) a la vez
- * que el volumen, y los botones son enormes para acertar medio dormido.
+ * Pantalla de alarma. La zona de arriba la dibuja el motor de pantallas (diseño `alarm_screen`);
+ * los botones son nativos y enormes para acertar medio dormido. El brillo sube poco a poco
+ * (efecto amanecer) a la vez que el volumen. Si el WebView falla, vuelve la zona nativa de siempre.
  */
 class AlarmActivity : Activity() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var time: TextView
+    private var time: TextView? = null
+    private var faceHost: FaceHost? = null
+    private lateinit var label: String
     private val fmt = SimpleDateFormat("HH:mm", Locale.getDefault())
     private val startedAt = System.currentTimeMillis()
 
@@ -37,62 +49,114 @@ class AlarmActivity : Activity() {
         if (e is Events.Event.AlarmStopped) finish()
     }
 
+    private val hostListener = object : FaceHost.Listener {
+        override fun onTap() {}
+        override fun onDoubleTap() {}
+        override fun onLongPress() {}
+        override fun onSwipe(direction: String) {}
+        override fun onPermission() {}
+        override fun onFailure(kind: String, reason: String) { runOnUiThread { rebuildNative() } }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOverLockscreen()
         Ui.immersive(window)
-
-        val label = intent.getStringExtra(EXTRA_LABEL) ?: "Alarma"
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.BLACK)
-            setPadding(Ui.dp(this@AlarmActivity, 24), Ui.dp(this@AlarmActivity, 16), Ui.dp(this@AlarmActivity, 24), Ui.dp(this@AlarmActivity, 16))
-        }
-        time = TextView(this).apply {
-            setTextColor(Color.WHITE)
-            textSize = 96f
-            typeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
-            gravity = Gravity.CENTER
-        }
-        val lbl = TextView(this).apply {
-            text = label
-            setTextColor(Ui.ACCENT)
-            textSize = 30f
-            gravity = Gravity.CENTER
-        }
-        val buttons = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        val snooze = bigButton("Posponer ${Prefs.snoozeMinutes} min", Color.parseColor("#FF263238")) {
-            AlarmRingService.snooze(this); finish()
-        }
-        val dismiss = bigButton("Descartar", Color.parseColor("#FF0277BD")) {
-            AlarmRingService.dismiss(this); finish()
-        }
-        buttons.addView(snooze, LinearLayout.LayoutParams(0, Ui.dp(this, 96), 1f).apply { marginEnd = Ui.dp(this@AlarmActivity, 12) })
-        buttons.addView(dismiss, LinearLayout.LayoutParams(0, Ui.dp(this, 96), 1f))
-
-        root.addView(time)
-        root.addView(lbl, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = Ui.dp(this@AlarmActivity, 28) })
-        root.addView(buttons, LinearLayout.LayoutParams(-1, -2))
-        setContentView(root)
+        label = intent.getStringExtra(EXTRA_LABEL) ?: "Alarma"
+        setContentView(buildRoot(web = true))
         Events.register(listener)
         tick()
     }
 
-    private fun bigButton(text: String, bg: Int, onClick: () -> Unit) = Button(this).apply {
+    private fun rebuildNative() {
+        faceHost?.release()
+        faceHost = null
+        setContentView(buildRoot(web = false))
+    }
+
+    private fun themeColor(o: JSONObject?, key: String, default: Int): Int =
+        runCatching { parseHex(o!!.getString(key)) }.getOrDefault(default)
+
+    private fun buildRoot(web: Boolean): LinearLayout {
+        val dp = { v: Int -> Ui.dp(this, v) }
+        val design = DesignStore.load(this).design
+        val alarm = design.optJSONObject("alarm_screen")
+        val theme = design.optJSONObject("themes")?.optJSONObject(alarm?.optString("theme").orEmpty())
+        val accent = themeColor(theme, "accent", Ui.ACCENT)
+        val bg = theme?.optJSONObject("bg")
+        val rootBg = if (web && bg?.optString("type") == "color") themeColor(bg, "color", Color.BLACK) else Color.BLACK
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(rootBg)
+            setPadding(0, 0, 0, dp(16))
+        }
+
+        // Una excepción inesperada del motor no puede tirar la única pantalla con botones.
+        val top: View = (if (web) runCatching {
+            FaceHost.create(this, hostListener)?.let { host ->
+                faceHost = host
+                host.render(design, JSONObject().put("alarm", true))
+                host.setData(FaceData.build(this, ringingLabel = label))
+                host.view
+            }
+        }.onFailure { faceHost?.release(); faceHost = null }.getOrNull() else null) ?: nativeTop()
+        root.addView(top, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        val snoozeText = alarm?.optString("snooze_label").orEmpty().ifEmpty { "Posponer {min} min" }
+            .replace("{min}", Prefs.snoozeMinutes.toString())
+        val dismissText = alarm?.optString("dismiss_label").orEmpty().ifEmpty { "Descartar" }
+        val snoozeBg = darken(accent, 0.3f)
+        val buttons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(12), dp(24), 0)
+        }
+        buttons.addView(
+            bigButton(snoozeText, snoozeBg, readableOn(snoozeBg)) { AlarmRingService.snooze(this); finish() },
+            LinearLayout.LayoutParams(0, dp(96), 1f).apply { marginEnd = dp(12) },
+        )
+        buttons.addView(
+            bigButton(dismissText, accent, readableOn(accent)) { AlarmRingService.dismiss(this); finish() },
+            LinearLayout.LayoutParams(0, dp(96), 1f),
+        )
+        root.addView(buttons, LinearLayout.LayoutParams(-1, -2))
+        return root
+    }
+
+    /** La zona de arriba de siempre: hora grande y nombre de la alarma. */
+    private fun nativeTop(): View = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER
+        val t = TextView(this@AlarmActivity).apply {
+            setTextColor(Ui.TEXT)
+            textSize = 96f
+            typeface = Fonts.light(this@AlarmActivity)
+            Fonts.tabular(this)
+            gravity = Gravity.CENTER
+        }
+        t.text = fmt.format(Date())
+        time = t
+        addView(t)
+        addView(TextView(this@AlarmActivity).apply {
+            text = label
+            setTextColor(Ui.ACCENT)
+            textSize = 30f
+            gravity = Gravity.CENTER
+        })
+    }
+
+    private fun bigButton(text: String, bg: Int, fg: Int, onClick: () -> Unit) = Button(this).apply {
         this.text = text
         textSize = 24f
-        setTextColor(Color.WHITE)
+        setTextColor(fg)
         setBackgroundColor(bg)
         isAllCaps = false
         setOnClickListener { onClick() }
     }
 
     private fun tick() {
-        time.text = fmt.format(Date())
+        time?.text = fmt.format(Date())
         // Amanecer: el brillo de la pantalla sigue a la rampa de volumen.
         val ramp = (Prefs.alarmRampSeconds * 1000L).coerceAtLeast(1)
         val t = ((System.currentTimeMillis() - startedAt).toFloat() / ramp).coerceIn(0f, 1f)
@@ -118,7 +182,13 @@ class AlarmActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        faceHost?.view?.onResume()
         if (!AlarmRingService.ringing) finish()
+    }
+
+    override fun onPause() {
+        faceHost?.view?.onPause()
+        super.onPause()
     }
 
     @Deprecated("Deprecated in Java")
@@ -129,6 +199,8 @@ class AlarmActivity : Activity() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         Events.unregister(listener)
+        faceHost?.release()
+        faceHost = null
         super.onDestroy()
     }
 

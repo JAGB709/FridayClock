@@ -143,6 +143,6 @@ class HttpServer(
 
     companion object {
         private const val TAG = "HttpServer"
-        private const val MAX_BODY = 8 * 1024 * 1024 // imágenes en base64
+        private const val MAX_BODY = 8 * 1024 * 1024 // fotos en bruto (hasta 8 MB)
     }
 }

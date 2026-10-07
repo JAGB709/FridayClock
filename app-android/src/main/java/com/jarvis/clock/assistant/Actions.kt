@@ -3,11 +3,15 @@ package com.jarvis.clock.assistant
 import android.content.Context
 import android.media.AudioManager
 import com.jarvis.clock.Events
+import com.jarvis.clock.SettingsSchema
 import com.jarvis.clock.alarm.Alarm
 import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.alarm.AlarmStore
 import com.jarvis.clock.bt.BluetoothControl
+import com.jarvis.clock.design.DesignSchema
+import com.jarvis.clock.design.DesignStore
+import com.jarvis.clock.design.FaceData
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
@@ -33,7 +37,12 @@ object Actions {
     fun execute(ctx: Context, a: JSONObject): JSONObject = when (a.optString("type")) {
         "set_alarm" -> {
             val (h, m) = parseTime(a.optString("time")) ?: error("time debe ser HH:MM")
-            val alarm = AlarmScheduler.create(ctx, h, m, Alarm.parseDays(a.opt("days")), a.optString("label", "Alarma"))
+            // Se validan las opciones antes de gastar un id.
+            val draft = Alarm(0, h, m, Alarm.parseDays(a.opt("days")), a.optString("label", "Alarma").ifBlank { "Alarma" })
+                .withOptions(a)
+                .copy(enabled = a.opt("enabled") as? Boolean ?: true)
+            val alarm = draft.copy(id = AlarmStore.newId(ctx))
+            AlarmScheduler.save(ctx, alarm)
             ok().put("alarm", alarm.toJson())
         }
         "cancel_alarm", "delete_alarm" -> {
@@ -54,6 +63,13 @@ object Actions {
                 ?: error("no existe la alarma ${a.optInt("id")}")
             ok().put("alarm", r.toJson())
         }
+        "update_alarm" -> {
+            val cur = AlarmStore.get(ctx, a.optInt("id", -1)) ?: error("no existe la alarma ${a.optInt("id")}")
+            require(!cur.isAbsolute) { "los temporizadores y las pospuestas no se editan" }
+            val n = cur.withPatch(a)
+            AlarmScheduler.save(ctx, n) // guarda y reprograma con la hora nueva
+            ok().put("alarm", n.toJson())
+        }
         "set_timer" -> {
             val secs = a.optLong("seconds").takeIf { it > 0 } ?: error("seconds > 0")
             ok().put("alarm", AlarmScheduler.createTimer(ctx, secs, a.optString("label", "Temporizador")).toJson())
@@ -66,6 +82,43 @@ object Actions {
         "set_volume" -> ok().put("volume", setVolume(ctx, a.optInt("level", 50), 0))
         "set_brightness" -> { Events.post(Events.Event.Brightness(a.optInt("level", 50).coerceIn(1, 100))); ok() }
         "bluetooth" -> bluetooth(ctx, a)
+        "get_settings" -> ok().put("settings", SettingsSchema.valuesJson()).put("schema", SettingsSchema.schemaJson())
+        "set_settings" -> when (val v = SettingsSchema.validate(a.optJSONObject("settings") ?: JSONObject())) {
+            is SettingsSchema.Validation.Invalid ->
+                JSONObject().put("ok", false).put("error", "ajustes no válidos").put("errors", JSONObject(v.errors))
+            is SettingsSchema.Validation.Ok -> {
+                SettingsSchema.apply(v.values)
+                if (v.values.isNotEmpty()) Events.post(Events.Event.SettingsChanged(v.values.keys))
+                ok().put("settings", SettingsSchema.valuesJson())
+            }
+        }
+        "get_design" -> {
+            val l = DesignStore.load(ctx)
+            ok().put("design", l.design).put("saved", l.saved).put("face_version", FaceData.faceVersion(ctx))
+        }
+        "set_design" -> when (val v = DesignSchema.validate(a.optJSONObject("design") ?: JSONObject())) {
+            is DesignSchema.Result.Invalid ->
+                JSONObject().put("ok", false).put("error", "diseño no válido").put("errors", JSONObject(v.errors))
+            is DesignSchema.Result.Ok -> {
+                DesignStore.save(ctx, v.design)
+                Events.post(Events.Event.DesignChanged)
+                ok().put("design", v.design)
+            }
+        }
+        "preview_design" -> when (val v = DesignSchema.validate(a.optJSONObject("design") ?: JSONObject())) {
+            is DesignSchema.Result.Invalid ->
+                JSONObject().put("ok", false).put("error", "diseño no válido").put("errors", JSONObject(v.errors))
+            is DesignSchema.Result.Ok -> {
+                val secs = a.optInt("seconds", 30).coerceIn(5, 120)
+                Events.post(Events.Event.DesignPreview(v.design, secs))
+                ok().put("seconds", secs)
+            }
+        }
+        "reset_design" -> {
+            DesignStore.reset(ctx)
+            Events.post(Events.Event.DesignChanged)
+            ok().put("design", DesignStore.load(ctx).design)
+        }
         else -> JSONObject().put("ok", false).put("error", "acción desconocida: ${a.optString("type")}")
     }
 
@@ -97,12 +150,7 @@ object Actions {
         return target
     }
 
-    fun parseTime(s: String): Pair<Int, Int>? {
-        val m = Regex("^(\\d{1,2})[:.h](\\d{2})$").find(s.trim()) ?: return null
-        val h = m.groupValues[1].toInt()
-        val mi = m.groupValues[2].toInt()
-        return if (h in 0..23 && mi in 0..59) h to mi else null
-    }
+    fun parseTime(s: String): Pair<Int, Int>? = Alarm.parseTime(s)
 
     private fun ok() = JSONObject().put("ok", true)
 }

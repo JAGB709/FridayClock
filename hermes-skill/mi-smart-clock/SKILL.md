@@ -40,8 +40,29 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
    para que el usuario empareje su móvil y suene por el reloj; `bluetooth off` lo apaga;
    `bluetooth status` informa. Tras `speaker`, dile al usuario que busque "Friday" en el
    Bluetooth de su móvil y acepte el emparejamiento.
-7. Otros: `volume 40`, `brightness 20`, `briefing` (buenos días hablado), `listen` (abre el micro).
-7. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
+7. Otros: `volume 40`, `brightness 20` (fija el brillo manual del reloj: manda sobre el del panel hasta que cambie el perfil o el panel cambie un brillo de perfil), `briefing` (buenos días hablado), `listen` (abre el micro).
+8. Ver o cambiar ajustes (posponer, subida de volumen, modo noche, brillo, voz, ciudad):
+   `clock.py settings` · `clock.py settings-set snooze_min=10 night_brightness=5`.
+   Es todo o nada: si un valor no vale, no se cambia ninguno y se devuelve `errors`.
+   En los datos de la carátula (`/face/data`), `weather.icon` es un nombre de icono (por ejemplo `cloud-rain`), no un emoji.
+9. Editar una alarma sin borrarla: `clock.py alarm-update 3 --time 06:45 --max-volume 60`.
+10. Sonidos disponibles para las alarmas: `clock.py sounds`.
+11. Diseño de las pantallas del reloj (temas, rejilla 8×6, perfiles por hora, pantalla de alarma):
+    `clock.py design` · `clock.py design-set diseno.json` · `clock.py design-preview diseno.json --seconds 30`
+    · `clock.py design-preview-cancel`
+    · `clock.py design-reset`. Guardar es todo o nada: si algo no vale, devuelve `errors` por ruta.
+12. Fondos de pantalla subidos: `clock.py backgrounds`.
+    Límites de las fotos: ≤ 8 MB por subida (jpg/png/webp), el reloj las reduce a 1600 px, hasta 60.
+    Un fondo de imagen y el elemento `photos` admiten `fit` (`cover`/`contain`/`fill`), `zoom` (1-3),
+    `pos_x` y `pos_y` (0-100). El elemento `photos` es un carrusel:
+    `{"id":"fotos","type":"photos","x":0,"y":0,"w":8,"h":6,"images":["a.jpg","b.jpg"],"interval_s":10,"transition":"fade","order":"sequential"}`
+    (1-20 fotos, `interval_s` 3-600). Máximo 2 elementos `photos` por pantalla y 1 en la pantalla de alarma.
+    Los diseños admiten elementos solapados: el orden de la lista `elements` es el orden de dibujo
+    (el último queda delante). El fondo de un tema también puede ser un carrusel:
+    `{"type":"photos","images":["a.jpg","b.jpg"],"interval_s":10,"transition":"fade","order":"random","fit":"cover","dim":30,"color":"#000000"}`
+    (1-20 fotos, `interval_s` 3-600, `transition` `fade`/`none`, `order` `sequential`/`random`, `dim` 0-80,
+    más `fit`/`zoom`/`pos_x`/`pos_y`).
+13. Confirma al usuario lo que ha quedado programado usando el JSON devuelto (campo `next`
    es epoch ms del próximo disparo).
 
 ## Pitfalls

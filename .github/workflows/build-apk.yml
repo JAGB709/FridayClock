@@ -38,12 +38,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Puente y skill compilan
         run: |
           python -m py_compile homelab/clock-bridge/bridge.py
           python -m py_compile hermes-skill/mi-smart-clock/scripts/clock.py
+          python -m py_compile homelab/friday-panel/app.py
+      - name: Tests del puente (palabra de activación, enrutado y calculadora)
+        working-directory: homelab/clock-bridge
+        run: |
+          pip install -q pytest
+          pytest -q test_wake.py test_route.py test_calc.py
       - name: Tests de la skill de Hermes
         working-directory: hermes-skill
         run: |
           pip install -q pytest httpx
           pytest -q
+      - name: Tests del panel web
+        working-directory: homelab/friday-panel
+        run: |
+          pip install -q -r requirements.txt pytest
+          pytest -q
+      - name: Motor de pantallas y editor (node) y copia en el panel
+        run: |
+          node --check app-android/src/main/assets/face/face.js
+          node --check homelab/friday-panel/static/pantallas.js
+          node --test app-android/face-tests/*.test.js homelab/friday-panel/tests-js/*.test.js
+          python tools/gen-tokens.py --check
+          python tools/gen-icons.py --check
+          bash tools/sync-face.sh --check

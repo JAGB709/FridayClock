@@ -65,6 +65,14 @@ def main():
         e = sub.add_parser(name)
         e.add_argument("id", type=int)
 
+    u = sub.add_parser("alarm-update", help="editar alarma (solo lo indicado)")
+    u.add_argument("id", type=int)
+    u.add_argument("--time")
+    u.add_argument("--label")
+    u.add_argument("--days")
+    u.add_argument("--max-volume", type=int)
+    u.add_argument("--snooze-min", type=int)
+
     sub.add_parser("alarm-stop", help="apagar la alarma que está sonando")
     sub.add_parser("alarm-snooze", help="posponer la alarma que está sonando")
 
@@ -95,6 +103,21 @@ def main():
     sub.add_parser("briefing", help="buenos días: hora, tiempo y resumen por voz")
     sub.add_parser("listen", help="abrir el micro del reloj")
 
+    sub.add_parser("settings", help="ver ajustes y su esquema")
+    st = sub.add_parser("settings-set", help="cambiar ajustes: clave=valor ...")
+    st.add_argument("pairs", nargs="+", help="p.ej. snooze_min=10 wake_word=false city=Sevilla")
+    sub.add_parser("sounds", help="sonidos de alarma disponibles")
+
+    sub.add_parser("design", help="ver el diseño de pantallas del reloj")
+    ds = sub.add_parser("design-set", help="guardar un diseño desde un archivo JSON")
+    ds.add_argument("file")
+    dp = sub.add_parser("design-preview", help="probar un diseño (archivo JSON) en el reloj sin guardarlo")
+    dp.add_argument("file")
+    dp.add_argument("--seconds", type=int, default=30)
+    sub.add_parser("design-preview-cancel", help="cancelar la prueba de diseño en curso")
+    sub.add_parser("design-reset", help="restaurar el diseño inicial")
+    sub.add_parser("backgrounds", help="fondos de pantalla subidos")
+
     x = p.parse_args()
     if x.cmd == "status":
         return call("GET", "/status")
@@ -113,6 +136,44 @@ def main():
         return call("POST", "/alarm", body)
     if x.cmd in ("alarm-enable", "alarm-disable"):
         return call("POST", "/alarm", {"action": x.cmd.split("-")[1], "id": x.id})
+    if x.cmd == "alarm-update":
+        body = {"action": "update", "id": x.id}
+        for k, v in (("time", x.time), ("label", x.label), ("days", x.days),
+                     ("max_volume", x.max_volume), ("snooze_min", x.snooze_min)):
+            if v is not None:
+                body[k] = v
+        return call("POST", "/alarm", body)
+    if x.cmd == "settings":
+        return call("GET", "/settings")
+    if x.cmd == "settings-set":
+        patch = {}
+        for pair in x.pairs:
+            k, _, v = pair.partition("=")
+            try:
+                patch[k] = json.loads(v)      # números, true/false
+            except ValueError:
+                patch[k] = v                  # texto
+        return call("PUT", "/settings", patch)
+    if x.cmd == "sounds":
+        return call("GET", "/sounds")
+    if x.cmd == "design":
+        return call("GET", "/design")
+    if x.cmd in ("design-set", "design-preview"):
+        try:
+            with open(x.file, encoding="utf-8") as f:
+                design = json.load(f)
+        except (OSError, ValueError) as e:
+            print(json.dumps({"ok": False, "error": f"no se pudo leer {x.file}: {e}"}, ensure_ascii=False, indent=2))
+            return 1
+        if x.cmd == "design-set":
+            return call("PUT", "/design", design)
+        return call("POST", "/design/preview", {"design": design, "seconds": x.seconds})
+    if x.cmd == "design-preview-cancel":
+        return call("DELETE", "/design/preview")
+    if x.cmd == "design-reset":
+        return call("POST", "/design/reset", {})
+    if x.cmd == "backgrounds":
+        return call("GET", "/backgrounds")
     if x.cmd == "alarm-stop":
         return call("POST", "/alarm", {"action": "stop"})
     if x.cmd == "alarm-snooze":
