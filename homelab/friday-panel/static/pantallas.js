@@ -230,10 +230,12 @@ function elementsPanel() {
   const sel = list.find((e) => e.id === dz.selected);
   return h("div", { class: "card" },
     h("h2", {}, "Elementos"),
-    h("p", { class: "muted" }, "Toca un elemento en la vista previa o en la lista. Arrastra su esquina azul para cambiar el tamaño."),
+    h("p", { class: "muted" }, "Toca un elemento en la vista previa o en la lista; vuelve a tocar el mismo sitio para elegir el de debajo. Arrastra su esquina azul para cambiar el tamaño."),
     list.length
-      ? list.map((e) => h("div", { class: "elrow" + (e.id === dz.selected ? " on" : ""), onclick: () => selectElement(e.id) },
-        h("span", {}, typeInfo(e.type).label + " · " + e.id), h("span", { class: "muted" }, e.w + "×" + e.h + " en " + e.x + "," + e.y)))
+      ? list.slice().reverse().map((e, i) => h("div", { class: "elrow" + (e.id === dz.selected ? " on" : ""), onclick: () => selectElement(e.id) },
+        h("span", {}, typeInfo(e.type).label + " · " + e.id),
+        h("span", { class: "muted" },
+          (list.length > 1 && i === 0 ? "delante · " : list.length > 1 && i === list.length - 1 ? "al fondo · " : "") + e.w + "×" + e.h + " en " + e.x + "," + e.y)))
       : h("p", { class: "muted" }, "Sin elementos."),
     addMenu(),
     sel ? elementOptions(sel) : null);
@@ -250,10 +252,9 @@ function addElement(type) {
   const rows = currentRows();
   if (list.length >= 12) { toast("Máximo 12 elementos por pantalla", true); return; }
   const t = EditorCore.TYPES[type];
-  let size = { w: t.w, h: t.h };
+  const size = { w: t.w, h: Math.min(t.h, rows) };
   let spot = EditorCore.findFreeSpot(list, size.w, size.h, rows);
-  if (!spot) { size = { w: 1, h: 1 }; spot = EditorCore.findFreeSpot(list, 1, 1, rows); }
-  if (!spot) { toast("No hay hueco libre en la rejilla", true); return; }
+  if (!spot) spot = { x: 0, y: 0 }; // sin hueco libre: se coloca encima de lo que haya
   const id = EditorCore.uniqueId(t.label, list.map((e) => e.id));
   list.push(EditorCore.newElement(type, id, spot, size));
   if (type === "photos") list[list.length - 1].images = dz.backgrounds.slice(0, 1).map((b) => b.name);
@@ -270,8 +271,6 @@ function selectElement(id) {
 function setRect(e, patch) {
   const cand = Object.assign({ x: e.x, y: e.y, w: e.w, h: e.h }, patch);
   if (!EditorCore.inBounds(cand, currentRows())) { toast("Se sale de la rejilla", true); return false; }
-  const other = EditorCore.collides(currentElements(), cand, e.id);
-  if (other) { toast("Se solapa con " + other.id, true); return false; }
   Object.assign(e, patch);
   touch();
   paintSub(); // los números ya salieron del foco (onchange): se refresca la lista
@@ -282,10 +281,10 @@ function resizeElement(id, w, hh) {
   const e = currentElements().find((x) => x.id === id);
   if (!e) return;
   const cand = { x: e.x, y: e.y, w, h: hh };
-  if (EditorCore.inBounds(cand, currentRows()) && !EditorCore.collides(currentElements(), cand, id)) {
+  if (EditorCore.inBounds(cand, currentRows())) {
     e.w = w; e.h = hh; touch();
   } else {
-    toast("No cabe ahí: se solaparía", true);
+    toast("Se sale de la rejilla", true);
     pushPreview();
   }
   paintSub();
@@ -297,10 +296,10 @@ function moveElement(id, x, y) {
   if (!e) return;
   dz.selected = id;
   const cand = { x, y, w: e.w, h: e.h };
-  if (EditorCore.inBounds(cand, currentRows()) && !EditorCore.collides(currentElements(), cand, id)) {
+  if (EditorCore.inBounds(cand, currentRows())) {
     e.x = x; e.y = y; touch();
   } else {
-    toast("No cabe ahí: se solaparía", true);
+    toast("Se sale de la rejilla", true);
     pushPreview();
   }
   paintSub();
@@ -363,14 +362,31 @@ function photoListField(e, f) {
 }
 
 
+function reorder(fn) {
+  const list = currentElements();
+  const e = list.find((x) => x.id === dz.selected);
+  if (!e) return;
+  const next = fn(list, e.id);
+  list.splice(0, list.length, ...next); // se reordena la misma lista del diseño
+  touch(); paintSub();
+}
+
 function elementOptions(e) {
   const rows = currentRows();
+  const els = currentElements();
+  const isLast = els[els.length - 1] === e, isFirst = els[0] === e, solo = els.length < 2;
+  const lbtn = (txt, fn, off) => { const b = btn(txt, () => reorder(fn), "small ghost"); if (off) b.disabled = true; return b; };
   const pos = (key, min, max) => numberField(key.toUpperCase(), e[key], min, max, (v) => { if (!setRect(e, { [key]: v })) paintSub(); });
   return h("div", { class: "opt" },
     h("h2", {}, typeInfo(e.type).label),
     h("div", { class: "grid4" }, pos("x", 0, 7), pos("y", 0, rows - 1), pos("w", 1, 8), pos("h", 1, rows)),
     selectField("Color", EditorCore.COLOR_OPTIONS, e.color || "fg", (v) => { e.color = v; touch(); }),
     selectField("Alineación", [["left", "Izquierda"], ["center", "Centro"], ["right", "Derecha"]], e.align || "center", (v) => { e.align = v; touch(); }),
+    h("div", { class: "row layers" },
+      lbtn("Traer al frente", EditorCore.bringToFront, solo || isLast),
+      lbtn("Subir una capa", EditorCore.moveUp, solo || isLast),
+      lbtn("Bajar una capa", EditorCore.moveDown, solo || isFirst),
+      lbtn("Enviar al fondo", EditorCore.sendToBack, solo || isFirst)),
     ...typeInfo(e.type).fields.map((f) => typedField(e, f)),
     btn("Borrar elemento", () => {
       const list = currentElements();
@@ -437,10 +453,12 @@ function subTheme() {
 
 function bgFields(t) {
   const bg = t.bg;
-  const kind = selectField("Tipo de fondo", [["color", "Color liso"], ["gradient", "Degradado"], ["image", "Imagen"]], bg.type, (v) => {
+  const kind = selectField("Tipo de fondo", [["color", "Color liso"], ["gradient", "Degradado"], ["image", "Imagen"], ["photos", "Carrusel de fotos"]], bg.type, (v) => {
     const base = bg.color || bg.from || "#000000";
     if (v === "color") t.bg = { type: "color", color: base };
     else if (v === "gradient") t.bg = { type: "gradient", from: base, to: bg.to || "#ffffff", angle: bg.angle === undefined ? 160 : bg.angle };
+    else if (v === "photos") t.bg = { type: "photos", images: dz.backgrounds.slice(0, 1).map((b) => b.name), interval_s: 10,
+      transition: "fade", order: "sequential", fit: "cover", zoom: 1, pos_x: 50, pos_y: 50, dim: 0, color: base };
     else t.bg = { type: "image", image: dz.backgrounds.length ? dz.backgrounds[0].name : "", dim: 30, color: base };
     touch(); paintSub();
   });
@@ -450,6 +468,16 @@ function bgFields(t) {
       colorField("Desde", bg.from, (v) => { bg.from = v; touch(); }),
       colorField("Hasta", bg.to, (v) => { bg.to = v; touch(); }),
       numberField("Ángulo (0–359)", bg.angle === undefined ? 160 : bg.angle, 0, 359, (v) => { bg.angle = v; touch(); })];
+  }
+  if (bg.type === "photos") {
+    return [kind,
+      photoListField(bg, { key: "images", label: "Fotos del carrusel" }),
+      numberField("Segundos entre fotos (3–600)", bg.interval_s === undefined ? 10 : bg.interval_s, 3, 600, (v) => { bg.interval_s = v; touch(); }),
+      selectField("Transición", [["fade", "Fundido"], ["none", "Corte directo"]], bg.transition || "fade", (v) => { bg.transition = v; touch(); }),
+      selectField("Orden", [["sequential", "En orden"], ["random", "Al azar"]], bg.order || "sequential", (v) => { bg.order = v; touch(); }),
+      photoFitBlock(bg),
+      numberField("Oscurecer las fotos (0–80 %)", bg.dim === undefined ? 0 : bg.dim, 0, 80, (v) => { bg.dim = v; touch(); }),
+      colorField("Color si falta la foto", bg.color || "#000000", (v) => { bg.color = v; touch(); })];
   }
   return [kind, imagePicker(bg),
     numberField("Oscurecer la imagen (0–80 %)", bg.dim === undefined ? 0 : bg.dim, 0, 80, (v) => { bg.dim = v; touch(); }),
@@ -559,12 +587,14 @@ function imagePicker(bg) {
 
 async function deleteBackground(name) {
   const used = Object.values(form.current.themes).filter((t) => t.bg.type === "image" && t.bg.image === name).map((t) => t.name);
+  const bgCarousels = Object.values(form.current.themes).filter((t) => t.bg.type === "photos" && (t.bg.images || []).includes(name)).map((t) => t.name);
   const carousels = [];
   const scanPhotos = (label, els) => (els || []).forEach((el) => { if (el.type === "photos" && (el.images || []).includes(name)) carousels.push(`${label} (${el.id})`); });
   Object.values(form.current.screens).forEach((sc) => scanPhotos(sc.name, sc.elements));
   scanPhotos("pantalla de alarma", form.current.alarm_screen && form.current.alarm_screen.elements);
   let msg = `¿Borrar ${name}?`;
   if (used.length) msg += ` Lo usan los temas: ${used.join(", ")}. Se verá su color de respaldo.`;
+  if (bgCarousels.length) msg += ` Lo usan los carruseles de fondo de: ${bgCarousels.join(", ")}. Se saltará su foto.`;
   if (carousels.length) msg += ` Lo usan los carruseles de las pantallas: ${carousels.join(", ")}. Se saltará su foto.`;
   if (!(await confirmInPage(msg, "Borrar"))) return;
   const r = await api("DELETE", `/api/backgrounds/${encodeURIComponent(name)}`);
