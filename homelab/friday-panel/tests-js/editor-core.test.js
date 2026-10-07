@@ -57,3 +57,23 @@ test("todos los tipos tienen etiqueta, tamaño y campos", () => {
   }
   assert.deepEqual(Object.keys(E.TYPES).sort(), ["clock", "date", "forecast", "next_alarm", "text", "weather_now"]);
 });
+
+test("downscaleSize: reduce el lado largo y no amplia", () => {
+  assert.deepEqual(E.downscaleSize(4000, 3000, 1600), { w: 1600, h: 1200 });
+  assert.deepEqual(E.downscaleSize(3000, 4000, 1600), { w: 1200, h: 1600 });
+  assert.deepEqual(E.downscaleSize(800, 480, 1600), { w: 800, h: 480 });
+  assert.deepEqual(E.downscaleSize(20000, 5, 1600), { w: 1600, h: 1 });
+});
+
+test("photos: plantilla por defecto", () => {
+  const e = E.newElement("photos", "galeria", { x: 0, y: 0 });
+  assert.equal(e.type, "photos");
+  assert.deepEqual(e.images, []);
+  assert.equal(e.interval_s, 10);
+  assert.equal(e.transition, "fade");
+  assert.equal(e.order, "sequential");
+  assert.equal(e.fit, "cover");
+  assert.equal(e.zoom, 1);
+  assert.equal(e.w, 4);
+  assert.equal(e.h, 3);
+});

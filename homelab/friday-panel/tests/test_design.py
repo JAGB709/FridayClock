@@ -49,8 +49,11 @@ def test_face_data_is_proxied(client):
 def test_background_upload_list_serve_delete(client):
     assert client.post("/api/backgrounds", params={"name": "virus.exe"}, content=b"x").status_code == 400
     assert client.post("/api/backgrounds", params={"name": "playa.jpg"}, content=b"").status_code == 400
-    r = client.post("/api/backgrounds", params={"name": "grande.jpg"}, content=b"x" * (2 * 1024 * 1024 + 1))
-    assert r.status_code == 413
+    r = client.post("/api/backgrounds", params={"name": "grande.jpg"}, content=b"x" * (8 * 1024 * 1024 + 1))
+    assert r.status_code == 413 and "8 MB" in r.text
+    r = client.post("/api/backgrounds", params={"name": "mediana.jpg"}, content=b"\xff\xd8" + b"x" * (3 * 1024 * 1024))
+    assert r.status_code == 200
+    assert client.delete("/api/backgrounds/mediana.jpg").status_code == 200
     r = client.post("/api/backgrounds", params={"name": "playa.jpg"}, content=b"\xff\xd8fake")
     assert r.status_code == 200 and r.json()["name"] == "playa.jpg"
     assert client.get("/api/backgrounds").json()["backgrounds"][0]["name"] == "playa.jpg"

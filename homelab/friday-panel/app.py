@@ -41,7 +41,7 @@ QUICK_ACTIONS = {
 FACE_FILES = ("index.html", "face.css", "face-core.js", "face.js")
 BG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 BG_MIME = {"image/jpeg", "image/png", "image/webp"}
-MAX_BG_BYTES = 2 * 1024 * 1024
+MAX_BG_BYTES = 8 * 1024 * 1024
 
 
 def face_version(face_dir: Path) -> str:
@@ -253,12 +253,12 @@ def create_app(cfg: Config) -> FastAPI:
         except ValueError:
             return _error(400, "Content-Length no válido")
         if content_length > MAX_BG_BYTES:
-            return _error(413, "La imagen supera 2 MB")
+            return _error(413, "La imagen supera 8 MB")
         data = await request.body()
         if not data:
             return _error(400, "Archivo vacío")
         if len(data) > MAX_BG_BYTES:
-            return _error(413, "La imagen supera 2 MB")
+            return _error(413, "La imagen supera 8 MB")
         return await clock("POST", "/backgrounds", content=data, params={"name": name}, timeout=UPLOAD_TIMEOUT_S)
 
     @app.delete("/api/backgrounds/{name}")

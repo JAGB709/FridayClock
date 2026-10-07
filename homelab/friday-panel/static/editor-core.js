@@ -36,6 +36,17 @@
       label: "Próxima alarma", w: 4, h: 1, defaults: { show_label: true },
       fields: [{ key: "show_label", kind: "bool", label: "Mostrar el nombre de la alarma" }],
     },
+    photos: {
+      label: "Fotos", w: 4, h: 3,
+      defaults: { images: [], interval_s: 10, transition: "fade", order: "sequential", fit: "cover", zoom: 1, pos_x: 50, pos_y: 50 },
+      fields: [
+        { key: "images", kind: "photolist", label: "Fotos del carrusel" },
+        { key: "interval_s", kind: "number", label: "Segundos entre fotos (3–600)", min: 3, max: 600 },
+        { key: "transition", kind: "select", label: "Transición", options: [["fade", "Fundido"], ["none", "Corte directo"]] },
+        { key: "order", kind: "select", label: "Orden", options: [["sequential", "En orden"], ["random", "Al azar"]] },
+        { key: "fit", kind: "photofit", label: "Ajuste de la foto" },
+      ],
+    },
     text: {
       label: "Texto", w: 8, h: 1, defaults: { mode: "fixed", text: "Hola" },
       fields: [
@@ -97,7 +108,17 @@
     return e;
   }
 
+  var PHOTO_SIDE = 1600;
+
+  function downscaleSize(w, h, maxSide) {
+    var side = Math.max(w, h);
+    if (side <= maxSide) return { w: w, h: h };
+    var k = maxSide / side;
+    return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)) };
+  }
+
   return {
+    PHOTO_SIDE: PHOTO_SIDE, downscaleSize: downscaleSize,
     COLS: COLS, TYPES: TYPES, COLOR_OPTIONS: COLOR_OPTIONS, overlaps: overlaps, inBounds: inBounds,
     collides: collides, findFreeSpot: findFreeSpot, slug: slug, uniqueId: uniqueId, newElement: newElement,
   };
