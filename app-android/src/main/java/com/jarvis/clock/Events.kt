@@ -21,6 +21,7 @@ object Events {
         object AlarmsChanged : Event()
         data class AlarmRinging(val alarmId: Int, val label: String) : Event()
         object AlarmStopped : Event()
+        /** Valor manual de brillo: manda en el perfil actual hasta que cambie el perfil o el panel cambie un brillo. */
         data class Brightness(val percent: Int) : Event()
         data class BluetoothDiscoverable(val seconds: Int) : Event()
         /** Ajustes cambiados por la API: la UI vuelve a aplicar lo que dependa de ellos. */

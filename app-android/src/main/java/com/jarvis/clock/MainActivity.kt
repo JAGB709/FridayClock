@@ -43,6 +43,7 @@ import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.assistant.Actions
 import com.jarvis.clock.assistant.Assistant
+import com.jarvis.clock.design.Brightness
 import com.jarvis.clock.design.DesignSchema
 import com.jarvis.clock.design.DesignStore
 import com.jarvis.clock.design.FaceData
@@ -94,7 +95,6 @@ class MainActivity : Activity() {
 
     private var night = false
     private var wakeUntil = 0L
-    private var brightnessOverride: Int? = null
     private var faceHost: FaceHost? = null
     private var cachedDesign: JSONObject? = null
     private var previewDesign: JSONObject? = null
@@ -159,6 +159,7 @@ class MainActivity : Activity() {
         Ui.immersive(window)
         maybeRecoverFace()
         faceHost?.view?.onResume()
+        applyNightMode() // recoge el brillo manual fijado en Ajustes
         tickMinute()
         refreshWeather()
         refreshNextAlarm()
@@ -426,8 +427,17 @@ class MainActivity : Activity() {
         bar.alpha = if (night) 0.15f else 1f
         (host.view.layoutParams as FrameLayout.LayoutParams).bottomMargin = if (showBar) Ui.dp(this, 56) else 0
         host.view.requestLayout()
-        val pct = brightnessOverride ?: if (profileNight && awake) wakeBrightness(design) else profile.optInt("brightness", 70)
-        window.attributes = window.attributes.apply { screenBrightness = pct.coerceIn(1, 100) / 100f }
+        val profileId = profile.optString("id")
+        // El manual se valida contra el diseño guardado y el perfil programado, nunca contra una vista previa.
+        val saved = cachedDesign ?: DesignStore.load(this).design.also { cachedDesign = it }
+        val scheduledId = DesignSchema.activeProfile(saved, minuteOfDay())?.optString("id").orEmpty()
+        val stored = Prefs.manualBrightness
+        var manual = Brightness.valid(stored, scheduledId, saved)
+        if (stored != null && manual == null && previewDesign == null) Brightness.clearManual()
+        if (previewDesign != null && profileId != scheduledId) manual = null
+        val base = if (profileNight && awake && manual?.profileId != profileId) wakeBrightness(design) else profile.optInt("brightness", 70)
+        val pct = Brightness.effective(base, manual, profileId)
+        window.attributes = window.attributes.apply { screenBrightness = pct / 100f }
         val key = profile.optString("id") + "|" + design.toString().hashCode()
         if (key != shownKey) {
             shownKey = key
@@ -480,7 +490,7 @@ class MainActivity : Activity() {
         nextAlarm.setTextColor(alarmColor)
         (nextAlarm.tag as? String)?.let { setIconText(nextAlarm, nextAlarm.text.toString(), it, alarmColor) }
         bar.alpha = if (night) 0.15f else 1f
-        val pct = brightnessOverride ?: if (night) Prefs.nightBrightness else Prefs.dayBrightness
+        val pct = Prefs.manualBrightness?.percent ?: if (night) Prefs.nightBrightness else Prefs.dayBrightness
         window.attributes = window.attributes.apply { screenBrightness = pct / 100f }
     }
 
@@ -537,10 +547,10 @@ class MainActivity : Activity() {
             Event.AlarmsChanged -> { refreshNextAlarm(); pushFaceData() }
             is Event.AlarmRinging -> { handler.removeCallbacks(endPreview); endPreview.run(); runCatching { startActivity(AlarmActivity.intent(this, e.label)) } }
             Event.AlarmStopped -> { refreshNextAlarm(); pushFaceData() }
-            is Event.Brightness -> { brightnessOverride = e.percent; applyNightMode() }
+            is Event.Brightness -> { Brightness.setManual(this, e.percent, minuteOfDay()); applyNightMode() }
             is Event.SettingsChanged -> {
                 // Un brillo nuevo desde el panel manda sobre un /brightness puntual anterior.
-                if (e.keys.any { it.endsWith("brightness") }) brightnessOverride = null
+                if (e.keys.any { it.endsWith("brightness") }) Brightness.clearManual()
                 cachedDesign = null
                 shownKey = null
                 applyNightMode()

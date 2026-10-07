@@ -11,6 +11,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -19,7 +20,11 @@ import com.jarvis.clock.Prefs
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.assistant.Assistant
 import com.jarvis.clock.assistant.Backend
+import com.jarvis.clock.design.Brightness
+import com.jarvis.clock.design.DesignSchema
+import com.jarvis.clock.design.DesignStore
 import com.jarvis.clock.server.NetUtil
+import java.util.Calendar
 import kotlin.concurrent.thread
 
 /** Ajustes: lo que antes estaba hardcodeado (token, backend, ciudad...) ahora se edita aquí. */
@@ -76,6 +81,7 @@ class SettingsActivity : Activity() {
         }
 
         section("Pantalla")
+        brightnessRow()
         number("Modo noche desde (hora)", Prefs.nightStartHour) { Prefs.nightStartHour = it }
         number("Modo noche hasta (hora)", Prefs.nightEndHour) { Prefs.nightEndHour = it }
         number("Brillo de noche (%)", Prefs.nightBrightness) { Prefs.nightBrightness = it }
@@ -167,6 +173,60 @@ class SettingsActivity : Activity() {
         text = label; isAllCaps = false
         setOnClickListener { onClick() }
     }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = Ui.dp(this@SettingsActivity, 6) })
+
+    private fun minuteOfDay(): Int {
+        val c = Calendar.getInstance()
+        return c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
+    }
+
+    /** Brillo efectivo ahora: el manual si sigue vigente, si no el del perfil programado. */
+    private fun currentBrightness(): Int {
+        val saved = DesignStore.load(this).design
+        val profile = DesignSchema.activeProfile(saved, minuteOfDay())
+        val id = profile?.optString("id").orEmpty()
+        val manual = Brightness.valid(Prefs.manualBrightness, id, saved)
+        return Brightness.effective(profile?.optInt("brightness", 70) ?: 70, manual, id)
+    }
+
+    private fun applyNow(pct: Int) {
+        window.attributes = window.attributes.apply { screenBrightness = pct / 100f }
+    }
+
+    /** Deslizador de brillo actual: al soltar guarda el valor manual y lo aplica; el botón vuelve al del panel. */
+    private fun brightnessRow() {
+        form.addView(TextView(this).apply {
+            text = "Brillo actual"; textSize = 14f; setTextColor(Ui.DIM); typeface = Fonts.regular(this@SettingsActivity)
+        })
+        val value = TextView(this).apply {
+            textSize = 16f; setTextColor(Ui.TEXT); typeface = Fonts.regular(this@SettingsActivity)
+        }
+        val initial = currentBrightness()
+        value.text = "$initial %"
+        val bar = SeekBar(this).apply {
+            max = 99 // 0..99 equivale a 1..100 %
+            progress = initial - 1
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) { value.text = "${p + 1} %" }
+                override fun onStartTrackingTouch(sb: SeekBar) {}
+                override fun onStopTrackingTouch(sb: SeekBar) {
+                    val pct = sb.progress + 1
+                    Brightness.setManual(this@SettingsActivity, pct, minuteOfDay())
+                    applyNow(pct)
+                    value.text = "$pct %"
+                }
+            })
+        }
+        form.addView(bar, LinearLayout.LayoutParams(-1, Ui.dp(this, 48)))
+        form.addView(value)
+        button("Volver al brillo del panel") {
+            Brightness.clearManual()
+            val pct = currentBrightness()
+            bar.progress = pct - 1
+            value.text = "$pct %"
+            applyNow(pct)
+            toast("Brillo del panel restaurado")
+        }
+    }
 
     private fun toast(m: String) = Toast.makeText(this, m, Toast.LENGTH_LONG).show()
 }

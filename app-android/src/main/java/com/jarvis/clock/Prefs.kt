@@ -98,6 +98,22 @@ object Prefs {
         get() = sp.getInt("day_brightness", 70)
         set(v) = sp.edit().putInt("day_brightness", v.coerceIn(1, 100)).apply()
 
+    /** Brillo fijado a mano en el reloj (persistente); ver [com.jarvis.clock.design.Brightness]. */
+    var manualBrightness: com.jarvis.clock.design.Brightness.Manual?
+        get() {
+            if (!sp.contains("manual_brightness")) return null
+            return com.jarvis.clock.design.Brightness.Manual(
+                sp.getInt("manual_brightness", 70), sp.getString("manual_brightness_profile", "") ?: "",
+                sp.getInt("manual_brightness_stamp", 0))
+        }
+        set(v) {
+            val e = sp.edit()
+            if (v == null) e.remove("manual_brightness").remove("manual_brightness_profile").remove("manual_brightness_stamp")
+            else e.putInt("manual_brightness", v.percent.coerceIn(1, 100)).putString("manual_brightness_profile", v.profileId)
+                .putInt("manual_brightness_stamp", v.stamp)
+            e.apply()
+        }
+
     /** Tras una respuesta que acaba en pregunta, vuelve a escuchar sin pulsar. */
     var followUp: Boolean
         get() = sp.getBoolean("follow_up", true)
