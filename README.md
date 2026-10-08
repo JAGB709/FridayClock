@@ -239,6 +239,17 @@ Variables de entorno (`.env`):
 Abre `http://<ip-tailscale-homelab>:8770` en el móvil. Si el reloj está apagado o sin
 red, el panel lo dice y no guarda nada; las alarmas siguen sonando igual.
 
+**Estructura del panel.** Es una aplicación de móvil primero con cuatro pestañas, todas con iconos Lucide y el sistema de diseño Obsidiana (tokens e Inter compartidos con el reloj, ver «Sistema de diseño»):
+
+- **Inicio**: el reloj en vivo, con la misma vista que muestra el reloj ahora mismo, y el resumen de la próxima alarma.
+- **Alarmas**: lista de tarjetas con interruptor, un botón flotante **+** para crear y, al crear o editar, una rueda de hora (`static/wheel-core.js`) para elegir la hora con el dedo.
+- **Pantallas**: el editor del diseño con la vista previa fija arriba, que sigue visible mientras se edita, y cuatro secciones debajo.
+- **Ajustes**: ajustes del reloj agrupados en tarjetas.
+
+Los componentes comunes (pestañas, tarjetas, interruptores, avisos) están en `static/ui.js` y usan solo los tokens de `tokens.css`; no hay colores literales en `styles.css`.
+
+**Pruebas que protegen el diseño.** `homelab/friday-panel/tests/test_design_system.py` comprueba que los tokens e iconos generados están al día, el contraste mínimo de los pares declarados, que `static/` no contiene emojis ni pictogramas (incluso escapados), que el CSS solo usa tokens de color y que todo icono usado existe en el sprite. La rueda de hora tiene sus pruebas en `homelab/friday-panel/tests-js/wheel-core.test.js`. Todo se ejecuta en la CI.
+
 **Fin de la Parte A.** Ya tienes cerebro (Qwen+Hermes), voz (Whisper+Piper) y red (Tailscale).
 
 ---
@@ -370,7 +381,7 @@ La carátula y la pantalla de alarma se describen en un diseño (JSON): **temas*
 fondo liso, degradado o imagen), **pantallas** en una rejilla de 8×6 con hora, fecha, tiempo,
 previsión, próxima alarma y texto o frase del día, y **perfiles** por hora (Mañana, Día, Noche…)
 con su tema, sus pantallas, rotación y brillo. Se edita desde la pestaña **Pantallas** del panel
-web, con una vista previa idéntica a la del reloj y un botón **▶ Probar** que lo muestra 30 s en el
+web, con una vista previa idéntica a la del reloj y un botón **Probar** que lo muestra 30 s en el
 reloj sin guardarlo. Si el `WebView` del reloj fallase, vuelve la carátula nativa de siempre; las
 alarmas no dependen de él.
 
@@ -468,7 +479,7 @@ Una sola fuente de verdad para colores, tipografía e iconos, compartida por la 
 - **Tipografía**: Inter (Light, Regular y SemiBold, licencia OFL) en `app-android/src/main/assets/face/fonts/`; el panel la sirve desde `/face/fonts/`.
 - **Iconos**: Lucide, en `design-system/icons/`. `python tools/gen-icons.py` genera `icons.js` y los recursos nativos; `--check` verifica que están al día.
 - **Copia al panel**: tras regenerar, ejecuta `bash tools/sync-face.sh` (`--check` lo verifica). La CI ejecuta los tres `--check`.
-- **Cero emojis**: se aplica al reloj, al motor y al sistema de diseño (interfaz, datos y textos hablados; todo icono es un icono Lucide por nombre). El panel web aún conserva algunos emojis hasta el subproyecto 4c.
+- **Cero emojis**: se aplica al reloj, al motor y al sistema de diseño (interfaz, datos y textos hablados; todo icono es un icono Lucide por nombre). También rige para el panel web: ningún emoji ni pictograma en `homelab/friday-panel/static/`; los iconos son Lucide por nombre.
 - **Contrato de `/face/data`**: el campo `icon` (por ejemplo en `weather`) pasa a ser un nombre de icono (`sun`, `cloud-rain`...) que el motor dibuja con Lucide; antes era un emoji.
 - **Temas**: el diseño trae por defecto dos temas, Obsidiana Día y Obsidiana Noche, basados en los tokens.
 - **Regla de brillo**: por defecto manda el brillo del panel (el del perfil activo). Si se cambia el brillo en el reloj (Ajustes o `POST /brightness`), ese valor manual manda y se conserva hasta que cambie el perfil activo o hasta que el panel cambie el brillo de un perfil. El botón "Volver al brillo del panel" en Ajustes del reloj borra el valor manual. `POST /brightness` aplica exactamente la misma regla que el deslizador. Una vista previa no borra el valor manual: solo lo ignora mientras el perfil previsualizado difiere del programado. Con un perfil de noche, tocar la pantalla la despierta al brillo del primer perfil que no sea de noche, salvo que haya un valor manual vigente para el perfil de noche. La rampa de amanecer de la alarma no cambia.

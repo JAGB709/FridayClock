@@ -65,6 +65,8 @@ jobs:
         run: |
           node --check app-android/src/main/assets/face/face.js
           node --check homelab/friday-panel/static/pantallas.js
+          node --check homelab/friday-panel/static/ui.js
+          node --check homelab/friday-panel/static/wheel-core.js
           node --test app-android/face-tests/*.test.js homelab/friday-panel/tests-js/*.test.js
           python tools/gen-tokens.py --check
           python tools/gen-icons.py --check
