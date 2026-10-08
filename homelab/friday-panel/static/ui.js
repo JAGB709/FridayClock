@@ -117,6 +117,100 @@ function switchRow(label, checked, onchange, key) {
     h("input", { type: "checkbox", role: "switch", checked: !!checked, onchange: (ev) => onchange(ev.target.checked) }));
 }
 
+/* Rueda de hora: dos columnas (horas 00-23 y minutos 00-59) con scroll-snap y filas de
+   48 px; se ven 5 filas y la central (resaltada) es la elegida. La lógica de valores e
+   índices vive en wheel-core.js. Avisa con onChange("HH:MM") cuando el scroll se detiene
+   (80 ms sin eventos) o al usar el teclado: flechas +-1, RePág/AvPág +-5 (horas) o
+   +-10 (minutos), Inicio/Fin a los extremos. Un valor no válido empieza en 07:00.
+   El nodo devuelto tiene setValue("HH:MM") para sincronizarlo desde fuera. */
+let wheelSeq = 0;
+function timeWheel(value, onChange) {
+  const W = window.WheelCore;
+  const ROW = 48;
+  const start = W.parseTime(value) || { h: 7, m: 0 };
+  const uid = "wheel" + (++wheelSeq);
+  let last = W.formatTime(start.h, start.m);
+  const cols = {};
+
+  const emit = () => {
+    const v = W.formatTime(cols.hours.index, cols.minutes.index);
+    if (v === last) return;
+    last = v;
+    if (onChange) onChange(v);
+  };
+
+  function column(kind, label, pageStep) {
+    const count = kind === "hours" ? 24 : 60;
+    const col = { index: kind === "hours" ? start.h : start.m, timer: null };
+    const opts = W.valuesFor(kind).map((v) => h("div", {
+      class: "wheel-opt", role: "option", id: `${uid}-${kind}-${v}`, "aria-selected": "false",
+      onclick: () => { setIndex(v, true); },
+    }, W.pad2(v)));
+    const list = h("div", {
+      class: "wheel-col", role: "listbox", tabindex: "0", "aria-label": label,
+      onscroll: () => {
+        mark(W.nearestIndex(list.scrollTop, ROW, count));
+        clearTimeout(col.timer);
+        col.timer = setTimeout(emit, 80);
+      },
+      onkeydown: (ev) => {
+        const step = { ArrowUp: -1, ArrowDown: 1, PageUp: -pageStep, PageDown: pageStep }[ev.key];
+        let next = null;
+        if (step != null) next = col.index + step;
+        else if (ev.key === "Home") next = 0;
+        else if (ev.key === "End") next = count - 1;
+        if (next == null) return;
+        ev.preventDefault();
+        setIndex(W.valueAt(next, count), false);
+        emit();
+      },
+    }, opts);
+    // Marca la fila central (resaltada y anunciada) sin mover el scroll.
+    function mark(i) {
+      if (i === col.index && opts[i].classList.contains("on")) return;
+      opts[col.index].classList.remove("on");
+      opts[col.index].setAttribute("aria-selected", "false");
+      col.index = i;
+      opts[i].classList.add("on");
+      opts[i].setAttribute("aria-selected", "true");
+      list.setAttribute("aria-activedescendant", opts[i].id);
+    }
+    // Lleva la columna a un valor: con animación al tocar una fila, al instante con teclado.
+    function setIndex(i, smooth) {
+      i = W.indexFor(i, count);
+      mark(i);
+      if (smooth && list.scrollTo) list.scrollTo({ top: i * ROW, behavior: "smooth" });
+      else list.scrollTop = i * ROW;
+    }
+    col.list = list;
+    col.mark = mark;
+    col.setIndex = setIndex;
+    mark(col.index);
+    return col;
+  }
+
+  cols.hours = column("hours", "Horas", 5);
+  cols.minutes = column("minutes", "Minutos", 10);
+  const root = h("div", { class: "wheel", role: "group", "aria-label": "Hora de la alarma" },
+    h("div", { class: "wheel-band", "aria-hidden": "true" }),
+    cols.hours.list,
+    h("div", { class: "wheel-sep", "aria-hidden": "true" }, ":"),
+    cols.minutes.list);
+
+  // El scroll solo se puede colocar con el nodo ya en el DOM (tiene altura).
+  const place = () => { cols.hours.setIndex(cols.hours.index, false); cols.minutes.setIndex(cols.minutes.index, false); };
+  requestAnimationFrame(place);
+
+  root.setValue = (v) => {
+    const t = W.parseTime(v);
+    if (!t) return;
+    last = W.formatTime(t.h, t.m);
+    cols.hours.setIndex(t.h, false);
+    cols.minutes.setIndex(t.m, false);
+  };
+  return root;
+}
+
 /* Aviso breve arriba, con icono. #toast está siempre en el DOM como región viva vacía
    (clase is-empty, oculta sin display:none); el contenido se pone un fotograma después de
    mostrarla para que los lectores de pantalla lo anuncien. Los errores duran más. */
@@ -155,7 +249,7 @@ function confirmInPage(msg, okLabel = "Aceptar") {
   return new Promise((resolve) => {
     const before = document.activeElement;
     // El resto de la página queda inerte mientras el diálogo está abierto.
-    const inertEls = ["top", "view", "tabs", "savebar", "toast"].map((i) => document.getElementById(i))
+    const inertEls = ["top", "view", "tabs", "savebar", "toast", "fab"].map((i) => document.getElementById(i))
       .filter((el) => el && !el.inert);
     const msgId = "dlg-msg-" + Date.now();
     const close = (v) => {

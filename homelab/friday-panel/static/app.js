@@ -102,9 +102,13 @@ $("#save").addEventListener("click", async () => {
     form = null; updateSaveBar();
     render(r.next || route);
   } else {
-    const errs = r.data.errors || {};
+    let errs = r.data.errors || {};
     const detail = Object.entries(errs).map(([k, v]) => `${k}: ${v}`).join(" · ");
     toast(errText(r) + (detail ? ` — ${detail}` : ""), true);
+    // Las alarmas devuelven un solo "error" que empieza por el campo ("max_volume debe…"):
+    // se marca ese campo igual que con la lista de errores de Ajustes.
+    const k = !Object.keys(errs).length && /^([a-z_]+) /.exec(r.data.error || "");
+    if (k && form && k[1] in form.current) errs = { [k[1]]: r.data.error };
     if (form) { form.errors = errs; markErrors(); }
   }
 });
@@ -124,6 +128,9 @@ function markErrors() {
     if (msg) {
       const err = h("div", { class: "err" }, icon("alert-triangle", 16), h("span", {}, msg));
       if (el.classList.contains("switch")) el.after(err); else el.append(err);
+      // Un campo con error dentro de "Opciones" plegadas se despliega para que se vea.
+      const fold = el.closest("details");
+      if (fold && !fold.open) fold.open = true;
     }
   });
 }
@@ -170,6 +177,7 @@ function render(next) {
     if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
   window.scrollTo(0, 0);
+  setFab(null);
   view.replaceChildren(loadingState());
   enterNext = true;
   if (route.tab === "home") return renderHome();
@@ -187,6 +195,7 @@ function showLogin() {
   loginShown = true;
   form = null; updateSaveBar();
   fillChrome();
+  setFab(null);
   document.body.classList.add("login");
   setTitle("Friday");
   const pass = h("input", { id: "pass", type: "password", autocomplete: "current-password", required: true });
@@ -361,6 +370,47 @@ setInterval(() => {
 
 // ------------------------------------------------------------------ Alarmas
 
+// El botón + flotante vive fuera de #view (la animación de entrada de la vista lo
+// desplazaría). Solo hay uno; render() y el login lo quitan.
+function setFab(node) {
+  document.getElementById("fab")?.remove();
+  if (node) document.body.append(node);
+}
+
+const DAY_NAMES = { mon: "Lunes", tue: "Martes", wed: "Miércoles", thu: "Jueves", fri: "Viernes", sat: "Sábado", sun: "Domingo" };
+
+// Estado de una alarma en su tarjeta: icono y texto, nunca solo color.
+const statusNode = (on) => h("span", { class: "status" }, icon(on ? "check" : "x", 16), h("span", {}, on ? "Activa" : "Apagada"));
+
+function alarmCard(a) {
+  const open = () => go({ tab: "alarms", edit: a.id });
+  const label = a.label || "Alarma";
+  const status = h("span", {}, statusNode(a.enabled));
+  const toggle = h("input", {
+    type: "checkbox", role: "switch", checked: a.enabled,
+    "aria-label": `Activar ${label} de las ${a.time}`,
+    onchange: async (ev) => {
+      const on = ev.target.checked;
+      ev.target.disabled = true;
+      const r = await api("PUT", `/api/alarms/${a.id}`, { enabled: on });
+      ev.target.disabled = false;
+      if (!r.ok) { ev.target.checked = !on; toast(errText(r), true); return; }
+      a.enabled = on;
+      card.classList.toggle("off", !on);
+      status.replaceChildren(statusNode(on));
+      toast(on ? "Alarma activada" : "Alarma desactivada");
+    },
+  });
+  const card = h("div", { class: "card alarm-card" + (a.enabled ? "" : " off"), onclick: open },
+    h("button", { type: "button", class: "alarm-open", "aria-label": `Editar ${label}, ${a.time}, ${daysText(a.days)}`, onclick: (ev) => { ev.stopPropagation(); open(); } },
+      h("span", { class: "t" }, a.time),
+      h("span", { class: "meta" }, h("strong", {}, label), ` · ${daysText(a.days)}`)),
+    h("div", { class: "alarm-side", onclick: (ev) => ev.stopPropagation() },
+      h("label", { class: "switch" }, toggle),
+      status));
+  return card;
+}
+
 async function renderAlarms() {
   const r = await api("GET", "/api/alarms");
   if (route.tab !== "alarms" || route.edit != null) return;
@@ -368,42 +418,31 @@ async function renderAlarms() {
   const all = r.data.alarms || [];
   const alarms = all.filter((a) => (a.kind || "alarm") === "alarm" && !a.trigger_at);
   const others = all.filter((a) => !alarms.includes(a));
-
-  const row = (a) => {
-    const toggle = h("input", {
-      type: "checkbox", checked: a.enabled,
-      onclick: (ev) => ev.stopPropagation(),
-      onchange: async (ev) => {
-        const r2 = await api("PUT", `/api/alarms/${a.id}`, { enabled: ev.target.checked });
-        if (!r2.ok) { ev.target.checked = !ev.target.checked; toast(errText(r2), true); }
-        else { toast(ev.target.checked ? "Alarma activada" : "Alarma desactivada"); ev.target.closest(".alarm").classList.toggle("disabled", !ev.target.checked); }
-      },
-    });
-    const label = h("label", { class: "switch", onclick: (ev) => ev.stopPropagation() }, toggle);
-    return h("div", { class: "alarm" + (a.enabled ? "" : " disabled"), onclick: () => go({ tab: "alarms", edit: a.id }) },
-      h("div", {}, h("div", { class: "t" }, a.time), h("div", { class: "muted" }, `${a.label} · ${daysText(a.days)}`)),
-      label);
-  };
+  const create = () => go({ tab: "alarms", edit: "new" });
+  const active = alarms.filter((a) => a.enabled).length;
 
   setView(
-    h("div", { class: "card" }, h("h2", {}, "Alarmas"),
-      alarms.length ? alarms.map(row) : h("p", { class: "muted" }, "No hay alarmas."),
-      btn("＋ Nueva alarma", () => go({ tab: "alarms", edit: "new" }))),
+    h("div", { class: "list-head" }, h("h2", {}, "Alarmas"),
+      alarms.length ? h("span", { class: "muted" }, active === 1 ? "1 activa" : `${active} activas`) : null),
+    alarms.length ? alarms.map(alarmCard)
+      : h("div", { class: "card" }, emptyState("bell", "No hay alarmas", btn("Crear alarma", create, "", "plus"))),
     others.length ? h("div", { class: "card" }, h("h2", {}, "Temporizadores y pospuestas"),
-      others.map((a) => h("div", { class: "row between" },
-        h("span", {}, `${a.label} · ${a.time || ""}`),
+      others.map((a) => h("div", { class: "row between others-row" },
+        h("span", {}, `${a.label || "Temporizador"} `, h("span", { class: "t" }, a.time ? `· ${a.time}` : "")),
         btn("Cancelar", async () => {
           const r2 = await api("DELETE", `/api/alarms/${a.id}`);
           toast(r2.ok ? "Cancelado" : errText(r2), !r2.ok); renderAlarms();
-        }, "small ghost")))) : null,
+        }, "small ghost", "x", { "aria-label": `Cancelar ${a.label || "temporizador"}` })))) : null,
   );
+  setFab(h("button", { id: "fab", type: "button", class: "fab", "aria-label": "Nueva alarma", title: "Nueva alarma", onclick: create }, icon("plus", 28)));
 }
 
+// Opción numérica por alarma: "Ajuste general" (null, manda el de Ajustes) o un valor propio.
 function optionNumber(key, label, min, max, unit, fallback) {
   const general = form.current[key] == null;
   const input = h("input", {
-    type: "number", min, max, step: "1", inputmode: "numeric",
-    value: general ? "" : form.current[key], disabled: general,
+    type: "number", min, max, step: "1", inputmode: "numeric", "aria-label": `${label} (${min}–${max} ${unit})`,
+    value: general ? "" : form.current[key], disabled: general, placeholder: "General",
     oninput: (ev) => { setField(key, ev.target.value === "" ? "" : Number(ev.target.value)); },
   });
   const check = h("input", {
@@ -411,12 +450,32 @@ function optionNumber(key, label, min, max, unit, fallback) {
     onchange: (ev) => {
       input.disabled = ev.target.checked;
       if (ev.target.checked) { input.value = ""; setField(key, null); }
-      else { input.value = fallback; setField(key, fallback); }
+      else { input.value = fallback; setField(key, fallback); input.focus(); }
     },
   });
   return h("div", { class: "opt", "data-key": key },
-    h("label", { class: "switch" }, h("span", {}, label), h("span", { class: "row" }, h("span", { class: "muted" }, "general"), check)),
-    h("label", { class: "field" }, h("span", {}, `Valor (${min}–${max} ${unit})`), input));
+    h("div", { class: "opt-head" }, h("span", {}, label), h("label", { class: "general" }, h("span", {}, "Ajuste general"), check)),
+    h("div", { class: "unit-input" }, input, h("span", { class: "unit" }, unit)),
+    h("div", { class: "muted hint" }, `Valor propio entre ${min} y ${max} ${unit}`));
+}
+
+// Buenos días al apagarla: mismo patrón (general o valor propio), con interruptor.
+function optionBriefing() {
+  const general = form.current.briefing == null;
+  const sw = switchRow("Buenos días del asistente", form.current.briefing === true, (v) => setField("briefing", v));
+  const input = sw.querySelector("input");
+  input.disabled = general;
+  const check = h("input", {
+    type: "checkbox", checked: general,
+    onchange: (ev) => {
+      input.disabled = ev.target.checked;
+      if (ev.target.checked) { input.checked = false; setField("briefing", null); }
+      else { input.checked = true; setField("briefing", true); }
+    },
+  });
+  return h("div", { class: "opt", "data-key": "briefing" },
+    h("div", { class: "opt-head" }, h("span", {}, "Al apagarla"), h("label", { class: "general" }, h("span", {}, "Ajuste general"), check)),
+    sw);
 }
 
 function soundPicker(sounds, reload) {
@@ -424,7 +483,7 @@ function soundPicker(sounds, reload) {
   const cur = form.current.sound;
   const select = h("select", { onchange: (ev) => setField("sound", ev.target.value || null) },
     h("option", { value: "", selected: cur == null }, "Tono por defecto"),
-    sounds.map((s) => h("option", { value: s.id, selected: s.id === cur }, (s.kind === "file" ? "📁 " : "🔔 ") + s.name)));
+    sounds.map((s) => h("option", { value: s.id, selected: s.id === cur }, `${s.name} (${s.kind === "file" ? "archivo" : "tono"})`)));
   const file = h("input", { type: "file", accept: "audio/*,.mp3,.ogg,.wav,.m4a", hidden: true,
     onchange: async (ev) => {
       const f = ev.target.files[0];
@@ -438,14 +497,14 @@ function soundPicker(sounds, reload) {
       reload();
     } });
   return h("div", { class: "opt", "data-key": "sound" },
-    h("label", { class: "field" }, h("span", {}, "Sonido"), select),
-    cur != null && !known.has(cur) ? h("div", { class: "warn" }, "⚠ Ese sonido ya no está en el reloj: sonará el tono por defecto.") : null,
-    h("div", { class: "row" },
-      btn("▶ Escuchar 5 s", async () => {
+    h("label", { class: "field" }, h("span", { class: "section-label" }, icon("music", 16), "Sonido"), select),
+    cur != null && !known.has(cur) ? h("div", { class: "warn" }, icon("alert-triangle", 16), h("span", {}, "Ese sonido ya no está en el reloj: sonará el tono por defecto.")) : null,
+    h("div", { class: "row sound-actions" },
+      btn("Escuchar 5 s", async () => {
         const r = await api("POST", "/api/sounds/preview", { id: form.current.sound });
         if (!r.ok) toast(errText(r), true);
-      }, "small ghost"),
-      btn("Subir sonido…", () => file.click(), "small ghost"), file));
+      }, "small ghost", "play"),
+      btn("Subir sonido…", () => file.click(), "small ghost", "upload"), file));
 }
 
 async function renderAlarmEdit(id) {
@@ -458,6 +517,8 @@ async function renderAlarmEdit(id) {
   const src = isNew ? NEW_ALARM : found;
   const fields = ["time", "label", "days", "enabled", "sound", "max_volume", "ramp_s", "snooze_min", "briefing"];
   const original = Object.fromEntries(fields.map((k) => [k, src[k] ?? NEW_ALARM[k]]));
+  // La rueda solo sabe de HH:MM válidas: si el reloj trae otra cosa, se parte de 07:00.
+  if (!WheelCore.parseTime(original.time)) original.time = NEW_ALARM.time;
   startForm(original, async (c) => {
     const r = isNew ? await api("POST", "/api/alarms", c) : await api("PUT", `/api/alarms/${id}`, c);
     return { ...r, next: { tab: "alarms" } };
@@ -468,44 +529,64 @@ async function renderAlarmEdit(id) {
 
 function paintAlarmEdit(id, isNew, sounds) {
   const c = form.current;
-  const chips = h("div", { class: "chips" });
-  const paintChips = () => chips.replaceChildren(...DAYS.map(([k, l]) =>
-    h("button", { class: "chip" + (c.days.includes(k) ? " on" : ""), type: "button",
-      onclick: () => { setField("days", c.days.includes(k) ? c.days.filter((d) => d !== k) : DAYS.map((d) => d[0]).filter((d) => d === k || c.days.includes(d))); paintChips(); } }, l)));
-  paintChips();
+  const sameDays = (a, b) => a.length === b.length && a.every((d) => b.includes(d));
+
+  const days = h("div", { class: "days", role: "group", "aria-label": "Días de la semana" });
+  const presets = h("div", { class: "presets", role: "group", "aria-label": "Atajos de días" });
+  const summary = h("span", { class: "aside" });
+  const paintDays = () => {
+    days.replaceChildren(...DAYS.map(([k, l]) => h("button", {
+      type: "button", class: "day", "aria-pressed": c.days.includes(k) ? "true" : "false", "aria-label": DAY_NAMES[k], title: DAY_NAMES[k],
+      onclick: () => {
+        setField("days", c.days.includes(k) ? c.days.filter((d) => d !== k) : DAYS.map((d) => d[0]).filter((d) => d === k || c.days.includes(d)));
+        paintDays();
+        days.querySelector(`[aria-label="${DAY_NAMES[k]}"]`).focus();
+      } }, h("span", { class: "dot", "aria-hidden": "true" }, l))));
+    presets.replaceChildren(...PRESETS.map(([name, list]) => h("button", {
+      type: "button", class: "chip", "aria-pressed": sameDays(c.days, list) ? "true" : "false",
+      onclick: () => { setField("days", [...list]); paintDays(); presets.querySelector(`[data-name="${name}"]`)?.focus(); },
+      "data-name": name,
+    }, name)));
+    summary.textContent = c.days.length ? daysText(c.days) : "Una vez";
+  };
+  paintDays();
+
   const reloadSounds = async () => {
     const rs = await api("GET", "/api/sounds");
     if (rs.ok && form) paintAlarmEdit(id, isNew, rs.data.sounds || []);
   };
-  const briefing = h("select", { onchange: (ev) => setField("briefing", ev.target.value === "" ? null : ev.target.value === "1") },
-    h("option", { value: "", selected: c.briefing == null }, "Ajuste general"),
-    h("option", { value: "1", selected: c.briefing === true }, "Sí"),
-    h("option", { value: "0", selected: c.briefing === false }, "No"));
-
-  setView(
-    h("div", { class: "row between" }, btn("‹ Alarmas", () => go({ tab: "alarms" }), "ghost small"), h("h2", {}, isNew ? "Nueva alarma" : "Editar alarma")),
-    h("div", { class: "card" },
-      h("label", { class: "field", "data-key": "time" }, h("span", {}, "Hora"),
-        h("input", { type: "time", value: c.time, required: true, oninput: (ev) => setField("time", ev.target.value) })),
-      h("label", { class: "field", "data-key": "label" }, h("span", {}, "Nombre"),
-        h("input", { type: "text", value: c.label, maxlength: "40", oninput: (ev) => setField("label", ev.target.value) })),
-      h("div", { class: "field", "data-key": "days" }, h("span", { class: "muted" }, "Días"), chips,
-        h("div", { class: "row", style: "margin-top:8px" }, PRESETS.map(([name, list]) =>
-          btn(name, () => { setField("days", [...list]); paintChips(); }, "small ghost")))),
-      h("label", { class: "switch" }, h("span", {}, "Activa"),
-        h("input", { type: "checkbox", checked: c.enabled, onchange: (ev) => setField("enabled", ev.target.checked) }))),
-    h("div", { class: "card" }, h("h2", {}, "Opciones de esta alarma"),
-      soundPicker(sounds, reloadSounds),
+  const custom = ["max_volume", "ramp_s", "snooze_min", "briefing"].filter((k) => c[k] != null).length;
+  const options = h("details", { class: "card opts", open: custom > 0 || null },
+    h("summary", {}, icon("settings"), h("span", {}, "Opciones"),
+      h("span", { class: "hint" }, custom ? (custom === 1 ? "1 propia" : `${custom} propias`) : "Ajuste general"),
+      h("span", { class: "chev" }, icon("chevron-down"))),
+    h("div", { class: "opts-body" },
       optionNumber("max_volume", "Volumen máximo", 1, 100, "%", 80),
       optionNumber("ramp_s", "Subida de volumen", 0, 600, "s", 20),
       optionNumber("snooze_min", "Minutos al posponer", 1, 60, "min", 5),
-      h("div", { class: "opt", "data-key": "briefing" }, h("label", { class: "field" }, h("span", {}, "Buenos días al apagarla"), briefing))),
-    isNew ? null : h("div", { class: "card" }, btn("Borrar alarma", async () => {
-      if (!(await confirmInPage("¿Borrar esta alarma?", "Borrar"))) return;
+      optionBriefing()));
+
+  setView(
+    h("div", { class: "edit-head" },
+      iconButton("chevron-left", "Volver a Alarmas", () => go({ tab: "alarms" })),
+      h("h2", {}, isNew ? "Nueva alarma" : "Editar alarma")),
+    h("div", { class: "card wheel-card", "data-key": "time" },
+      timeWheel(c.time, (v) => setField("time", v))),
+    h("div", { class: "card days-card", "data-key": "days" },
+      h("span", { class: "section-label" }, icon("clock", 16), "Repetir", summary),
+      days, presets),
+    h("div", { class: "card" },
+      h("label", { class: "field", "data-key": "label" }, h("span", {}, "Nombre"),
+        h("input", { type: "text", value: c.label, maxlength: "40", autocomplete: "off", oninput: (ev) => setField("label", ev.target.value) })),
+      switchRow("Activa", c.enabled, (v) => setField("enabled", v), "enabled")),
+    h("div", { class: "card" }, soundPicker(sounds, reloadSounds)),
+    options,
+    isNew ? null : h("div", { class: "card delete-card" }, btn("Borrar alarma", async () => {
+      if (!(await confirmInPage("¿Borrar esta alarma? No se puede deshacer.", "Borrar"))) return;
       const r = await api("DELETE", `/api/alarms/${id}`);
       if (r.ok) { form = null; updateSaveBar(); toast("Alarma borrada"); render({ tab: "alarms" }); }
       else toast(errText(r), true);
-    }, "danger")),
+    }, "danger", "trash-2")),
   );
   markErrors();
 }
