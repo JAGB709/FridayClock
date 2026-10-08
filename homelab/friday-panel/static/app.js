@@ -509,8 +509,8 @@ function soundPicker(sounds, reload) {
       reload();
     } });
   return h("div", { class: "opt", "data-key": "sound" },
-    h("label", { class: "field" }, h("span", { class: "section-label" }, icon("music", 16), "Sonido"), select),
-    cur != null && !known.has(cur) ? h("div", { class: "warn" }, icon("alert-triangle", 16), h("span", {}, "Ese sonido ya no está en el reloj: sonará el tono por defecto.")) : null,
+    h("label", { class: "field" }, h("span", { class: "h2 with-icon" }, icon("music", 20), "Sonido"), select),
+    cur != null && !known.has(cur) ? warnBox("Ese sonido ya no está en el reloj: sonará el tono por defecto.") : null,
     h("div", { class: "row sound-actions" },
       btn("Escuchar 5 s", async () => {
         const r = await api("POST", "/api/sounds/preview", { id: form.current.sound });
@@ -586,7 +586,7 @@ function paintAlarmEdit(id, isNew, sounds) {
     h("div", { class: "card wheel-card", "data-key": "time" },
       timeWheel(c.time, (v) => setField("time", v))),
     h("div", { class: "card days-card", "data-key": "days" },
-      h("span", { class: "section-label" }, icon("clock", 16), "Repetir"),
+      h("h2", { class: "with-icon" }, icon("clock", 20), "Repetir"),
       days, presets, helper),
     h("div", { class: "card" },
       h("label", { class: "field", "data-key": "label" }, h("span", {}, "Nombre"),
@@ -643,8 +643,7 @@ function connectionCard(status, panelVersion) {
       icon("info", 20),
       h("span", {}, "Versión del motor"),
       h("span", { class: "info-val" }, clockVersion ? `reloj ${clockVersion}` : "reloj sin datos", panelVersion ? ` · panel ${panelVersion}` : "")),
-    differs ? h("div", { class: "warn", role: "status" }, icon("alert-triangle", 16),
-      h("span", {}, "El motor del reloj y el del panel son distintos: actualiza el panel o el reloj.")) : null);
+    differs ? warnBox("El motor del reloj y el del panel son distintos: actualiza el panel o el reloj.") : null);
 }
 
 function soundsCard(files, reload) {

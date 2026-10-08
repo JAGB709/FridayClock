@@ -65,6 +65,11 @@ function emptyState(iconName, text, action = null) {
     action);
 }
 
+/* Aviso con borde ámbar: icono y texto (nunca solo color). Un único estilo para todo el panel. */
+function warnBox(text, attrs = {}) {
+  return h("div", { class: "warn", role: "status", ...attrs }, icon("alert-triangle", 20), h("span", {}, text));
+}
+
 function loadingState(text = "Cargando…") {
   return h("div", { class: "state loading", role: "status", "aria-live": "polite" },
     h("div", { class: "spinner", "aria-hidden": "true" }),

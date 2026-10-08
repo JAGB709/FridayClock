@@ -68,12 +68,12 @@ function rangeField(label, val, min, max, step, onInput, unit = "", fmt = null) 
 // Tarjeta de un bloque con encabezado pequeño (icono y título) y, si hay, un dato a la derecha.
 function block(iconName, title, aside, ...kids) {
   return h("section", { class: "card block" },
-    h("h2", { class: "section-label" }, iconName ? icon(iconName, 16) : null, h("span", {}, title),
+    h("h2", { class: "with-icon" }, iconName ? icon(iconName, 20) : null, h("span", {}, title),
       aside != null ? h("span", { class: "aside" }, aside) : null),
     ...kids);
 }
 
-const warnLine = (text) => h("div", { class: "warn" }, icon("alert-triangle", 16), h("span", {}, text));
+const warnLine = (text) => warnBox(text);
 
 // Actualiza el texto de la opción de un <select> mientras se escribe el nombre, sin repintar (no pierde el foco).
 function setOptionText(select, value, text) {
@@ -261,8 +261,7 @@ async function renderDesign() {
 
 function paintDesign() {
   const warn = dz.clockVersion && dz.panelVersion && dz.clockVersion !== dz.panelVersion
-    ? h("div", { class: "card notice", role: "note" }, icon("alert-triangle"),
-      h("span", {}, `El reloj y el panel usan versiones distintas del motor (reloj ${dz.clockVersion}, panel ${dz.panelVersion}): la vista previa puede no ser idéntica. Actualiza la app del reloj o el panel.`))
+    ? warnBox(`El reloj y el panel usan versiones distintas del motor (reloj ${dz.clockVersion}, panel ${dz.panelVersion}): la vista previa puede no ser idéntica. Actualiza la app del reloj o el panel.`)
     : null;
   const tabs = segmented(SUBS, dz.sub, switchSub);
   tabs.classList.add("sections");
