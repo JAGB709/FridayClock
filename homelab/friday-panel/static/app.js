@@ -606,41 +606,82 @@ function paintAlarmEdit(id, isNew, sounds) {
 
 // ------------------------------------------------------------------ Ajustes
 
+// Unidad de cada ajuste numérico; el esquema del reloj trae la unidad dentro de la etiqueta.
+const SETTING_UNITS = {
+  snooze_min: "min", alarm_ramp_s: "s", alarm_auto_snooze_min: "min", night_start: "h", night_end: "h",
+  night_brightness: "%", day_brightness: "%", tts_rate: "×", lat: "°", lon: "°",
+};
+
 function settingInput(f) {
   const v = form.current[f.key];
-  if (f.type === "bool") {
-    return h("label", { class: "switch", "data-key": f.key }, h("span", {}, f.label),
-      h("input", { type: "checkbox", checked: v, onchange: (ev) => setField(f.key, ev.target.checked) }));
-  }
+  const label = String(f.label).replace(/\s*\([^)]*\)\s*$/, "");
+  if (f.type === "bool") return switchRow(label, v, (on) => setField(f.key, on), f.key);
   const isNum = f.type === "int" || f.type === "float";
+  const unit = SETTING_UNITS[f.key] || "";
   const input = h("input", isNum
     ? { type: "number", min: f.min, max: f.max, step: f.type === "int" ? "1" : "any", inputmode: f.type === "int" ? "numeric" : "decimal", value: v,
         oninput: (ev) => { setField(f.key, ev.target.value === "" ? "" : Number(ev.target.value)); } }
-    : { type: "text", maxlength: f.max_len, value: v, oninput: (ev) => setField(f.key, ev.target.value) });
-  const range = isNum ? ` (${f.min}–${f.max})` : "";
-  return h("label", { class: "field", "data-key": f.key }, h("span", {}, f.label + range), input);
+    : { type: "text", maxlength: f.max_len, value: v, autocomplete: "off", oninput: (ev) => setField(f.key, ev.target.value) });
+  const hint = isNum ? `Entre ${f.min} y ${f.max}${unit ? " " + unit : ""}` : `Hasta ${f.max_len} caracteres`;
+  return h("label", { class: "field setting", "data-key": f.key },
+    h("span", { class: "setting-label" }, label),
+    h("span", { class: "setting-control" }, input, unit ? h("span", { class: "unit", "aria-hidden": "true" }, unit) : null),
+    h("span", { class: "hint" }, hint));
+}
+
+const fileSize = (bytes) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`;
+
+function connectionCard(status, panelVersion) {
+  const online = !!(status && status.ok);
+  const clockVersion = online ? status.data.face_version : null;
+  const differs = clockVersion && panelVersion && clockVersion !== panelVersion;
+  return h("div", { class: "card conn-card" },
+    h("div", { class: "info-row " + (online ? "ok" : "bad") },
+      icon(online ? "wifi" : "wifi-off", 20),
+      h("span", {}, online ? "Conectado al reloj" : "Sin conexión con el reloj")),
+    h("div", { class: "info-row" },
+      icon("info", 20),
+      h("span", {}, "Versión del motor"),
+      h("span", { class: "info-val" }, clockVersion ? `reloj ${clockVersion}` : "reloj sin datos", panelVersion ? ` · panel ${panelVersion}` : "")),
+    differs ? h("div", { class: "warn", role: "status" }, icon("alert-triangle", 16),
+      h("span", {}, "El motor del reloj y el del panel son distintos: actualiza el panel o el reloj.")) : null);
+}
+
+function soundsCard(files, reload) {
+  const body = files.length
+    ? h("div", { class: "sound-list" }, files.map((s) => h("div", { class: "sound-row" },
+      icon("music", 20),
+      h("div", { class: "sound-name" }, h("span", {}, s.name), h("span", { class: "muted" }, fileSize(s.size))),
+      btn("Borrar", async () => {
+        if (!(await confirmInPage(`¿Borrar ${s.name}? Las alarmas que lo usen sonarán con el tono por defecto.`, "Borrar"))) return;
+        const r2 = await api("DELETE", `/api/sounds/${encodeURIComponent(s.name)}`);
+        toast(r2.ok ? "Sonido borrado" : errText(r2), !r2.ok);
+        if (r2.ok) reload();
+      }, "small ghost", "trash-2", { "aria-label": `Borrar ${s.name}` }))))
+    : emptyState("music", "Ningún sonido subido todavía: súbelos desde la ficha de una alarma.");
+  return h("div", { class: "card" }, h("h2", {}, "Sonidos subidos"), body);
 }
 
 async function renderSettings() {
-  const [r, rs] = await Promise.all([api("GET", "/api/settings"), api("GET", "/api/sounds")]);
+  const [r, rs, st, rv] = await Promise.all([
+    api("GET", "/api/settings"), api("GET", "/api/sounds"), api("GET", "/api/status"), api("GET", "/api/face-version")]);
   if (route.tab !== "settings") return;
   if (!r.ok) { showError(r); return; }
   startForm(r.data.settings, (c) => api("PUT", "/api/settings", c));
   const groups = new Map();
   for (const f of r.data.schema) { if (!groups.has(f.group)) groups.set(f.group, []); groups.get(f.group).push(f); }
-  const files = rs.ok ? (rs.data.sounds || []).filter((s) => s.kind === "file") : [];
+  const soundsHost = h("div", {});
+  const paintSounds = (res) => {
+    const files = res.ok ? (res.data.sounds || []).filter((x) => x.kind === "file") : [];
+    soundsHost.replaceChildren(soundsCard(files, async () => { if (route.tab === "settings") paintSounds(await api("GET", "/api/sounds")); }));
+  };
+  paintSounds(rs);
   setView(
-    ...[...groups].map(([g, fs]) => h("div", { class: "card" }, h("h2", {}, g), fs.map(settingInput))),
-    h("div", { class: "card" }, h("h2", {}, "Sonidos subidos"),
-      files.length ? files.map((s) => h("div", { class: "row between" },
-        h("span", {}, `${s.name} · ${Math.round((s.size || 0) / 1024)} KB`),
-        btn("Borrar", async () => {
-          if (!(await confirmInPage(`¿Borrar ${s.name}? Las alarmas que lo usen sonarán con el tono por defecto.`, "Borrar"))) return;
-          const r2 = await api("DELETE", `/api/sounds/${encodeURIComponent(s.name)}`);
-          toast(r2.ok ? "Sonido borrado" : errText(r2), !r2.ok);
-          if (r2.ok && !dirty()) renderSettings();
-        }, "small ghost"))) : h("p", { class: "muted" }, "Ninguno. Súbelos desde la ficha de una alarma.")),
+    connectionCard(st, rv.ok ? rv.data.face_version : null),
+    ...[...groups].map(([g, fs]) => h("div", { class: "card group" }, h("h2", {}, g), fs.map(settingInput))),
+    soundsHost,
   );
+  markErrors();
 }
 
 // ------------------------------------------------------------------ arranque

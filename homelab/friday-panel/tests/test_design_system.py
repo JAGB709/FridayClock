@@ -93,3 +93,57 @@ def test_no_emojis_in_clock_engine_and_design_system():
                 if rx.search(line):
                     hits.append(f"{f.relative_to(ROOT)}:{i}")
     assert not hits, "emojis encontrados: " + ", ".join(hits)
+
+
+PANEL = ROOT / "homelab/friday-panel/static"
+
+
+def _panel_files():
+    for f in sorted(PANEL.iterdir()):
+        if f.is_file() and f.suffix in (".html", ".js", ".css", ".json", ".svg") and f.name != "icon.svg":
+            yield f
+
+
+def test_no_emojis_or_pictographs_in_panel():
+    import re
+    rx = re.compile("[⌀-⏿■-➿⤀-⥿⬀-⯿←-⇿＋‹›️\U0001F000-\U0001FFFF]")
+    allowed = set("↑↓")  # flechas arriba y abajo permitidas como texto
+    hits = []
+    for f in _panel_files():
+        for i, line in enumerate(f.read_text(encoding="utf-8").split("\n"), 1):
+            if any(ch not in allowed for ch in rx.findall(line)):
+                hits.append(f"{f.name}:{i}")
+    assert not hits, "símbolos pictográficos en el panel: " + ", ".join(hits)
+
+
+def test_panel_css_uses_only_tokens_for_colors():
+    import re
+    css = (PANEL / "styles.css").read_text(encoding="utf-8")
+    bad = []
+    for i, line in enumerate(css.split("\n"), 1):
+        if "@font-face" in line:
+            continue
+        decl = line.split("{", 1)[-1]  # lo anterior a "{" es el selector (p. ej. "#fab" es un id)
+        if re.search(r"#[0-9a-fA-F]{3,8}\b", decl) and "#000" not in decl:
+            bad.append(i)
+        if re.search(r"rgba?\((?!\s*0\s*,\s*0\s*,\s*0)", decl):
+            bad.append(i)
+    assert not bad, f"colores literales en styles.css, líneas: {bad}"
+
+
+def test_every_icon_used_by_the_panel_exists_in_the_sprite():
+    import re
+    sprite = (ROOT / "app-android/src/main/assets/face/icons.js").read_text(encoding="utf-8")
+    known = set(re.findall(r'^  "([a-z0-9-]+)": "', sprite, re.M))
+    used = set()
+    for f in _panel_files():
+        if f.suffix != ".js":
+            continue
+        # sin comentarios de línea completa, que citan ejemplos
+        text = "\n".join(l for l in f.read_text(encoding="utf-8").split("\n") if not l.lstrip().startswith(("/*", "//", "*")))
+        used |= set(re.findall(r'\bicon(?:Button)?\(\s*"([a-z0-9-]+)"', text))
+        # btn(etiqueta, accion, "clases", "icono"[, opciones]): clases e icono seguidos
+        used |= set(re.findall(r',\s*"(?:primary|ghost|danger|small|back|fab|\s)*",\s*"([a-z0-9-]+)"\s*[,)]', text))
+    used |= set(re.findall(r'data-icon="([a-z0-9-]+)"', (PANEL / "index.html").read_text(encoding="utf-8")))
+    assert known, "no se pudo leer el sprite"
+    assert used - known == set(), f"iconos inexistentes: {sorted(used - known)}"

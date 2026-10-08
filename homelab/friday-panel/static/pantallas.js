@@ -553,10 +553,13 @@ function elementOptions(e) {
     fields,
     h("div", { class: "block-foot" }, btn("Borrar elemento", () => {
       const list = currentElements();
+      // "Descartar lo recupera" solo es cierto si el elemento ya estaba en el diseño guardado.
+      const saved = dz.sub === "alarm" ? form.original.alarm_screen : form.original.screens[dz.screenId];
+      const wasSaved = !!saved && saved.elements.some((x) => x.id === e.id);
       list.splice(list.indexOf(e), 1);
       dz.selected = null;
       touch(); paintSub();
-      toast("Elemento borrado. Descartar lo recupera.");
+      if (wasSaved && dirty()) toast("Elemento borrado. Descartar lo recupera.");
     }, "danger", "trash-2")));
 }
 
