@@ -90,7 +90,11 @@ const dirty = () => !!form && (form.isNew || Object.keys(changes()).length > 0);
 
 function updateSaveBar() { $("#savebar").hidden = !dirty(); }
 
+// La rueda de hora avisa 80 ms después de pararse: antes de guardar se recoge ya su valor
+// (también al apoyar el dedo en Guardar, por si sigue con inercia).
+$("#save").addEventListener("pointerdown", () => flushWheels());
 $("#save").addEventListener("click", async () => {
+  flushWheels();
   if (!form || !dirty()) return;
   const b = $("#save");
   const lbl = b.querySelector(".lbl");
@@ -136,6 +140,7 @@ function markErrors() {
 }
 
 async function go(next) {
+  flushWheels(); // un valor pendiente de la rueda también cuenta como cambio sin guardar
   if (dirty() && !(await confirmInPage("Tienes cambios sin guardar. ¿Descartarlos?", "Descartar"))) return;
   form = null; updateSaveBar();
   render(next);
@@ -165,6 +170,7 @@ function fillChrome() {
 }
 
 function render(next) {
+  flushWheels();
   route = next;
   fillChrome();
   if (loginShown) return; // la pantalla de login manda hasta que se entra
@@ -404,7 +410,8 @@ function alarmCard(a) {
   const card = h("div", { class: "card alarm-card" + (a.enabled ? "" : " off"), onclick: open },
     h("button", { type: "button", class: "alarm-open", "aria-label": `Editar ${label}, ${a.time}, ${daysText(a.days)}`, onclick: (ev) => { ev.stopPropagation(); open(); } },
       h("span", { class: "t" }, a.time),
-      h("span", { class: "meta" }, h("strong", {}, label), ` · ${daysText(a.days)}`)),
+      h("span", { class: "name" }, label),
+      h("span", { class: "meta" }, daysText(a.days))),
     h("div", { class: "alarm-side", onclick: (ev) => ev.stopPropagation() },
       h("label", { class: "switch" }, toggle),
       status));
@@ -422,10 +429,10 @@ async function renderAlarms() {
   const active = alarms.filter((a) => a.enabled).length;
 
   setView(
-    h("div", { class: "list-head" }, h("h2", {}, "Alarmas"),
-      alarms.length ? h("span", { class: "muted" }, active === 1 ? "1 activa" : `${active} activas`) : null),
+    alarms.length ? h("p", { class: "list-head muted" }, `${active === 1 ? "1 activa" : `${active} activas`} de ${alarms.length}`) : null,
     alarms.length ? alarms.map(alarmCard)
-      : h("div", { class: "card" }, emptyState("bell", "No hay alarmas", btn("Crear alarma", create, "", "plus"))),
+      : h("div", { class: "card" }, emptyState("bell", "No hay alarmas",
+        h("p", { class: "muted fab-hint" }, "Pulsa ", h("span", { class: "plus-ico" }, icon("plus", 16)), " para crear una"))),
     others.length ? h("div", { class: "card" }, h("h2", {}, "Temporizadores y pospuestas"),
       others.map((a) => h("div", { class: "row between others-row" },
         h("span", {}, `${a.label || "Temporizador"} `, h("span", { class: "t" }, a.time ? `· ${a.time}` : "")),
@@ -445,18 +452,23 @@ function optionNumber(key, label, min, max, unit, fallback) {
     value: general ? "" : form.current[key], disabled: general, placeholder: "General",
     oninput: (ev) => { setField(key, ev.target.value === "" ? "" : Number(ev.target.value)); },
   });
+  // La pista del rango solo tiene sentido con valor propio; en general se dice de dónde sale.
+  const hint = h("div", { class: "muted hint" });
+  const paintHint = (gen) => { hint.textContent = gen ? "Usa el valor general" : `Valor propio entre ${min} y ${max} ${unit}`; };
+  paintHint(general);
   const check = h("input", {
-    type: "checkbox", checked: general,
+    type: "checkbox", checked: general, "aria-label": `${label}: usar el ajuste general`,
     onchange: (ev) => {
       input.disabled = ev.target.checked;
+      paintHint(ev.target.checked);
       if (ev.target.checked) { input.value = ""; setField(key, null); }
       else { input.value = fallback; setField(key, fallback); input.focus(); }
     },
   });
   return h("div", { class: "opt", "data-key": key },
-    h("div", { class: "opt-head" }, h("span", {}, label), h("label", { class: "general" }, h("span", {}, "Ajuste general"), check)),
+    h("div", { class: "opt-head" }, h("span", {}, label), h("label", { class: "general" }, h("span", {}, "General"), check)),
     h("div", { class: "unit-input" }, input, h("span", { class: "unit" }, unit)),
-    h("div", { class: "muted hint" }, `Valor propio entre ${min} y ${max} ${unit}`));
+    hint);
 }
 
 // Buenos días al apagarla: mismo patrón (general o valor propio), con interruptor.
@@ -466,7 +478,7 @@ function optionBriefing() {
   const input = sw.querySelector("input");
   input.disabled = general;
   const check = h("input", {
-    type: "checkbox", checked: general,
+    type: "checkbox", checked: general, "aria-label": "Al apagarla: usar el ajuste general",
     onchange: (ev) => {
       input.disabled = ev.target.checked;
       if (ev.target.checked) { input.checked = false; setField("briefing", null); }
@@ -474,7 +486,7 @@ function optionBriefing() {
     },
   });
   return h("div", { class: "opt", "data-key": "briefing" },
-    h("div", { class: "opt-head" }, h("span", {}, "Al apagarla"), h("label", { class: "general" }, h("span", {}, "Ajuste general"), check)),
+    h("div", { class: "opt-head" }, h("span", {}, "Al apagarla"), h("label", { class: "general" }, h("span", {}, "General"), check)),
     sw);
 }
 
@@ -528,12 +540,13 @@ async function renderAlarmEdit(id) {
 }
 
 function paintAlarmEdit(id, isNew, sounds) {
+  flushWheels(); // al repintar, un valor de la rueda aún sin avisar no se pierde
   const c = form.current;
   const sameDays = (a, b) => a.length === b.length && a.every((d) => b.includes(d));
 
   const days = h("div", { class: "days", role: "group", "aria-label": "Días de la semana" });
   const presets = h("div", { class: "presets", role: "group", "aria-label": "Atajos de días" });
-  const summary = h("span", { class: "aside" });
+  const helper = h("p", { class: "muted days-help" });
   const paintDays = () => {
     days.replaceChildren(...DAYS.map(([k, l]) => h("button", {
       type: "button", class: "day", "aria-pressed": c.days.includes(k) ? "true" : "false", "aria-label": DAY_NAMES[k], title: DAY_NAMES[k],
@@ -547,7 +560,8 @@ function paintAlarmEdit(id, isNew, sounds) {
       onclick: () => { setField("days", [...list]); paintDays(); presets.querySelector(`[data-name="${name}"]`)?.focus(); },
       "data-name": name,
     }, name)));
-    summary.textContent = c.days.length ? daysText(c.days) : "Una vez";
+    helper.textContent = c.days.length ? "" : "Sin días: suena una sola vez";
+    helper.hidden = c.days.length > 0;
   };
   paintDays();
 
@@ -568,13 +582,12 @@ function paintAlarmEdit(id, isNew, sounds) {
 
   setView(
     h("div", { class: "edit-head" },
-      iconButton("chevron-left", "Volver a Alarmas", () => go({ tab: "alarms" })),
-      h("h2", {}, isNew ? "Nueva alarma" : "Editar alarma")),
+      btn("Alarmas", () => go({ tab: "alarms" }), "ghost back", "chevron-left", { "aria-label": "Volver a Alarmas" })),
     h("div", { class: "card wheel-card", "data-key": "time" },
       timeWheel(c.time, (v) => setField("time", v))),
     h("div", { class: "card days-card", "data-key": "days" },
-      h("span", { class: "section-label" }, icon("clock", 16), "Repetir", summary),
-      days, presets),
+      h("span", { class: "section-label" }, icon("clock", 16), "Repetir"),
+      days, presets, helper),
     h("div", { class: "card" },
       h("label", { class: "field", "data-key": "label" }, h("span", {}, "Nombre"),
         h("input", { type: "text", value: c.label, maxlength: "40", autocomplete: "off", oninput: (ev) => setField("label", ev.target.value) })),

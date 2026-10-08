@@ -44,6 +44,7 @@ Pantallas nativas del reloj (4b); cronómetro, tarjetas de control y vista del a
 - **Editor** (pantalla completa, `chevron-left` "Alarmas", título "Nueva alarma" o "Editar alarma"):
   - **Rueda de hora:** dos columnas (horas 00-23 y minutos 00-59) con `scroll-snap`, fila central resaltada de 48 px, números tabulares en 300; actualiza `form.current.time` ("HH:MM") al detenerse; accesible con teclado (flechas arriba y abajo cambian el valor) y con `aria-label`. La lógica pura (valor a índice, índice a valor y redondeo) vive en `static/wheel-core.js` y se prueba con `node --test`.
   - **Días:** círculos de 48 px (L M X J V S D) más atajos (Laborables, Finde, Todos, Una vez).
+    Los 7 círculos de días miden 44 px con 4 px de separación en 390 px: 7x48+6x8 no cabe en una fila; se cumple WCAG 2.2 (24 px).
   - Nombre, sonido (selector con icono `music`, Escuchar con `play`, Subir con `upload`; sin emojis), y "Opciones" plegables (volumen máximo, subida de volumen, posponer, buenos días) con el patrón "general / valor propio" actual.
   - Borrar (`trash-2`, peligro, con confirmación) y Guardar vía barra de guardado.
 

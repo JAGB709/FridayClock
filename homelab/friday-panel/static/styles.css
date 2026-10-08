@@ -281,7 +281,7 @@ body.login { padding-bottom: var(--space-6); }
 }
 .alarm-card .t { font-size: var(--fs-6); font-weight: 300; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .alarm-card .status { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--fs-2); color: var(--accent); }
-.alarm-card.off .t, .alarm-card.off .meta { opacity: .5; }
+.alarm-card.off .t, .alarm-card.off .meta, .alarm-card.off .name { opacity: .5; }
 .alarm-card.off .status { color: var(--text-muted); }
 @media (hover: hover) { .alarm-card:hover { background: var(--surface-high); } }
 
@@ -294,9 +294,12 @@ body.login { padding-bottom: var(--space-6); }
 body:has(#savebar:not([hidden])) .fab { bottom: calc(var(--tabs-h) + var(--savebar-h) + var(--safe-b) + var(--space-4)); }
 
 /* Lista de alarmas: la tarjeta entera abre el editor; el interruptor y su estado, aparte. */
-.list-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin: var(--space-4) 0 0; }
-.list-head h2 { font-size: var(--fs-4); margin: 0; }
-.list-head .muted { font-size: var(--fs-2); }
+.list-head { margin: var(--space-4) 0 0; font-size: var(--fs-2); }
+.fab-hint { display: inline-flex; align-items: center; gap: var(--space-1); margin: 0; color: var(--text-muted) !important; font-size: var(--fs-2); }
+.fab-hint .plus-ico {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent);
+}
 .alarm-card { padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4); margin: var(--space-3) 0; }
 .alarm-card:active { background: var(--surface-high); }
 .alarm-open {
@@ -304,10 +307,14 @@ body:has(#savebar:not([hidden])) .fab { bottom: calc(var(--tabs-h) + var(--saveb
   background: transparent; color: var(--text); border: 0; text-align: left; font-weight: 400;
 }
 .alarm-open:active:not(:disabled) { transform: none; opacity: 1; }
-.alarm-open .meta { display: block; margin-top: var(--space-1); color: var(--text-muted); font-size: var(--fs-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.alarm-open .meta strong { color: var(--text); font-weight: 600; }
 .alarm-open .t { display: block; }
-.alarm-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); }
+.alarm-open .name, .alarm-open .meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 20px; }
+.alarm-open .name { margin-top: var(--space-1); font-weight: 600; font-size: var(--fs-3); }
+.alarm-open .meta { color: var(--text-muted); font-size: var(--fs-2); }
+/* El interruptor arriba y el estado abajo, a la altura de la línea de días en todas las tarjetas. */
+.alarm-side { flex: none; align-self: stretch; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; gap: var(--space-1); }
+.alarm-card .status { line-height: 20px; }
+.alarm-side > span { display: flex; }
 .alarm-side .switch { min-height: var(--touch); min-width: var(--touch); padding: 0; justify-content: flex-end; border: 0; }
 .alarm-card .status { min-height: 20px; }
 .alarm-card .status .ico { width: 16px; height: 16px; }
@@ -321,8 +328,7 @@ body:has(#fab) #view { padding-bottom: calc(56px + var(--space-4)); }
 
 /* Editor de alarma */
 .edit-head { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-2) 0 0 calc(-1 * var(--space-2)); }
-.edit-head h2 { font-size: var(--fs-4); margin: 0; }
-.edit-head button.ghost { border-color: transparent; }
+.edit-head button.ghost { border-color: transparent; padding: 0 var(--space-3) 0 var(--space-2); }
 .section-label { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-3); color: var(--text-muted); font-size: var(--fs-2); font-weight: 600; }
 .section-label .ico { color: var(--text-muted); }
 .section-label .aside { margin-left: auto; color: var(--text); font-weight: 400; }
@@ -371,10 +377,11 @@ body:has(#fab) #view { padding-bottom: calc(56px + var(--space-4)); }
   background: transparent; color: var(--text);
 }
 .day .dot {
-  display: grid; place-items: center; width: min(48px, calc(100% - 4px)); aspect-ratio: 1;
+  display: grid; place-items: center; width: 44px; height: 44px;
   border-radius: 50%; border: 1px solid var(--border); background: var(--surface-high);
   font-weight: 600; transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
 }
+@media (max-width: 374px) { .day .dot { width: 40px; height: 40px; } }
 .day[aria-pressed=true] .dot { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .day:active:not(:disabled) { transform: none; opacity: 1; }
 .day:active .dot { transform: scale(.92); }
@@ -382,6 +389,7 @@ body:has(#fab) #view { padding-bottom: calc(56px + var(--space-4)); }
 .day:focus-visible .dot { outline: 2px solid var(--accent); outline-offset: 2px; }
 .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: var(--space-2); margin-top: var(--space-4); }
 .presets .chip { font-size: var(--fs-2); }
+.days-help { margin: var(--space-3) 0 0; font-size: var(--fs-2); }
 .presets .chip[aria-pressed=true] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: var(--accent); }
 
 /* Sonido */
@@ -405,8 +413,8 @@ details.card > summary:focus-visible { outline-offset: -2px; }
 @media (hover: hover) { details.card > summary:hover { background: var(--surface-high); } }
 .opts-body { padding: 0 var(--space-4) var(--space-4); }
 .opt .opt-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: var(--touch); }
-.opt .opt-head > span:first-child { font-weight: 600; }
-.opt .general { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--touch); padding-left: var(--space-2); cursor: pointer; color: var(--text-muted); font-size: var(--fs-2); }
+.opt .opt-head > span:first-child { font-weight: 600; min-width: 0; }
+.opt .general { flex: none; white-space: nowrap; min-width: var(--touch); justify-content: flex-end; display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--touch); padding-left: var(--space-2); cursor: pointer; color: var(--text-muted); font-size: var(--fs-2); }
 .opt .unit-input { display: flex; align-items: center; gap: var(--space-2); }
 .opt .unit-input input { flex: 1 1 auto; }
 .opt .unit-input .unit { flex: none; min-width: 4ch; color: var(--text-muted); }

@@ -122,7 +122,8 @@ function switchRow(label, checked, onchange, key) {
    índices vive en wheel-core.js. Avisa con onChange("HH:MM") cuando el scroll se detiene
    (80 ms sin eventos) o al usar el teclado: flechas +-1, RePág/AvPág +-5 (horas) o
    +-10 (minutos), Inicio/Fin a los extremos. Un valor no válido empieza en 07:00.
-   El nodo devuelto tiene setValue("HH:MM") para sincronizarlo desde fuera. */
+   flush() (o flushWheels() para todas) avisa ya del valor que marca el scroll, sin esperar
+   al debounce: se llama antes de guardar, de salir del editor o de repintarlo. */
 let wheelSeq = 0;
 function timeWheel(value, onChange) {
   const W = window.WheelCore;
@@ -198,17 +199,26 @@ function timeWheel(value, onChange) {
     cols.minutes.list);
 
   // El scroll solo se puede colocar con el nodo ya en el DOM (tiene altura).
-  const place = () => { cols.hours.setIndex(cols.hours.index, false); cols.minutes.setIndex(cols.minutes.index, false); };
+  let placed = false;
+  const place = () => { cols.hours.setIndex(cols.hours.index, false); cols.minutes.setIndex(cols.minutes.index, false); placed = true; };
   requestAnimationFrame(place);
 
-  root.setValue = (v) => {
-    const t = W.parseTime(v);
-    if (!t) return;
-    last = W.formatTime(t.h, t.m);
-    cols.hours.setIndex(t.h, false);
-    cols.minutes.setIndex(t.m, false);
+  // Lee el valor del scroll actual, para la columna en esa fila (corta la inercia) y avisa
+  // ya. Sin colocar todavía, el scroll no dice nada: vale el valor inicial.
+  root.flush = () => {
+    if (!placed || !root.isConnected) return;
+    for (const col of [cols.hours, cols.minutes]) {
+      clearTimeout(col.timer);
+      const count = col === cols.hours ? 24 : 60;
+      col.setIndex(W.nearestIndex(col.list.scrollTop, ROW, count), false);
+    }
+    emit();
   };
   return root;
+}
+
+function flushWheels() {
+  document.querySelectorAll(".wheel").forEach((w) => { if (w.flush) w.flush(); });
 }
 
 /* Aviso breve arriba, con icono. #toast está siempre en el DOM como región viva vacía
