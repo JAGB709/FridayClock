@@ -48,6 +48,15 @@ function iconButton(iconName, label, onclick, cls = "ghost") {
   return btn("", onclick, cls, iconName, { "aria-label": label, title: label });
 }
 
+/* Escala el iframe del motor (800x480 fijo) al ancho del contenedor, manteniendo 16:10.
+   Lo usan la vista previa de Pantallas y el reloj en vivo de Inicio. */
+function fitFaceFrame(wrap, frame) {
+  if (!wrap || !frame) return;
+  const k = wrap.clientWidth / 800;
+  frame.style.transform = "scale(" + k + ")";
+  wrap.style.height = Math.round(480 * k) + "px";
+}
+
 /* Estados de vista: vacío, cargando y error. Centrados, con icono y texto. */
 function emptyState(iconName, text, action = null) {
   return h("div", { class: "state" },

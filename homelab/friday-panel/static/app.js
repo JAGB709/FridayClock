@@ -62,7 +62,6 @@ const daysText = (days) => {
   for (const [name, list] of PRESETS) if (list.length === set.size && list.every((d) => set.has(d))) return name === "Una vez" ? "Una vez" : name;
   return DAYS.filter(([k]) => set.has(k)).map(([, l]) => l).join(" ");
 };
-const whenText = (ms) => new Date(ms).toLocaleString("es-ES", { weekday: "short", hour: "2-digit", minute: "2-digit" });
 
 // ------------------------------------------------------------------ formulario y Guardar
 
@@ -215,6 +214,12 @@ function showLogin() {
 
 // ------------------------------------------------------------------ Inicio
 
+// Estado de la vista de Inicio. El iframe del reloj vive aquí y no se recrea en los refrescos:
+// solo se reenvían los datos (face-data) y se repintan las tarjetas de alarma.
+let home = null; // { root, ring, next, live }
+let homeSeq = 0;
+const HOME_LOAD_MS = 8000; // si el motor no carga en este tiempo, se enseña el respaldo
+
 async function doAction(name, body) {
   const r = await api("POST", `/api/do/${name}`, body);
   toast(r.ok ? "Hecho" : errText(r), !r.ok);
@@ -222,30 +227,132 @@ async function doAction(name, body) {
   return r.ok;
 }
 
+const timeText = (ms) => new Date(ms).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+
+// "hoy a las 08:30", "mañana a las 08:30" o "mié a las 08:30".
+function whenLabel(ms) {
+  const at = new Date(ms);
+  const day0 = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((day0(at) - day0(new Date())) / 86400000);
+  const hour = at.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  if (diff === 0) return `hoy a las ${hour}`;
+  if (diff === 1) return `mañana a las ${hour}`;
+  return `${at.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "")} a las ${hour}`;
+}
+
+// Tarjeta del reloj en vivo: el motor en un iframe de solo lectura (sin edición ni rejilla), con el
+// diseño guardado y los datos reales. Si no hay diseño o el motor no carga, enseña la hora del reloj.
+function liveClockCard(design, data, ms) {
+  const live = { frame: null, ready: false, data, design, ms };
+  const wrap = h("div", { class: "face-wrap" });
+  const fallback = h("div", { class: "live-fallback", hidden: true },
+    h("div", { class: "clock" }, timeText(ms)),
+    h("div", { class: "muted" }, "Vista del reloj no disponible"));
+  const card = h("div", { class: "card face-card live-card" }, wrap, fallback);
+  const showFallback = (on) => { wrap.hidden = on; fallback.hidden = !on; };
+  live.fallback = fallback;
+  live.showFallback = showFallback;
+  live.fit = () => fitFaceFrame(wrap, live.frame);
+  live.push = () => {
+    if (!live.ready || !live.frame || !live.frame.isConnected || !live.frame.contentWindow) return;
+    live.frame.contentWindow.postMessage({ type: "face-data", data: live.data }, location.origin);
+  };
+  if (!design) { showFallback(true); return { card, live }; }
+
+  const frame = h("iframe", { class: "face-frame", src: "/face/index.html?preview=1", scrolling: "no", tabindex: "-1", title: "Reloj en vivo" });
+  live.frame = frame;
+  let timer = setTimeout(() => { if (!live.ready) showFallback(true); }, HOME_LOAD_MS);
+  frame.addEventListener("load", () => {
+    clearTimeout(timer);
+    live.ready = true;
+    showFallback(false);
+    live.fit();
+    frame.contentWindow.postMessage({ type: "face-render", design, opts: { bgBase: "/api/bg/" } }, location.origin);
+    live.push();
+  });
+  frame.addEventListener("error", () => showFallback(true));
+  wrap.append(frame);
+  if (window.ResizeObserver) new ResizeObserver(() => live.fit()).observe(wrap);
+  return { card, live };
+}
+
+function ringingCard(s) {
+  if (!s.ringing) return null;
+  return h("div", { class: "card ring stack" },
+    h("div", { class: "ring-head" }, icon("bell", 24), h("strong", {}, `Sonando: ${s.ringing_label || "Alarma"}`)),
+    h("div", { class: "row ring-actions" }, btn("Apagar", () => doAction("stop"), "", "x"), btn("Posponer", () => doAction("snooze"), "ghost", "clock")));
+}
+
+function nextAlarmCard(s) {
+  const a = s.next_alarm;
+  if (!a) {
+    return h("div", { class: "card" }, emptyState("bell", "No hay alarmas activas",
+      btn("Crear alarma", () => go({ tab: "alarms", edit: "new" }), "", "plus")));
+  }
+  const open = () => go(a.id != null ? { tab: "alarms", edit: a.id } : { tab: "alarms" });
+  return h("div", {
+    class: "card alarm-card", role: "button", tabindex: "0",
+    "aria-label": `Próxima alarma ${a.time}, ${a.label || "Alarma"}, ${whenLabel(a.at)}`,
+    onclick: open,
+    onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } },
+  },
+  h("div", {},
+    h("div", { class: "muted next-kicker" }, "Próxima alarma"),
+    h("div", { class: "t" }, a.time),
+    h("div", { class: "muted" }, `${a.label || "Alarma"} · ${whenLabel(a.at)}`)),
+  icon("chevron-right", 24));
+}
+
+function quickActionsCard() {
+  const say = h("input", { id: "say", type: "text", placeholder: "Decir en el reloj…", maxlength: "300", "aria-label": "Texto para decir en el reloj", enterkeyhint: "send" });
+  const send = async (ev) => {
+    ev.preventDefault();
+    if (!say.value.trim()) return;
+    if (await doAction("speak", { text: say.value })) say.value = "";
+  };
+  return h("div", { class: "card stack" }, h("h2", {}, "Acciones rápidas"),
+    btn("Probar alarma en 10 s", () => doAction("test"), "", "play"),
+    btn("Buenos días", () => doAction("briefing"), "ghost", "sun"),
+    h("form", { class: "row say-row", onsubmit: send }, say, btn("Decir", null, "", "mic", { type: "submit" })));
+}
+
+function paintHomeCards(s) {
+  home.ring.replaceChildren(...[ringingCard(s)].filter(Boolean));
+  home.next.replaceChildren(nextAlarmCard(s));
+  if (home.live) {
+    home.live.ms = s.time;
+    home.live.fallback.querySelector(".clock").textContent = timeText(s.time);
+  }
+}
+
 async function renderHome() {
-  const r = await api("GET", "/api/status");
-  if (route.tab !== "home") return;
+  // Con la vista ya montada solo se refrescan estado y datos: el iframe y el campo de texto se conservan.
+  if (home && home.root.isConnected) return refreshHome();
+  const mine = ++homeSeq;
+  const [r, rd, rf] = await Promise.all([api("GET", "/api/status"), api("GET", "/api/design"), api("GET", "/api/face-data")]);
+  if (route.tab !== "home" || mine !== homeSeq) return;
   if (!r.ok) { showError(r); return; }
   const s = r.data;
-  const time = new Date(s.time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-  const next = s.next_alarm ? `${s.next_alarm.time} · ${s.next_alarm.label} (${whenText(s.next_alarm.at)})` : "ninguna";
-  const say = h("input", { id: "say", type: "text", placeholder: "Decir en el reloj…", maxlength: "300" });
-  setView(
-    h("div", { class: "card" }, h("div", { class: "clock" }, time), h("div", { class: "muted" }, "Próxima alarma: ", next)),
-    s.ringing ? h("div", { class: "card ring stack" }, h("strong", {}, "🔔 Sonando: ", s.ringing_label || "Alarma"),
-      h("div", { class: "row" }, btn("Apagar", () => doAction("stop")), btn("Posponer", () => doAction("snooze"), "ghost"))) : null,
-    h("div", { class: "card stack" }, h("h2", {}, "Acciones rápidas"),
-      btn("Probar alarma en 10 s", () => doAction("test")),
-      btn("Buenos días", () => doAction("briefing"), "ghost"),
-      h("div", { class: "row between" }, say, btn("Decir", async () => { if (await doAction("speak", { text: say.value })) say.value = ""; }, "small"))),
-  );
+  const design = rd.ok && rd.data.design ? rd.data.design : null;
+  const data = rf.ok ? rf.data : (typeof SAMPLE_DATA !== "undefined" ? SAMPLE_DATA : {});
+  const { card, live } = liveClockCard(design, data, s.time);
+  home = { root: h("div", { class: "home" }), ring: h("div", {}), next: h("div", {}), live };
+  home.root.append(card, home.ring, home.next, quickActionsCard());
+  paintHomeCards(s);
+  setView(home.root);
+  live.fit();
+}
+
+async function refreshHome() {
+  const mine = homeSeq;
+  const [r, rf] = await Promise.all([api("GET", "/api/status"), api("GET", "/api/face-data")]);
+  if (route.tab !== "home" || mine !== homeSeq || !home || !home.root.isConnected) return;
+  if (rf.ok) { home.live.data = rf.data; home.live.push(); }
+  if (r.ok) paintHomeCards(r.data);
 }
 
 setInterval(() => {
-  if (document.visibilityState === "visible" && route.tab === "home" && !form && !loginShown) {
-    const say = $("#say");
-    if (!say || (document.activeElement !== say && !say.value)) renderHome();
-  }
+  if (document.visibilityState === "visible" && route.tab === "home" && !form && !loginShown) renderHome();
 }, 10_000);
 
 // ------------------------------------------------------------------ Alarmas

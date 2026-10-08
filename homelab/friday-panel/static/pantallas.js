@@ -90,11 +90,7 @@ function pushData() {
 }
 
 function fitFrame() {
-  const wrap = $("#facewrap");
-  if (!wrap || !dz.frame) return;
-  const k = wrap.clientWidth / 800;
-  dz.frame.style.transform = "scale(" + k + ")";
-  wrap.style.height = Math.round(480 * k) + "px";
+  fitFaceFrame($("#facewrap"), dz.frame);
 }
 window.addEventListener("resize", fitFrame);
 

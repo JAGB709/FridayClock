@@ -414,6 +414,21 @@ body:has(#savebar:not([hidden])) .fab { bottom: calc(var(--tabs-h) + var(--saveb
 
 .face-card { padding: 0; overflow: hidden; }
 .face-wrap { position: relative; width: 100%; height: 0; background: #000; }
+.live-card { margin-top: var(--space-2); }
+.live-fallback { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); min-height: 160px; padding: var(--space-5) var(--space-4); text-align: center; }
+.live-fallback[hidden], .face-wrap[hidden] { display: none; }
+
+/* ------------------------------------------------------------------ inicio */
+
+.card > .state { padding: var(--space-4) 0; }
+.ring-head { display: flex; align-items: center; gap: var(--space-3); color: var(--accent); font-size: var(--fs-4); }
+.ring-head strong { color: var(--text); font-weight: 600; }
+.ring-actions button { flex: 1 1 0; }
+.alarm-card .next-kicker { font-size: var(--fs-2); }
+.alarm-card > .ico { flex: none; color: var(--text-muted); }
+.alarm-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.say-row { flex-wrap: nowrap; }
+
 .face-frame { position: absolute; left: 0; top: 0; width: 800px; height: 480px; border: 0; transform-origin: 0 0; }
 
 .elrow {
