@@ -18,11 +18,11 @@
   </header>
   <main id="view"></main>
   <div id="savebar" hidden>
-    <button id="discard" type="button" class="ghost" aria-label="Descartar cambios"><span class="lbl">Descartar</span></button>
+    <button id="discard" type="button" class="ghost" aria-label="Descartar cambios" title="Descartar cambios"><span class="lbl">Descartar</span></button>
     <button id="try" type="button" class="ghost" aria-label="Probar en el reloj" hidden><span class="lbl">Probar<span class="lbl-x"> en el reloj</span></span></button>
     <button id="save" type="button" class="primary"><span class="lbl">Guardar</span></button>
   </div>
-  <div id="toast" hidden role="status" aria-live="polite"></div>
+  <div id="toast" class="is-empty" role="status" aria-live="polite"></div>
   <nav id="tabs" aria-label="Secciones">
     <button type="button" data-tab="home" data-icon="house"><span class="lbl">Inicio</span></button>
     <button type="button" data-tab="alarms" data-icon="bell"><span class="lbl">Alarmas</span></button>

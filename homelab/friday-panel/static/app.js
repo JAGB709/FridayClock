@@ -189,7 +189,7 @@ function showLogin() {
   form = null; updateSaveBar();
   fillChrome();
   document.body.classList.add("login");
-  setTitle("Entrar");
+  setTitle("Friday");
   const pass = h("input", { id: "pass", type: "password", autocomplete: "current-password", required: true });
   const field = h("label", { class: "field" }, h("span", {}, "Contraseña del panel"), pass);
   const go_ = h("button", { type: "submit", class: "primary" }, icon("chevron-right"), h("span", { class: "lbl" }, "Entrar"));

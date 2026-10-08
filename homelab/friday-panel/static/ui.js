@@ -35,7 +35,8 @@ function icon(name, size = 20) {
 function btn(label, onclick, cls = "", iconName = null, opts = {}) {
   const onlyIcon = label == null || label === "";
   const classes = [cls, onlyIcon ? "icon" : ""].filter(Boolean).join(" ");
-  const ariaLabel = opts["aria-label"] || null;
+  // Un botón nunca se queda sin nombre: sin texto ni aria-label, se usa el del icono.
+  const ariaLabel = opts["aria-label"] || (onlyIcon ? (iconName || "Botón") : null);
   return h("button", { type: "button", ...opts, class: classes, onclick,
     "aria-label": ariaLabel, title: onlyIcon ? (opts.title || ariaLabel) : (opts.title || null) },
   iconName ? icon(iconName) : null,
@@ -73,10 +74,12 @@ function errorState(msg, onRetry, retryLabel = "Reintentar") {
 function segmented(options, value, onchange) {
   const bar = h("div", { class: "segmented", role: "tablist" });
   const select = (v, focus) => {
+    const known = options.some((o) => String(o[0]) === String(v));
     for (const b of bar.children) {
       const on = b.dataset.value === String(v);
       b.setAttribute("aria-selected", on ? "true" : "false");
-      b.tabIndex = on ? 0 : -1;
+      // Si el valor no es de ninguna opción, la primera sigue siendo alcanzable con Tab.
+      b.tabIndex = on || (!known && b === bar.firstElementChild) ? 0 : -1;
       b.classList.toggle("on", on);
       if (on && focus) b.focus();
     }
@@ -105,21 +108,32 @@ function switchRow(label, checked, onchange, key) {
     h("input", { type: "checkbox", role: "switch", checked: !!checked, onchange: (ev) => onchange(ev.target.checked) }));
 }
 
-/* Aviso breve arriba, con icono. Los errores duran más. */
-let toastTimer;
+/* Aviso breve arriba, con icono. #toast está siempre en el DOM como región viva vacía
+   (clase is-empty, oculta sin display:none); el contenido se pone un fotograma después de
+   mostrarla para que los lectores de pantalla lo anuncien. Los errores duran más. */
+let toastTimer, toastFrame;
 function toast(msg, bad = false) {
   const t = document.getElementById("toast");
-  t.replaceChildren(icon(bad ? "alert-triangle" : "check"), h("span", {}, msg));
-  t.className = bad ? "bad" : "";
-  t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), bad ? 6000 : 3000);
+  cancelAnimationFrame(toastFrame);
+  t.replaceChildren();
+  t.classList.add("is-empty");
+  toastFrame = requestAnimationFrame(() => {
+    t.className = bad ? "bad" : "";
+    t.replaceChildren(icon(bad ? "alert-triangle" : "check"), h("span", {}, msg));
+    toastTimer = setTimeout(() => { t.replaceChildren(); t.className = "is-empty"; }, bad ? 6000 : 3000);
+  });
 }
 
-/* Estado de la conexión en la cabecera: icono y texto, nunca solo color. */
+/* Estado de la conexión en la cabecera: icono y texto, nunca solo color. #conn es una
+   región viva: solo se toca cuando cambia, para no repetir el aviso en cada petición. */
+let connLast = null;
 function setConn(on, msg) {
-  const p = document.getElementById("conn");
   const text = on ? "Conectado" : (msg || "Sin conexión con el reloj");
+  const key = (on ? "on:" : "off:") + text;
+  if (key === connLast) return;
+  connLast = key;
+  const p = document.getElementById("conn");
   p.replaceChildren(icon(on ? "wifi" : "wifi-off", 16), h("span", {}, text));
   p.className = "pill " + (on ? "on" : "off");
   p.title = text;
@@ -131,10 +145,14 @@ function setConn(on, msg) {
 function confirmInPage(msg, okLabel = "Aceptar") {
   return new Promise((resolve) => {
     const before = document.activeElement;
+    // El resto de la página queda inerte mientras el diálogo está abierto.
+    const inertEls = ["top", "view", "tabs", "savebar", "toast"].map((i) => document.getElementById(i))
+      .filter((el) => el && !el.inert);
     const msgId = "dlg-msg-" + Date.now();
     const close = (v) => {
       document.removeEventListener("keydown", onKey, true);
       dlg.remove();
+      inertEls.forEach((el) => { el.inert = false; });
       if (before && before.isConnected && before.focus) before.focus();
       resolve(v);
     };
@@ -150,10 +168,11 @@ function confirmInPage(msg, okLabel = "Aceptar") {
       }
     };
     const dlg = h("div", { class: "modal", onclick: (ev) => { if (ev.target === dlg) close(false); } },
-      h("div", { class: "card", role: "dialog", "aria-modal": "true", "aria-describedby": msgId, "aria-label": "Confirmar" },
+      h("div", { class: "card", role: "dialog", "aria-modal": "true", "aria-labelledby": msgId },
         h("p", { id: msgId }, msg),
         h("div", { class: "row actions" }, cancel, ok)));
     document.body.append(dlg);
+    inertEls.forEach((el) => { el.inert = true; });
     document.addEventListener("keydown", onKey, true);
     cancel.focus();
   });

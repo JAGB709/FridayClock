@@ -381,6 +381,11 @@ body:has(#savebar:not([hidden])) .fab { bottom: calc(var(--tabs-h) + var(--saveb
   font-size: var(--fs-2); line-height: 1.4;
   animation: drop var(--dur-base) var(--ease);
 }
+/* Vacío sigue en el DOM (región viva) pero no se ve ni ocupa sitio ni recibe toques. */
+#toast.is-empty {
+  visibility: hidden; min-height: 0; height: 0; padding: 0; border-width: 0;
+  box-shadow: none; overflow: hidden; pointer-events: none; animation: none;
+}
 #toast .ico { color: var(--success); }
 #toast.bad { border-color: var(--error); }
 #toast.bad .ico { color: var(--error); }
