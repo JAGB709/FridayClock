@@ -247,7 +247,7 @@ function liveClockCard(design, data, ms) {
   const wrap = h("div", { class: "face-wrap" });
   const fallback = h("div", { class: "live-fallback", hidden: true },
     h("div", { class: "clock" }, timeText(ms)),
-    h("div", { class: "muted" }, "Vista del reloj no disponible"));
+    h("div", { class: "muted live-msg" }, icon("alert-triangle", 16), h("span", {}, "No se pudo cargar la vista en vivo")));
   const card = h("div", { class: "card face-card live-card" }, wrap, fallback);
   const showFallback = (on) => { wrap.hidden = on; fallback.hidden = !on; };
   live.fallback = fallback;
@@ -261,16 +261,20 @@ function liveClockCard(design, data, ms) {
 
   const frame = h("iframe", { class: "face-frame", src: "/face/index.html?preview=1", scrolling: "no", tabindex: "-1", title: "Reloj en vivo" });
   live.frame = frame;
-  let timer = setTimeout(() => { if (!live.ready) showFallback(true); }, HOME_LOAD_MS);
+  // Si `load` nunca llega, a los 8 s se enseña el respaldo (y no si ya se salió de Inicio).
+  live.timer = setTimeout(() => { if (!live.ready && frame.isConnected) showFallback(true); }, HOME_LOAD_MS);
   frame.addEventListener("load", () => {
-    clearTimeout(timer);
+    clearTimeout(live.timer);
+    // Con 404, 500 o sin red Chrome también dispara `load`: se comprueba que el motor esté vivo (window.Face).
+    let alive = false;
+    try { alive = !!frame.contentWindow && typeof frame.contentWindow.Face === "object"; } catch { alive = false; }
+    if (!alive) { live.ready = false; showFallback(true); return; }
     live.ready = true;
     showFallback(false);
     live.fit();
     frame.contentWindow.postMessage({ type: "face-render", design, opts: { bgBase: "/api/bg/" } }, location.origin);
     live.push();
   });
-  frame.addEventListener("error", () => showFallback(true));
   wrap.append(frame);
   if (window.ResizeObserver) new ResizeObserver(() => live.fit()).observe(wrap);
   return { card, live };
@@ -292,7 +296,6 @@ function nextAlarmCard(s) {
   const open = () => go(a.id != null ? { tab: "alarms", edit: a.id } : { tab: "alarms" });
   return h("div", {
     class: "card alarm-card", role: "button", tabindex: "0",
-    "aria-label": `Próxima alarma ${a.time}, ${a.label || "Alarma"}, ${whenLabel(a.at)}`,
     onclick: open,
     onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } },
   },
@@ -329,6 +332,7 @@ async function renderHome() {
   // Con la vista ya montada solo se refrescan estado y datos: el iframe y el campo de texto se conservan.
   if (home && home.root.isConnected) return refreshHome();
   const mine = ++homeSeq;
+  if (home && home.live) clearTimeout(home.live.timer);
   const [r, rd, rf] = await Promise.all([api("GET", "/api/status"), api("GET", "/api/design"), api("GET", "/api/face-data")]);
   if (route.tab !== "home" || mine !== homeSeq) return;
   if (!r.ok) { showError(r); return; }
