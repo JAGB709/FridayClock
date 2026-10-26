@@ -27,3 +27,17 @@ device-kit/hwparam.json
 device-kit/.state
 .state
 hwparam.json
+
+# secretos y artefactos que nunca se publican
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.keystore
+*.apk
+*.img
+*.onnx
+*.gguf
+models/

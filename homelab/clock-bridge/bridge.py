@@ -16,6 +16,7 @@ import base64
 import io
 import json
 import logging
+import hmac
 import os
 import shutil
 import subprocess
@@ -118,9 +119,10 @@ app = FastAPI(title="clock-bridge")
 # --------------------------------------------------------------------------- auth
 
 def check_token(authorization: str | None = Header(default=None)) -> None:
-    if not BRIDGE_TOKEN:
-        return
-    if authorization != f"Bearer {BRIDGE_TOKEN}":
+    # Sin token configurado el puente no atiende: llega a Hermes, que tiene terminal.
+    if len(BRIDGE_TOKEN) < 16 or BRIDGE_TOKEN.startswith("pon-aqui"):
+        raise HTTPException(status_code=503, detail="BRIDGE_TOKEN sin configurar (mínimo 16 caracteres)")
+    if not hmac.compare_digest(authorization or "", f"Bearer {BRIDGE_TOKEN}"):
         raise HTTPException(status_code=401, detail="token inválido")
 
 # --------------------------------------------------------------------------- STT
