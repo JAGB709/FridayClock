@@ -49,7 +49,7 @@ async function api(method, path, body, raw) {
   return { ok: res.ok && data.ok !== false, status: res.status, data };
 }
 
-const errText = (r) => r.data.login_required ? "Inicia sesión" : (r.data.error || `Error ${r.status}`);
+const errText = (r) => r.data.login_required ? "Inicia sesión" : (r.data.error ? humanError(r.data.error) : `Error ${r.status}`);
 
 // Si hace falta login, la pantalla de login manda: no la tapamos con un error.
 function showError(r) {
@@ -107,12 +107,12 @@ $("#save").addEventListener("click", async () => {
     render(r.next || route);
   } else {
     let errs = r.data.errors || {};
-    const detail = Object.entries(errs).map(([k, v]) => `${k}: ${v}`).join(" · ");
+    const detail = errorDetail(errs);
     toast(errText(r) + (detail ? ` — ${detail}` : ""), true);
     // Las alarmas devuelven un solo "error" que empieza por el campo ("max_volume debe…"):
     // se marca ese campo igual que con la lista de errores de Ajustes.
     const k = !Object.keys(errs).length && /^([a-z_]+) /.exec(r.data.error || "");
-    if (k && form && k[1] in form.current) errs = { [k[1]]: r.data.error };
+    if (k && form && k[1] in form.current) errs = { [k[1]]: errorBody(r.data.error) };
     if (form) { form.errors = errs; markErrors(); }
   }
 });
@@ -130,7 +130,7 @@ function markErrors() {
     el.querySelector(".err")?.remove();
     if (el.classList.contains("switch") && el.nextElementSibling?.classList.contains("err")) el.nextElementSibling.remove();
     if (msg) {
-      const err = h("div", { class: "err" }, icon("alert-triangle", 16), h("span", {}, msg));
+      const err = h("div", { class: "err", role: "alert" }, icon("alert-triangle", 16), h("span", {}, msg));
       if (el.classList.contains("switch")) el.after(err); else el.append(err);
       // Un campo con error dentro de "Opciones" plegadas se despliega para que se vea.
       const fold = el.closest("details");
@@ -215,7 +215,7 @@ function showLogin() {
     if (r.ok) { loginShown = false; render(route); return; }
     field.classList.add("error");
     field.querySelector(".err")?.remove();
-    field.append(h("div", { class: "err" }, icon("alert-triangle", 16), h("span", {}, errText(r))));
+    field.append(h("div", { class: "err", role: "alert" }, icon("alert-triangle", 16), h("span", {}, errText(r))));
     pass.select();
   };
   enterNext = true;
@@ -380,7 +380,8 @@ setInterval(() => {
 // desplazaría). Solo hay uno; render() y el login lo quitan.
 function setFab(node) {
   document.getElementById("fab")?.remove();
-  if (node) document.body.append(node);
+  // Antes de la barra de pestañas en el DOM, para que el orden de tabulación sea el visual.
+  if (node) document.body.insertBefore(node, document.getElementById("tabs"));
 }
 
 const DAY_NAMES = { mon: "Lunes", tue: "Martes", wed: "Miércoles", thu: "Jueves", fri: "Viernes", sat: "Sábado", sun: "Domingo" };
@@ -667,12 +668,19 @@ async function renderSettings() {
   if (route.tab !== "settings") return;
   if (!r.ok) { showError(r); return; }
   startForm(r.data.settings, (c) => api("PUT", "/api/settings", c));
+  registerKeyLabels(Object.fromEntries(r.data.schema.map((f) => [f.key, String(f.label).replace(/\s*\([^)]*\)\s*$/, "")])));
   const groups = new Map();
   for (const f of r.data.schema) { if (!groups.has(f.group)) groups.set(f.group, []); groups.get(f.group).push(f); }
   const soundsHost = h("div", {});
+  const reloadSounds = async () => { if (route.tab === "settings") paintSounds(await api("GET", "/api/sounds")); };
   const paintSounds = (res) => {
-    const files = res.ok ? (res.data.sounds || []).filter((x) => x.kind === "file") : [];
-    soundsHost.replaceChildren(soundsCard(files, async () => { if (route.tab === "settings") paintSounds(await api("GET", "/api/sounds")); }));
+    if (!res.ok) {
+      soundsHost.replaceChildren(h("div", { class: "card" }, h("h2", {}, "Sonidos subidos"),
+        errorState("No se pudo cargar la lista de sonidos: " + errText(res), reloadSounds)));
+      return;
+    }
+    const files = (res.data.sounds || []).filter((x) => x.kind === "file");
+    soundsHost.replaceChildren(soundsCard(files, reloadSounds));
   };
   paintSounds(rs);
   setView(

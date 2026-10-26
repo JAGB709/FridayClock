@@ -588,7 +588,7 @@ function bindTry() {
     const r = await api("POST", "/api/design/preview", { design: form.current, seconds: 30 });
     b.disabled = false; b.removeAttribute("aria-busy");
     if (r.ok) { toast("Mostrándose 30 s en el reloj"); return; }
-    const detail = Object.entries(r.data.errors || {}).map(([k, v]) => `${k}: ${v}`).join(" · ");
+    const detail = errorDetail(r.data.errors);
     toast(errText(r) + (detail ? " — " + detail : ""), true);
   });
 }

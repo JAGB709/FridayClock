@@ -78,7 +78,7 @@ def test_generated_icons_are_up_to_date():
 
 def test_no_emojis_in_clock_engine_and_design_system():
     import re
-    rx = re.compile("[⌀-⏿■-➿⤀-⥿⬀-⯿️\U0001F000-\U0001FFFF]")
+    rx = re.compile("[\u2300-\u23ff\u25a0-\u27bf\u2900-\u297f\u2b00-\u2bff\ufe0f\U0001F000-\U0001FFFF]")
     roots = [ROOT / "app-android/src/main", ROOT / "design-system"]
     hits = []
     for base in roots:
@@ -100,7 +100,7 @@ PANEL = ROOT / "homelab/friday-panel/static"
 
 def _panel_files():
     for f in sorted(PANEL.iterdir()):
-        if f.is_file() and f.suffix in (".html", ".js", ".css", ".json", ".svg") and f.name != "icon.svg":
+        if f.is_file() and f.suffix in (".html", ".js", ".css", ".json", ".svg"):
             yield f
 
 
@@ -109,7 +109,9 @@ def _panel_files():
 # Solo estos símbolos no alfabéticos se admiten como texto: flechas arriba/abajo, grados,
 # multiplicación y la puntuación habitual (· – — … ¿ ¡ « »).
 ALLOWED_SYMBOLS = set("↑↓°×·–—…¿¡«»")
-EXTRA_FORBIDDEN = set("•‼⁉‹›\u200d\ufe0f\u20e3\uff0b\u2122\u00a9\u00ae")
+# Puntuación "Po" de aspecto pictográfico (la normal, como ¿ ¡ · …, queda permitida).
+NO_PO_SYMBOLS = set("\u203b\u2051\u2042\u2055\u2234\u2235\u203c\u2049")
+EXTRA_FORBIDDEN = set("\u2022\u203c\u2049\u2039\u203a\u200d\ufe0f\u20e3\uff0b\u2122\u00a9\u00ae")
 
 
 def decode_escapes(text, suffix):
@@ -117,6 +119,7 @@ def decode_escapes(text, suffix):
     import html
     import re
 
+    text = re.sub(r"\\x([0-9a-fA-F]{2})", lambda m: chr(int(m.group(1), 16)), text)
     text = re.sub(r"\\u\{([0-9a-fA-F]{1,6})\}", lambda m: chr(min(int(m.group(1), 16), 0x10FFFF)), text)
     text = re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), text)
     if suffix == ".css":
@@ -129,12 +132,20 @@ def decode_escapes(text, suffix):
 def pictograph_hits(text, suffix=".js"):
     import unicodedata
 
+    import re
+
     hits = []
+    for i, line in enumerate(text.split("\n"), 1):
+        # Construcción dinámica: fromCodePoint/fromCharCode con un número de pictograma.
+        for m in re.finditer(r"from(?:CodePoint|CharCode)\(([^)]*)\)", line):
+            for n in re.findall(r"0[xX][0-9a-fA-F]+|\d+", m.group(1)):
+                if int(n, 0) > 0x2000:
+                    hits.append((i, chr(min(int(n, 0), 0x10FFFF))))
     for i, line in enumerate(decode_escapes(text, suffix).split("\n"), 1):
         for ch in line:
             if ch in ALLOWED_SYMBOLS or ord(ch) < 0x80:
                 continue
-            if ch in EXTRA_FORBIDDEN or unicodedata.category(ch) in ("So", "Sk", "Sm", "Cf", "Cs", "Co") or 0x2100 <= ord(ch) <= 0x214F or ord(ch) >= 0x1F000:
+            if ch in EXTRA_FORBIDDEN or unicodedata.category(ch) in ("So", "Sk", "Sm", "Cf", "Cs", "Co", "No") or ch in NO_PO_SYMBOLS or 0x2100 <= ord(ch) <= 0x214F or ord(ch) >= 0x1F000:
                 hits.append((i, ch))
     return hits
 
@@ -152,8 +163,10 @@ def test_pictograph_scanner_catches_escaped_and_odd_forms():
         ("a = '\\u2713';", ".js"), ("a = '\\u{1F514}';", ".js"), ("a = '\\ud83d\\udd14';", ".js"),
         ('x::before { content: "\\2713"; }', ".css"), ('x::before { content: "\\1F514"; }', ".css"),
         ("<p>&#x2713;</p>", ".html"), ("<p>&#10003;</p>", ".html"), ("<p>&check;</p>", ".html"),
-        ("ℹ", ".js"), ("™", ".js"), ("©", ".js"), ("®", ".js"), ("•", ".js"), ("‼", ".js"),
-        ("a\u200db", ".js"), ("a\ufe0fb", ".js"), ("\U0001F514", ".js"), ("✓", ".js"), ("＋", ".js"), ("‹", ".js"), ("←", ".js"),
+        ("\u2139", ".js"), ("\u2122", ".js"), ("\u00a9", ".js"), ("\u00ae", ".js"), ("\u2022", ".js"), ("\u203c", ".js"),
+        ("a\u200db", ".js"), ("a = '\\xA9';", ".js"), ("String.fromCodePoint(0x1F514)", ".js"),
+        ("String.fromCharCode(9733)", ".js"), ("\u2460", ".js"), ("\u203b", ".js"), ('<path d="M0"/><text>\u2460</text>', ".svg"),
+        ("\u00b2", ".js"), ("a\ufe0fb", ".js"), ("\U0001F514", ".js"), ("\u2713", ".js"), ("\uff0b", ".js"), ("\u2039", ".js"), ("\u2190", ".js"),
     ]
     for text, suf in bad:
         assert pictograph_hits(text, suf), f"no detectado: {text!r}"
@@ -176,10 +189,9 @@ olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise paleviol
 powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue
 slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke
 yellow yellowgreen""".split())
-COLOR_PROPS = (
-    "color", "background", "background-color", "background-image", "border", "border-color", "outline", "outline-color",
-    "fill", "stroke", "box-shadow", "text-shadow", "caret-color", "accent-color", "text-decoration-color",
-)
+# Cualquier propiedad que pueda llevar un color (border-top, border-left-color, ...) y las
+# propiedades personalizadas (--x: white), donde se puede esconder cualquier valor.
+COLOR_PROP_RX = r"color|background|border|outline|shadow|fill|stroke|caret|accent|decoration"
 
 
 def _blank_css_comments(css):
@@ -226,7 +238,7 @@ def literal_color_lines(css):
             for f in re.finditer(r"\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(", v):
                 if not re.match(r"rgba?\(\s*0\s*,\s*0\s*,\s*0\s*[,)]", v[f.start():]):
                     problem = True
-            if prop in COLOR_PROPS:
+            if prop.startswith("--") or re.search(COLOR_PROP_RX, prop):
                 words = re.sub(r"url\([^)]*\)", "", v)
                 for w in re.finditer(r"(?<![\w-])([a-zA-Z]+)(?![\w(-])", words):
                     if w.group(1).lower() in NAMED_COLORS:
@@ -245,7 +257,8 @@ def test_color_scanner_catches_literals_and_spares_selectors():
     bad = [
         "a { color: #000; background: #ff0000; }", "a { background: #000fff; }", "a { color: #abc; }",
         "a { color: hsl(10, 50%, 50%); }", "a { color: hsla(10 50% 50% / .5); }", "a { color: red; }",
-        "a { border: 1px solid white; }", "a { background: url(\"data:image/svg+xml,<svg fill='%23ff0000'/>\"); }",
+        "a { border: 1px solid white; }",
+        "a { border-top: 1px solid white; }", "a { border-left-color: red; }", "a { --x: white; }", "a { outline-offset: 0; stop-color: gold; }", "a { background: url(\"data:image/svg+xml,<svg fill='%23ff0000'/>\"); }",
         "a { box-shadow: 0 0 4px rgba(255, 0, 0, .5); }", "@media (x) { a { fill: gray; } }", "a { --x: #fff; }",
         "a {\n  color: var(--text);\n  outline: 2px solid rgb(1,2,3);\n}",
     ]

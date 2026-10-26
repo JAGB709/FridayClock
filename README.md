@@ -241,14 +241,14 @@ red, el panel lo dice y no guarda nada; las alarmas siguen sonando igual.
 
 **Estructura del panel.** Es una aplicación de móvil primero con cuatro pestañas, todas con iconos Lucide y el sistema de diseño Obsidiana (tokens e Inter compartidos con el reloj, ver «Sistema de diseño»):
 
-- **Inicio**: el reloj en vivo, con la misma vista que muestra el reloj ahora mismo, y el resumen de la próxima alarma.
+- **Inicio**: la tarjeta del reloj en vivo, con la misma vista que muestra el reloj ahora mismo; cuando una alarma está sonando, una tarjeta propia con **Apagar** y **Posponer**; la tarjeta de la próxima alarma (hora, nombre y días; al tocarla se abre en el editor de alarmas); y las acciones rápidas: probar la alarma, el «buenos días» y el campo **Decir** para que el reloj hable.
 - **Alarmas**: lista de tarjetas con interruptor, un botón flotante **+** para crear y, al crear o editar, una rueda de hora (`static/wheel-core.js`) para elegir la hora con el dedo.
 - **Pantallas**: el editor del diseño con la vista previa fija arriba, que sigue visible mientras se edita, y cuatro secciones debajo.
 - **Ajustes**: ajustes del reloj agrupados en tarjetas.
 
-Los componentes comunes (pestañas, tarjetas, interruptores, avisos) están en `static/ui.js` y usan solo los tokens de `tokens.css`; no hay colores literales en `styles.css`.
+Los componentes comunes (pestañas, tarjetas, interruptores, avisos) están en `static/ui.js` y usan solo los tokens de `tokens.css`; en `styles.css` no hay más colores literales que el negro de la vista previa y de las sombras.
 
-**Pruebas que protegen el diseño.** `homelab/friday-panel/tests/test_design_system.py` comprueba que los tokens e iconos generados están al día, el contraste mínimo de los pares declarados, que `static/` no contiene emojis ni pictogramas (incluso escapados), que el CSS solo usa tokens de color y que todo icono usado existe en el sprite. La rueda de hora tiene sus pruebas en `homelab/friday-panel/tests-js/wheel-core.test.js`. Todo se ejecuta en la CI.
+**Pruebas que protegen el diseño.** `homelab/friday-panel/tests/test_design_system.py` comprueba que los tokens e iconos generados están al día, el contraste mínimo de los pares declarados (los del reloj y los del panel), que `static/` (icono incluido) no contiene emojis ni pictogramas (incluso escapados), que el CSS solo usa tokens de color y que todo icono usado existe en el sprite. La rueda de hora tiene sus pruebas en `homelab/friday-panel/tests-js/wheel-core.test.js`. Todo se ejecuta en la CI.
 
 **Fin de la Parte A.** Ya tienes cerebro (Qwen+Hermes), voz (Whisper+Piper) y red (Tailscale).
 

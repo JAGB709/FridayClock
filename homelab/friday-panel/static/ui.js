@@ -57,6 +57,72 @@ function fitFaceFrame(wrap, frame) {
   wrap.style.height = Math.round(480 * k) + "px";
 }
 
+/* Nombres legibles de las claves internas (alarma y ajustes) y de las rutas del diseño, para
+   que ningún aviso ni error enseñe una clave en inglés. renderSettings registra las etiquetas
+   del esquema con registerKeyLabels(). */
+const KEY_LABELS = {
+  time: "Hora", label: "Nombre", days: "Días", enabled: "Activa", sound: "Sonido",
+  max_volume: "Volumen máximo", ramp_s: "Subida de volumen", snooze_min: "Minutos al posponer", briefing: "Buenos días",
+};
+const DESIGN_FIELDS = {
+  x: "columna", y: "fila", w: "ancho", h: "alto", color: "color", align: "alineación", type: "tipo", id: "identificador",
+  name: "nombre", theme: "tema", style: "estilo", format: "formato", mode: "modo", count: "cantidad", images: "imágenes",
+  fg: "color del texto", muted: "color secundario", accent: "color de acento", font: "letra", bg: "fondo", zoom: "zoom",
+  fit: "ajuste", pos_x: "posición horizontal", pos_y: "posición vertical", snooze_label: "texto de posponer",
+  dismiss_label: "texto de apagar", seconds: "segundos", hour12: "formato de 12 horas", detail: "detalle", show_label: "mostrar nombre",
+};
+function registerKeyLabels(map) { Object.assign(KEY_LABELS, map); }
+
+function humanKey(key) {
+  key = String(key == null ? "" : key);
+  if (Object.prototype.hasOwnProperty.call(KEY_LABELS, key)) return KEY_LABELS[key];
+  const parts = key.split(".");
+  const scope = { screens: "Pantalla", themes: "Tema", profiles: "Perfil" };
+  const fieldName = (f) => DESIGN_FIELDS[f] || f.replace(/_/g, " ");
+  if (parts.length > 1 && scope[parts[0]]) {
+    const out = [`${scope[parts[0]]} "${parts[1]}"`];
+    let i = 2;
+    if (parts[0] === "screens" && parts[2] === "elements") {
+      if (parts[3]) out.push(`elemento "${parts[3].replace(/\[(\d+)\]$/, " n.º $1")}"`);
+      i = 4;
+    }
+    if (parts.slice(i).length) out.push(parts.slice(i).map(fieldName).join(", "));
+    return out.join(", ");
+  }
+  if (parts[0] === "alarm_screen") {
+    const out = ["Pantalla de alarma"];
+    if (parts[1] === "elements" && parts[2]) out.push(`elemento "${parts[2]}"`);
+    else if (parts[1]) out.push(fieldName(parts[1]));
+    if (parts[1] === "elements" && parts[3]) out.push(fieldName(parts[3]));
+    return out.join(", ");
+  }
+  if (parts.length > 1) return parts.map(fieldName).join(", ");
+  const plain = { themes: "Temas", screens: "Pantallas", profiles: "Perfiles", version: "Versión", design: "Diseño" };
+  return plain[key] || key.replace(/_/g, " ");
+}
+
+// Separa la clave interna al inicio de un mensaje ("max_volume debe estar entre 1 y 100").
+function splitKeyed(msg) {
+  const m = /^([a-z][a-z0-9_]*)(?::\s*|\s+)(.+)$/s.exec(String(msg));
+  if (!m || !(Object.prototype.hasOwnProperty.call(KEY_LABELS, m[1]) || m[1].includes("_"))) return null;
+  return { key: m[1], rest: m[2] };
+}
+// Error en línea: sin la clave (el campo ya está marcado) y con mayúscula inicial.
+function errorBody(msg) {
+  const k = splitKeyed(msg);
+  const body = k ? k.rest : String(msg);
+  return body.charAt(0).toUpperCase() + body.slice(1);
+}
+// Aviso: el mismo mensaje con la clave traducida ("Volumen máximo debe estar entre 1 y 100").
+function humanError(msg) {
+  const k = splitKeyed(msg);
+  return k ? `${humanKey(k.key)} ${k.rest}` : String(msg);
+}
+// Detalle por campo de un error de varios campos, para el aviso.
+function errorDetail(errors) {
+  return Object.entries(errors || {}).map(([k, v]) => `${humanKey(k)}: ${v}`).join(" · ");
+}
+
 /* Estados de vista: vacío, cargando y error. Centrados, con icono y texto. */
 function emptyState(iconName, text, action = null) {
   return h("div", { class: "state" },
@@ -147,14 +213,22 @@ function timeWheel(value, onChange) {
 
   function column(kind, label, pageStep) {
     const count = kind === "hours" ? 24 : 60;
-    const col = { index: kind === "hours" ? start.h : start.m, timer: null };
+    // target: fila a la que va el scroll suave tras tocar una fila; mientras exista, el scroll
+    // todavía no dice el valor (flush usa el objetivo, no la posición intermedia).
+    const col = { index: kind === "hours" ? start.h : start.m, timer: null, target: null };
     const opts = W.valuesFor(kind).map((v) => h("div", {
       class: "wheel-opt", role: "option", id: `${uid}-${kind}-${v}`, "aria-selected": "false",
       onclick: () => { setIndex(v, true); },
     }, W.pad2(v)));
     const list = h("div", {
       class: "wheel-col", role: "listbox", tabindex: "0", "aria-label": label,
+      onpointerdown: () => { col.target = null; },
+      onwheel: () => { col.target = null; },
       onscroll: () => {
+        if (col.target != null) {
+          if (Math.abs(list.scrollTop - col.target * ROW) > 1) return; // animación en curso: sin filas intermedias
+          col.target = null;
+        }
         mark(W.nearestIndex(list.scrollTop, ROW, count));
         clearTimeout(col.timer);
         col.timer = setTimeout(emit, 80);
@@ -185,8 +259,9 @@ function timeWheel(value, onChange) {
     function setIndex(i, smooth) {
       i = W.indexFor(i, count);
       mark(i);
-      if (smooth && list.scrollTo) list.scrollTo({ top: i * ROW, behavior: "smooth" });
-      else list.scrollTop = i * ROW;
+      const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (smooth && !calm && list.scrollTo) { col.target = i; list.scrollTo({ top: i * ROW, behavior: "smooth" }); }
+      else { col.target = null; list.scrollTop = i * ROW; }
     }
     col.list = list;
     col.mark = mark;
@@ -215,7 +290,7 @@ function timeWheel(value, onChange) {
     for (const col of [cols.hours, cols.minutes]) {
       clearTimeout(col.timer);
       const count = col === cols.hours ? 24 : 60;
-      col.setIndex(W.nearestIndex(col.list.scrollTop, ROW, count), false);
+      col.setIndex(col.target != null ? col.target : W.nearestIndex(col.list.scrollTop, ROW, count), false);
     }
     emit();
   };

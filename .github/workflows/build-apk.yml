@@ -64,6 +64,8 @@ jobs:
       - name: Motor de pantallas y editor (node) y copia en el panel
         run: |
           node --check app-android/src/main/assets/face/face.js
+          node --check homelab/friday-panel/static/app.js
+          node --check homelab/friday-panel/static/editor-core.js
           node --check homelab/friday-panel/static/pantallas.js
           node --check homelab/friday-panel/static/ui.js
           node --check homelab/friday-panel/static/wheel-core.js
