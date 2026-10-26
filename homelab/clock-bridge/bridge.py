@@ -107,6 +107,12 @@ Acabo de apagar la alarma. Dame los buenos días en voz alta en 4-6 frases:
 fecha y hora, el tiempo de hoy (está en el contexto), mi agenda o recordatorios de
 hoy si tienes acceso a ellos, y un titular importante si puedes consultarlo. Sin preguntas."""
 
+# Versión para el camino rápido (Qwen directo): solo lo que hay en el contexto, sin herramientas.
+BRIEFING_FAST_PROMPT = """\
+Acabo de apagar la alarma. Dame los buenos días en voz alta en 3-4 frases: el día y la hora, y el
+tiempo de hoy con lo que debo llevar encima si hace falta. Sin preguntas y sin inventar nada más."""
+BRIEFING_MAX_TOKENS = int(os.getenv("BRIEFING_MAX_TOKENS", "220"))
+
 app = FastAPI(title="clock-bridge")
 
 # --------------------------------------------------------------------------- auth
@@ -331,7 +337,7 @@ def _fast_system(context: dict) -> str:
     )
 
 
-def ask_fast(text: str, context: dict, device: str) -> str:
+def ask_fast(text: str, context: dict, device: str, briefing: bool = False) -> str:
     """Respuesta directa de Qwen por Ollama, sin razonamiento. Lanza si no hay respuesta útil."""
     now = time.time()
     hist, last = _chats.get(device, ([], 0.0))
@@ -345,7 +351,7 @@ def ask_fast(text: str, context: dict, device: str) -> str:
             "messages": [{"role": "system", "content": _fast_system(context)}, *hist, {"role": "user", "content": text}],
             # Sin razonamiento: 0,4 s en vez de 9. Las cuentas no llegan aquí (calc.py o Hermes).
             "reasoning_effort": "none",
-            "max_tokens": FAST_MAX_TOKENS,
+            "max_tokens": BRIEFING_MAX_TOKENS if briefing else FAST_MAX_TOKENS,
             "temperature": 0.3,
             "stream": False,
         },
@@ -355,7 +361,8 @@ def ask_fast(text: str, context: dict, device: str) -> str:
     reply = (r.json()["choices"][0]["message"].get("content") or "").strip()
     if not reply:
         raise RuntimeError("Ollama devolvió una respuesta vacía")
-    remember_turn(device, text, reply)
+    if not briefing:
+        remember_turn(device, text, reply)
     return reply
 
 
@@ -449,8 +456,14 @@ def assist(req: AssistRequest) -> dict:
 
     t0 = time.time()
     engine, reply = "Hermes", ""
-    # El parte de buenos días usa agenda y herramientas: siempre Hermes.
-    if FAST_CHAT and req.mode != "briefing" and not needs_agent(transcript):
+    # El parte de buenos días sale de lo que ya trae el contexto (fecha, tiempo): Qwen directo, en segundos.
+    # El bucle de herramientas de Hermes tarda más que HERMES_TIMEOUT, así que solo es el plan B.
+    if FAST_CHAT and req.mode == "briefing":
+        try:
+            engine, reply = "Qwen", ask_fast(BRIEFING_FAST_PROMPT, req.context, req.device, briefing=True)
+        except Exception:  # noqa: BLE001
+            log.exception("Parte rápido falló; paso a Hermes")
+    elif FAST_CHAT and not needs_agent(transcript):
         last, stamp = _last_calc.get(req.device, (None, 0.0))
         solved = calc.solve_with_value(transcript, last if time.time() - stamp < SESSION_IDLE_MIN * 60 else None)
         if solved:
