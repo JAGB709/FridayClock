@@ -34,6 +34,16 @@ object Actions {
         return out
     }
 
+    /**
+     * Acciones que llegan del puente/LLM (puede haber prompt injection): solo pasan las de
+     * [ActionPolicy]. La API HTTP autenticada sigue usando [executeAll] completo.
+     */
+    fun executeFromBackend(ctx: Context, actions: JSONArray?): JSONArray {
+        val f = ActionPolicy.filter(actions)
+        if (f.rejected.isNotEmpty()) android.util.Log.w("Actions", "Acciones del backend rechazadas: ${f.rejected}")
+        return executeAll(ctx, f.allowed)
+    }
+
     fun execute(ctx: Context, a: JSONObject): JSONObject = when (a.optString("type")) {
         "set_alarm" -> {
             val (h, m) = parseTime(a.optString("time")) ?: error("time debe ser HH:MM")

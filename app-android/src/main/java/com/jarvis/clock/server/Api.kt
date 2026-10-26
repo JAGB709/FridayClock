@@ -22,13 +22,20 @@ import java.security.MessageDigest
 /** Endpoints HTTP del reloj. Todos (salvo /health) exigen el token. */
 class Api(private val ctx: Context) {
 
-    fun handle(r: Request): Response {
-        if (r.path == "/health") return Response.ok()
+    /** Comprobación previa a leer el cuerpo: null si puede seguir. */
+    fun preAuth(r: Request): Response? {
+        if (r.path == "/health") return null
         // Sin token configurado, el servidor no atiende nada (evita el reloj "abierto").
         if (Prefs.authToken.isEmpty()) {
             return Response.error(503, "reloj sin token configurado; ponlo en Ajustes o por ADB")
         }
         if (!authorized(r)) return Response.error(401, "token inválido")
+        return null
+    }
+
+    fun handle(r: Request): Response {
+        if (r.path == "/health") return Response.ok()
+        preAuth(r)?.let { return it }
         if (r.method == "DELETE" && r.path.startsWith("/sounds/")) {
             val name = try {
                 java.net.URLDecoder.decode(r.path.removePrefix("/sounds/"), "UTF-8")

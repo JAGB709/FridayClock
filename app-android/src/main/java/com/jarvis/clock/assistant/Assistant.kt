@@ -88,7 +88,7 @@ class Assistant private constructor(ctx: Context) {
         }
         return try {
             val r = backend.assist(text = text)
-            Actions.executeAll(app, r.actions)
+            Actions.executeFromBackend(app, r.actions)
             Result(text, r.reply, r.expectReply, r.audio)
         } catch (e: Exception) {
             Log.w(TAG, "backend", e)
@@ -117,7 +117,7 @@ class Assistant private constructor(ctx: Context) {
             Weather.get()
             val r = if (backend.configured) {
                 runCatching { backend.assist(mode = "briefing") }.getOrNull()
-                    ?.let { Actions.executeAll(app, it.actions); Result("", it.reply, false, it.audio) }
+                    ?.let { Actions.executeFromBackend(app, it.actions); Result("", it.reply, false, it.audio) }
             } else null
             respond(gen, r?.takeIf { it.reply.isNotBlank() } ?: Result("", localBriefing()))
         }

@@ -19,6 +19,14 @@ object NetUtil {
     /** IP de Tailscale (100.64.0.0/10) si el reloj está en la tailnet. */
     fun tailscaleAddress(): String? = ipv4().firstOrNull { isTailscale(it) }
 
+    /**
+     * Dirección donde enlazar el servidor: null = todas las interfaces (solo si no se pidió
+     * "solo Tailscale"). Con "solo Tailscale" y sin IP todavía, nunca se abre al resto: se
+     * queda en loopback hasta que aparezca la interfaz.
+     */
+    fun bindHost(tailscaleOnly: Boolean, tailscaleIp: String?): String? =
+        if (!tailscaleOnly) null else tailscaleIp ?: "127.0.0.1"
+
     private fun isTailscale(ip: String): Boolean {
         val p = ip.split('.').mapNotNull { it.toIntOrNull() }
         return p.size == 4 && p[0] == 100 && p[1] in 64..127

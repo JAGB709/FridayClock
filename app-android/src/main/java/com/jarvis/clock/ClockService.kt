@@ -7,7 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import com.jarvis.clock.assistant.WakeWord
 import com.jarvis.clock.server.Api
@@ -52,11 +54,29 @@ class ClockService : Service() {
     }
 
     private fun newServer(): HttpServer {
-        val host = if (Prefs.bindTailscaleOnly) NetUtil.tailscaleAddress() else null
-        return HttpServer(Prefs.httpPort, host, Api(this)::handle).also { it.start() }
+        val ts = NetUtil.tailscaleAddress()
+        val host = NetUtil.bindHost(Prefs.bindTailscaleOnly, ts)
+        retry.removeCallbacks(rebind)
+        // En loopback a la espera de Tailscale: se reintenta cada 30 s, sin abrir a la LAN.
+        if (Prefs.bindTailscaleOnly && ts == null) retry.postDelayed(rebind, REBIND_MS)
+        val api = Api(this)
+        return HttpServer(Prefs.httpPort, host, api::handle, api::preAuth).also { it.start() }
+    }
+
+    private val retry = Handler(Looper.getMainLooper())
+    private val rebind = object : Runnable {
+        override fun run() {
+            if (Prefs.bindTailscaleOnly && NetUtil.tailscaleAddress() != null) {
+                server?.stop()
+                server = newServer()
+            } else if (Prefs.bindTailscaleOnly) {
+                retry.postDelayed(this, REBIND_MS)
+            }
+        }
     }
 
     override fun onDestroy() {
+        retry.removeCallbacks(rebind)
         wake?.stop()
         server?.stop()
         super.onDestroy()
@@ -64,6 +84,7 @@ class ClockService : Service() {
 
     companion object {
         private const val NOTIF_ID = 1
+        private const val REBIND_MS = 30_000L
         private const val ACTION_RESTART_SERVER = "com.jarvis.clock.RESTART_SERVER"
 
         fun start(ctx: Context) {
