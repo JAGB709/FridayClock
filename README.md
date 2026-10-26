@@ -177,7 +177,7 @@ Kotlin 1.9 con `minSdk 26` y `targetSdk 34`, **sin dependencias de runtime**. La
 
 - **Alarmas** (`alarm/`): `AlarmManager.setAlarmClock()`, servicio de sonido con volumen progresivo y pantalla de amanecer, `BootReceiver` que reprograma tras reiniciar. Nunca dependen de la red.
 - **Asistente** (`assistant/`): grabación con detección de voz (VAD), palabra de activación "Friday", conversación continua, TTS del puente o del sistema.
-- **Servidor HTTP** (`server/`): un servidor mínimo propio, con token y escuchando solo en la IP de Tailscale.
+- **Servidor HTTP** (`server/`): un servidor mínimo propio, con token. Por defecto escucha en todas las interfaces; activa en Ajustes "solo Tailscale" para limitarlo.
 - **Carátula**: un motor HTML y JavaScript dentro de un `WebView`, con respaldo nativo si falla.
 - **Clima** con Open-Meteo (sin clave de API), **Bluetooth** como altavoz del móvil y **brillo** con una regla propia entre panel y reloj.
 
@@ -289,6 +289,9 @@ sudo systemctl edit ollama    # crea un override; añade lo siguiente
 Environment="OLLAMA_CONTEXT_LENGTH=65536"
 Environment="OLLAMA_HOST=0.0.0.0:11434"
 ```
+
+> [!WARNING]
+> Ollama no tiene autenticación. Si lo haces escuchar en `0.0.0.0`, limita el puerto 11434 con el cortafuegos a Tailscale o a la red de Docker.
 
 ```bash
 sudo systemctl restart ollama
@@ -607,13 +610,14 @@ curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
 ## Seguridad y privacidad
 
 - **La voz es local.** Whisper y el motor de TTS corren en tu servidor; no hay nube de voz ni Google. El puente no registra lo que se dice cuando la palabra de activación no coincide.
-- **La API del reloj exige token** (comparado en tiempo constante) y, sin token configurado, responde 503 a todo. Por defecto escucha **solo en la IP de Tailscale**, así que no es accesible desde tu red local ni desde internet.
+- **La API del reloj exige token** (comparado en tiempo constante) y, sin token configurado, responde 503 a todo. Por defecto escucha en todas las interfaces del reloj (accesible desde tu red local). Activa **solo Tailscale** en Ajustes para que escuche únicamente en esa IP; si Tailscale no está activo en ese momento, vuelve a escuchar en todas. No abras el puerto a internet.
 - **El token del reloj no sale del homelab:** el panel hace de proxy, el navegador nunca lo ve. Las peticiones del panel llevan una cabecera anti-CSRF, las subidas tienen límites de tamaño y se puede proteger con contraseña.
 - **Todo se valida de forma estricta.** El diseño de pantallas se valida entero o no se guarda; las fotos se reducen y se comprueban; los nombres de archivo se sanean.
 - **Reversible.** Los paquetes de Google solo se deshabilitan, hay backup completo previo y un script de rollback.
 
-> [!NOTE]
+> [!WARNING]
 > El `adb shell` del reloj liberado es root sin autenticación y SELinux queda permisivo. Es razonable para un reloj de mesilla en tu casa, pero no lo expongas a una red no confiable.
+> El asistente (Hermes) puede ejecutar comandos en tu servidor y obedece a la voz que oye el reloj. No abras en el router los puertos 8080, 8642, 8765, 8770 ni 11434, usa token de al menos 16 caracteres, pon contraseña al panel y no dejes `hermes dashboard --insecure` accesible. El APK de release va firmado con la clave de depuración: verifica su SHA-256. Detalles en [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -729,6 +733,8 @@ Friday se apoya en el trabajo de mucha gente. Gracias a:
 - **Voz:** [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [Piper](https://github.com/rhasspy/piper) de Rhasspy, [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) y NVIDIA Magpie.
 - **Red y servicios:** [Tailscale](https://tailscale.com/), [FastAPI](https://fastapi.tiangolo.com/) y [Open-Meteo](https://open-meteo.com/).
 - **Diseño:** iconos [Lucide](https://lucide.dev/) (licencia ISC) y tipografía [Inter](https://rsms.me/inter/) (licencia SIL Open Font).
+
+El código se publica bajo [Apache-2.0](LICENSE); los componentes de terceros están en [NOTICE](NOTICE).
 
 > [!NOTE]
 > Este es un proyecto personal y no oficial, sin ninguna relación con Xiaomi, Google, Nous Research ni ninguna de las empresas citadas. Modificar el firmware de un dispositivo es responsabilidad de quien lo hace.
