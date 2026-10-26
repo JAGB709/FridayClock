@@ -36,3 +36,15 @@ En el móvil (con Tailscale activo) abre `http://<ip-tailscale-homelab>:8770` y
 
 Sin Docker: `pip install -r requirements.txt && python app.py` (lee el entorno).
 Tests: `pip install pytest && pytest -q` (usan el reloj de mentira de `hermes-skill`).
+
+
+## Estructura del panel
+
+Es una aplicación de móvil primero con cuatro pestañas, todas con iconos Lucide y el sistema de diseño Obsidiana (tokens e Inter compartidos con el reloj, ver [`docs/sistema-de-diseno.md`](../../docs/sistema-de-diseno.md)):
+
+- **Inicio**: la tarjeta del reloj en vivo, con la misma vista que muestra el reloj ahora mismo; cuando una alarma está sonando, una tarjeta propia con **Apagar** y **Posponer**; la tarjeta de la próxima alarma (hora, nombre y días; al tocarla se abre en el editor de alarmas); y las acciones rápidas: probar la alarma, el "buenos días" y el campo **Decir** para que el reloj hable.
+- **Alarmas**: lista de tarjetas con interruptor, un botón flotante **+** para crear y, al crear o editar, una rueda de hora (`static/wheel-core.js`) para elegir la hora con el dedo.
+- **Pantallas**: el editor del diseño con la vista previa fija arriba, que sigue visible mientras se edita, y cuatro secciones debajo (Elementos, Tema, Perfiles y Alarma).
+- **Ajustes**: ajustes del reloj agrupados en tarjetas, estado de la conexión y sonidos subidos.
+
+Los componentes comunes (pestañas, tarjetas, interruptores, avisos) están en `static/ui.js` y usan solo los tokens de `tokens.css`; en `styles.css` no hay más colores literales que el negro de la vista previa y de las sombras.
