@@ -13,6 +13,8 @@ Variables de entorno (`.env`):
 | `PANEL_BIND` | por defecto `127.0.0.1`; pon la IP de Tailscale del homelab (`tailscale ip -4`) |
 | `PANEL_PORT` | `8770` |
 | `PANEL_PASSWORD` | opcional; si la pones, el panel pide contraseña |
+| `PANEL_ALLOWED_HOSTS` | opcional; nombres de Host aceptados, separados por comas (frena el DNS rebinding) |
+| `PANEL_COOKIE_SECURE` | `1` si lo sirves por HTTPS (Tailscale Serve) |
 | `CLOCK_TIMEOUT_S` | `5` |
 
 **Nota:** El motor de la vista previa (`static/face/`) es una copia del del APK: tras cambiar `app-android/src/main/assets/face/` ejecuta `bash tools/sync-face.sh`.

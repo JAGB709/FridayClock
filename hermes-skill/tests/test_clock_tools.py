@@ -186,3 +186,13 @@ def test_reset_design(clock):
 def test_list_backgrounds_empty(clock):
     r = clock.clock_list_backgrounds()
     assert r["ok"] and r["backgrounds"] == []
+
+
+def test_skill_pide_confirmacion_en_acciones_delicadas():
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[1] / "mi-smart-clock" / "SKILL.md").read_text(encoding="utf-8")
+    pitfalls = text.split("## Pitfalls", 1)[1]
+    assert "confirmación" in pitfalls
+    for cmd in ("alarm-cancel --all", "design-reset", "settings-set", "show --type html"):
+        assert cmd in pitfalls.split("## Verification")[0], cmd

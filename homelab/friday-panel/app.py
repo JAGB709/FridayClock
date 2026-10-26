@@ -13,9 +13,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import secrets
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import httpx
 from fastapi import Body, FastAPI, Request
@@ -29,6 +31,12 @@ UPLOAD_TIMEOUT_S = 60.0  # subir un sonido tarda más que una petición normal
 SOUND_EXTS = {".mp3", ".ogg", ".wav", ".m4a"}
 COOKIE = "friday_panel"
 COOKIE_MAX_AGE = 30 * 24 * 3600
+LOGIN_MAX_FAILS = 5
+LOGIN_WINDOW_S = 60
+MAX_SESSIONS = 1000
+
+CSP_BASE = ("default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+            "frame-src 'self'; base-uri 'none'; form-action 'self'; ")
 
 # Acciones rápidas de Inicio -> (ruta del reloj, cuerpo).
 QUICK_ACTIONS = {
@@ -58,6 +66,8 @@ class Config:
     clock_token: str
     password: str = ""
     timeout_s: float = 5.0
+    allowed_hosts: str = ""  # nombres de Host aceptados, separados por comas; vacío = cualquiera
+    cookie_secure: bool = False
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -67,12 +77,8 @@ class Config:
             raise SystemExit("Faltan CLOCK_URL o CLOCK_TOKEN en el entorno (.env)")
         if not url.startswith(("http://", "https://")):
             raise SystemExit("CLOCK_URL debe empezar por http:// o https:// (p. ej. http://100.x.y.z:8080)")
-        return cls(url, token, os.getenv("PANEL_PASSWORD", ""), float(os.getenv("CLOCK_TIMEOUT_S", "5")))
-
-
-def _session_value(password: str) -> str:
-    """Valor de la cookie: derivado de la contraseña, nunca la contraseña."""
-    return hmac.new(password.encode(), b"friday-panel-session", hashlib.sha256).hexdigest()
+        return cls(url, token, os.getenv("PANEL_PASSWORD", ""), float(os.getenv("CLOCK_TIMEOUT_S", "5")),
+                   os.getenv("PANEL_ALLOWED_HOSTS", ""), os.getenv("PANEL_COOKIE_SECURE", "") == "1")
 
 
 def _error(status: int, msg: str) -> JSONResponse:
@@ -85,6 +91,19 @@ def create_app(cfg: Config) -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
         return _error(400, "Petición no válida")
+
+    allowed = {h.strip().lower() for h in cfg.allowed_hosts.split(",") if h.strip()}
+    sessions: dict[str, float] = {}       # token aleatorio -> caducidad (solo en servidor)
+    fails: dict[str, list[float]] = {}    # IP -> instantes de intentos fallidos
+
+    def session_ok(token: str) -> bool:
+        exp = sessions.get(token)
+        if exp is None:
+            return False
+        if exp < time.time():
+            sessions.pop(token, None)
+            return False
+        return True
 
     async def clock(method: str, path: str, *, json: dict | None = None,
                     content: bytes | None = None, params: dict | None = None,
@@ -110,6 +129,18 @@ def create_app(cfg: Config) -> FastAPI:
         return JSONResponse(data, status_code=r.status_code)
 
     @app.middleware("http")
+    async def host_origin(request: Request, call_next):
+        # Frena el DNS rebinding (Host) y las peticiones de otro origen que cambian estado (Origin).
+        host = request.headers.get("host", "")
+        if allowed and host.rsplit(":", 1)[0].strip("[]").lower() not in allowed:
+            return _error(400, "Host no permitido")
+        origin = request.headers.get("origin")
+        if origin is not None and request.method not in ("GET", "HEAD", "OPTIONS") \
+                and urlparse(origin).netloc.lower() != host.lower():
+            return _error(403, "Origen no permitido")
+        return await call_next(request)
+
+    @app.middleware("http")
     async def require_header(request: Request, call_next):
         # Anti-CSRF: un formulario de otra web no puede añadir cabeceras propias.
         p = request.url.path
@@ -121,19 +152,35 @@ def create_app(cfg: Config) -> FastAPI:
     @app.middleware("http")
     async def require_login(request: Request, call_next):
         if cfg.password and request.url.path.startswith("/api/"):
-            given = request.cookies.get(COOKIE, "")
-            if not hmac.compare_digest(given.encode(), _session_value(cfg.password).encode()):
+            if not session_ok(request.cookies.get(COOKIE, "")):
                 return JSONResponse({"ok": False, "error": "Inicia sesión", "login_required": True}, status_code=401)
         return await call_next(request)
 
     @app.post("/login")
-    async def login(body: dict = Body(default_factory=dict)):
+    async def login(request: Request, body: dict = Body(default_factory=dict)):
         if not cfg.password:
             return {"ok": True}
+        now = time.time()
+        ip = request.client.host if request.client else "?"
+        recent = [t for t in fails.get(ip, []) if now - t < LOGIN_WINDOW_S]
+        if len(recent) >= LOGIN_MAX_FAILS:
+            fails[ip] = recent
+            return _error(429, "Demasiados intentos: espera un minuto")
         if not hmac.compare_digest(str(body.get("password", "")).encode(), cfg.password.encode()):
+            fails[ip] = [*recent, now]
+            while len(fails) > MAX_SESSIONS:
+                fails.pop(next(iter(fails)))
             return _error(401, "Contraseña incorrecta")
+        fails.pop(ip, None)
+        for tok in [t for t, exp in sessions.items() if exp < now]:
+            del sessions[tok]
+        while len(sessions) >= MAX_SESSIONS:
+            sessions.pop(next(iter(sessions)))
+        token = secrets.token_urlsafe(32)
+        sessions[token] = now + COOKIE_MAX_AGE
         resp = JSONResponse({"ok": True})
-        resp.set_cookie(COOKIE, _session_value(cfg.password), max_age=COOKIE_MAX_AGE, httponly=True, samesite="strict")
+        resp.set_cookie(COOKIE, token, max_age=COOKIE_MAX_AGE, httponly=True, samesite="strict",
+                        secure=cfg.cookie_secure)
         return resp
 
     @app.get("/health")
@@ -286,6 +333,18 @@ def create_app(cfg: Config) -> FastAPI:
         return Response(content=r.content, media_type=ctype,
                         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        # Última en registrarse = más externa: también cubre las respuestas de error de las demás.
+        resp = await call_next(request)
+        embeddable = request.url.path.startswith("/face/")  # el panel incrusta el reloj en un iframe propio
+        resp.headers["Content-Security-Policy"] = CSP_BASE + (
+            "frame-ancestors 'self'" if embeddable else "frame-ancestors 'none'")
+        resp.headers["X-Frame-Options"] = "SAMEORIGIN" if embeddable else "DENY"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["Referrer-Policy"] = "no-referrer"
+        return resp
+
     # La web, al final para que no tape /api.
     app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
     return app
@@ -295,7 +354,8 @@ def main() -> None:
     import uvicorn
 
     cfg = Config.from_env()
-    uvicorn.run(create_app(cfg), host=os.getenv("PANEL_BIND", "127.0.0.1"), port=int(os.getenv("PANEL_PORT", "8770")))
+    uvicorn.run(create_app(cfg), host=os.getenv("PANEL_BIND", "127.0.0.1"), port=int(os.getenv("PANEL_PORT", "8770")),
+                server_header=False)
 
 
 if __name__ == "__main__":
