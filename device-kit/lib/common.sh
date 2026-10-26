@@ -37,13 +37,16 @@ banner() {
 }
 
 # Ejecuta un comando, o solo lo imprime en dry-run.
+# Oculta valores de tokens antes de escribir un comando en el log.
+redact() { sed -E 's/(--es (token|backend_token) )[^ ]+/\1***/g'; }
+
 run() {
   if [ "$DRY_RUN" = 0 ]; then
-    log "\$ $*"
+    log "\$ $(printf '%s' "$*" | redact)"
     "$@" 2>&1 | tee -a "$LOGFILE"
     return "${PIPESTATUS[0]}"
   else
-    log "(dry-run) \$ $*"
+    log "(dry-run) \$ $(printf '%s' "$*" | redact)"
   fi
 }
 
