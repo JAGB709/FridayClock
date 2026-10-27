@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- El backend del asistente vive en el homelab (Tailscale), normalmente por HTTP plano. -->
+<!--
+  El backend del asistente vive en el homelab (Tailscale), normalmente por HTTP plano.
+  Android 10 no permite rangos CIDR aqui (solo dominios o IP literales), asi que no se puede
+  limitar http a Tailscale/LAN con este fichero. La restriccion se aplica en codigo:
+  assistant/CleartextPolicy.kt (http solo a localhost, LAN privada, Tailscale y *.ts.net).
+-->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

@@ -23,11 +23,12 @@ class WakeWord(private val ctx: Context) {
     private val audio = ctx.getSystemService(AudioManager::class.java)
     @Volatile private var running = false
     private var thread: Thread? = null
-    private var seq = 0
 
     fun start() {
         if (running) return
         running = true
+        // Borra los WAV de depuración que dejaban versiones anteriores.
+        runCatching { ctx.cacheDir.listFiles { f -> f.name.startsWith("wake_") && f.name.endsWith(".wav") }?.forEach { it.delete() } }
         thread = Thread(::loop, "wake-word").apply { isDaemon = true; start() }
     }
 
@@ -78,11 +79,9 @@ class WakeWord(private val ctx: Context) {
     }
 
     private fun handle(wav: ByteArray) {
-        // Depuración: el último fragmento enviado, para ver qué oye realmente el micro.
-        val file = "wake_${seq++ % 10}.wav"
-        runCatching { java.io.File(ctx.cacheDir, file).writeBytes(wav) }
+        // Privacidad: el micro oye toda la habitación; ni se guarda el audio ni se registra lo dicho.
         val r = backend.wake(wav)
-        Log.i(TAG, "$file llama=${r.called} texto='${r.text}' orden='${r.command}'")
+        Log.i(TAG, "fragmento=${wav.size}B llama=${r.called}")
         if (!r.called) {
             // Ruido continuo (tele, conversación): no mandar un fragmento tras otro al puente.
             if (wav.size > LONG_SEGMENT_BYTES) Thread.sleep(LONG_SEGMENT_PAUSE_MS)

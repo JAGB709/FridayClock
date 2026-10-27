@@ -153,7 +153,7 @@ class Assistant private constructor(ctx: Context) {
             return
         }
         if (gen != generation.get()) return
-        Log.i(TAG, "stt='$text'")
+        Log.i(TAG, "stt: ${text.length} caracteres")
         if (text.isBlank() || LocalIntents.parse(text) is LocalIntents.Intent.StopTalking) { post(State.IDLE); return }
         post(State.THINKING, text)
         respond(gen, process(text))
