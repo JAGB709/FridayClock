@@ -231,7 +231,7 @@ function showLogin() {
 
 // Estado de la vista de Inicio. El iframe del reloj vive aquí y no se recrea en los refrescos:
 // solo se reenvían los datos (face-data) y se repintan las tarjetas de alarma.
-let home = null; // { root, ring, next, live }
+let home = null; // { root, ring, next, live, tm }
 let homeSeq = 0;
 const HOME_LOAD_MS = 8000; // si el motor no carga en este tiempo, se enseña el respaldo
 
@@ -334,6 +334,68 @@ function quickActionsCard() {
     h("form", { class: "row say-row", onsubmit: send }, say, btn("Decir", null, "", "mic", { type: "submit" })));
 }
 
+// Cronómetro y temporizadores del reloj: tarjetas de control. El estado trae tiempos absolutos y la
+// hora del reloj (`now`); la cuenta se pinta cada segundo en el navegador sin pedir nada al reloj.
+const TIMER_PRESETS = [[1, "1 min"], [5, "5 min"], [10, "10 min"]];
+
+function timersCards() {
+  const st = { sw: null, timers: [], offset: 0 };
+  const swTime = h("div", { class: "sw-time", role: "timer", "aria-label": "Cronómetro" }, "00:00");
+  const swToggle = btn("Iniciar", () => swAction("toggle"), "", "play");
+  const swCard = h("div", { class: "card stack" }, h("h2", {}, "Cronómetro"), swTime,
+    h("div", { class: "row" }, swToggle, btn("Reiniciar", () => swAction("reset"), "ghost", "rotate-ccw")));
+  const list = h("div", { class: "stack" });
+  const tmCard = h("div", { class: "card stack" }, h("h2", {}, "Temporizadores"), list,
+    h("div", { class: "row" }, ...TIMER_PRESETS.map(([min, label]) => btn(label, () => timerCall({ minutes: min, label: `${min} min` }), "ghost small", "plus"))));
+  const nowMs = () => Date.now() + st.offset;
+  const paintStopwatch = () => {
+    const running = !!(st.sw && st.sw.running);
+    swTime.textContent = FaceCore.formatDuration(FaceCore.stopwatchMs(st.sw, nowMs()), true);
+    swToggle.replaceChildren(icon(running ? "pause" : "play"), h("span", { class: "lbl" }, running ? "Pausar" : "Iniciar"));
+  };
+  const paintTimers = () => {
+    const items = FaceCore.timerItems(st.timers, nowMs(), 99).slice(0, 8);
+    const rows = items.map((t) => h("div", { class: "row between tm-row" + (t.paused ? " paused" : ""), "data-tid": t.id },
+      h("div", {}, h("div", { class: "muted tm-label" }, t.label), h("div", { class: "tm-time" }, t.text)),
+      h("div", { class: "row" },
+        iconButton(t.paused ? "play" : "pause", t.paused ? "Reanudar" : "Pausar", () => timerCall(t.paused
+          ? { action: "resume", pid: Number(String(t.id).slice(1)) } : { action: "pause", id: Number(t.id) })),
+        iconButton("x", "Cancelar el temporizador", () => timerCall(String(t.id).startsWith("p")
+          ? { action: "cancel", pid: Number(String(t.id).slice(1)) } : { action: "cancel", id: Number(t.id) })))));
+    list.replaceChildren(...(rows.length ? rows : [h("div", { class: "muted" }, "No hay temporizadores")]));
+  };
+  // Solo se repinta la lista cuando cambia su estructura; cada segundo solo cambia el texto de la hora.
+  let structure = "";
+  const tick = () => {
+    paintStopwatch();
+    const items = FaceCore.timerItems(st.timers, nowMs(), 99).slice(0, 8);
+    const key = items.map((t) => t.id + (t.paused ? "p" : "r") + t.label).join("|");
+    if (key !== structure) { structure = key; paintTimers(); return; }
+    list.querySelectorAll(".tm-row").forEach((row, i) => { row.querySelector(".tm-time").textContent = items[i].text; });
+  };
+  const apply = (data) => {
+    if (data.stopwatch !== undefined) st.sw = data.stopwatch;
+    if (data.timers !== undefined) st.timers = data.timers;
+    if (typeof data.now === "number") st.offset = data.now - Date.now();
+    structure = "";
+    tick();
+  };
+  const swAction = async (action) => {
+    const r = await api("POST", "/api/stopwatch", { action });
+    if (!r.ok) { toast(errText(r), true); return; }
+    st.sw = r.data.stopwatch;
+    tick();
+  };
+  const timerCall = async (body) => {
+    const r = await api("POST", "/api/timer", body);
+    if (!r.ok) { toast(errText(r), true); return; }
+    const t = await api("GET", "/api/timers");
+    if (t.ok) apply(t.data);
+  };
+  const timer = setInterval(() => { if (swCard.isConnected) tick(); else clearInterval(timer); }, 1000);
+  return { swCard, tmCard, apply };
+}
+
 function paintHomeCards(s) {
   home.ring.replaceChildren(...[ringingCard(s)].filter(Boolean));
   home.next.replaceChildren(nextAlarmCard(s));
@@ -355,8 +417,10 @@ async function renderHome() {
   const design = rd.ok && rd.data.design ? rd.data.design : null;
   const data = rf.ok ? rf.data : (typeof SAMPLE_DATA !== "undefined" ? SAMPLE_DATA : {});
   const { card, live } = liveClockCard(design, data, s.time);
-  home = { root: h("div", { class: "home" }), ring: h("div", {}), next: h("div", {}), live };
-  home.root.append(card, home.ring, home.next, quickActionsCard());
+  const tm = timersCards();
+  home = { root: h("div", { class: "home" }), ring: h("div", {}), next: h("div", {}), live, tm };
+  home.root.append(card, home.ring, home.next, tm.swCard, tm.tmCard, quickActionsCard());
+  tm.apply(rf.ok ? rf.data : {});
   paintHomeCards(s);
   setView(home.root);
   live.fit();
@@ -366,7 +430,7 @@ async function refreshHome() {
   const mine = homeSeq;
   const [r, rf] = await Promise.all([api("GET", "/api/status"), api("GET", "/api/face-data")]);
   if (route.tab !== "home" || mine !== homeSeq || !home || !home.root.isConnected) return;
-  if (rf.ok) { home.live.data = rf.data; home.live.push(); }
+  if (rf.ok) { home.live.data = rf.data; home.live.push(); home.tm.apply(rf.data); }
   if (r.ok) paintHomeCards(r.data);
 }
 

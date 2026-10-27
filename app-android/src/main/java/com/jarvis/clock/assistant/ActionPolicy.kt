@@ -16,7 +16,7 @@ object ActionPolicy {
 
     private val SIMPLE = setOf(
         "set_alarm", "enable_alarm", "disable_alarm", "update_alarm",
-        "set_timer", "cancel_timer", "snooze_alarm",
+        "set_timer", "cancel_timer", "pause_timer", "resume_timer", "stopwatch", "snooze_alarm",
         "clear_display", "set_volume", "set_brightness",
     )
     private val BT_ACTIONS = setOf("on", "off", "status")

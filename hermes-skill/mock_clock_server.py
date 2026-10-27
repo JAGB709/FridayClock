@@ -85,6 +85,38 @@ FACE_DATA = {
 }
 
 
+STOPWATCH = {"running": False, "base_ms": 0, "since": 0}
+PAUSED: list[dict] = []
+_next_pid = [1]
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _timers_json() -> list[dict]:
+    out = [{"id": str(a["id"]), "label": a.get("label", "Temporizador"), "at": a["trigger_at"], "paused": False}
+           for a in ALARMS if a.get("kind") == "timer"]
+    out += [{"id": f"p{p['pid']}", "label": p["label"], "remaining_ms": p["remaining_ms"], "paused": True} for p in PAUSED]
+    return out
+
+
+def _stopwatch(action: str) -> dict | None:
+    now = _now_ms()
+    sw = STOPWATCH
+    if action == "status":
+        pass
+    elif action in ("start", "toggle") and not sw["running"]:
+        sw.update(running=True, since=now)
+    elif action in ("pause", "toggle") and sw["running"]:
+        sw.update(base_ms=sw["base_ms"] + now - sw["since"], running=False, since=0)
+    elif action == "reset":
+        sw.update(base_ms=0, since=now if sw["running"] else 0)
+    elif action not in ("start", "pause", "toggle"):
+        return None
+    return {**sw, "elapsed_ms": sw["base_ms"] + (now - sw["since"] if sw["running"] else 0)}
+
+
 def _is_int(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and float(v).is_integer()
 
@@ -249,6 +281,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "time": int(time.time() * 1000), "ringing": False, "alarms": ALARMS, "face_version": FACE_VERSION})
         if self._path == "/alarms":
             return self._send(200, {"ok": True, "alarms": ALARMS})
+        if self._path == "/timers":
+            return self._send(200, {"ok": True, "timers": _timers_json(), "now": _now_ms()})
+        if self._path == "/stopwatch":
+            return self._send(200, {"ok": True, "stopwatch": _stopwatch("status")})
         if self._path == "/settings":
             return self._send(200, {"ok": True, "settings": SETTINGS, "schema": SCHEMA})
         if self._path == "/sounds":
@@ -264,7 +300,8 @@ class Handler(BaseHTTPRequestHandler):
             ctype = "text/html" if BG_DATA[name].startswith(b"<html") else "image/png" if name.endswith(".png") else "image/webp" if name.endswith(".webp") else "image/jpeg"
             return self._send_bytes(200, BG_DATA[name], ctype)
         if self._path == "/face/data":
-            return self._send(200, {"ok": True, **FACE_DATA})
+            return self._send(200, {"ok": True, **FACE_DATA, "now": _now_ms(), "stopwatch": _stopwatch("status"),
+                                    "timers": _timers_json()})
         self._send(404, {"ok": False, "error": "no existe"})
 
     def do_PUT(self):
@@ -340,6 +377,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True})
         if self._path == "/alarm":
             return self._alarm(body)
+        if self._path == "/stopwatch":
+            sw = _stopwatch(body.get("action", "status"))
+            if sw is None:
+                return self._send(400, {"ok": False, "error": "action debe ser start, pause, reset, toggle, status"})
+            return self._send(200, {"ok": True, "stopwatch": sw})
+        if self._path == "/timer" and body.get("action") in ("pause", "resume", "cancel"):
+            return self._timer_control(body)
         if self._path == "/timer":
             aid = _next_id[0]; _next_id[0] += 1
             a = {"id": aid, "kind": "timer", "label": body.get("label", "Temporizador"), "trigger_at": int(time.time() * 1000)}
@@ -353,6 +397,35 @@ class Handler(BaseHTTPRequestHandler):
         if self._path in ("/speak", "/display", "/volume", "/brightness", "/listen", "/briefing"):
             return self._send(200, {"ok": True})
         self._send(404, {"ok": False, "error": "no existe"})
+
+    def _timer_control(self, body: dict):
+        act = body["action"]
+        if act == "cancel" and "id" not in body and "pid" not in body:
+            n = len(PAUSED) + len([a for a in ALARMS if a.get("kind") == "timer"])
+            PAUSED.clear()
+            ALARMS[:] = [a for a in ALARMS if a.get("kind") != "timer"]
+            return self._send(200, {"ok": True, "deleted": n})
+        if act == "resume" or (act == "cancel" and "pid" in body):
+            p = next((x for x in PAUSED if x["pid"] == body.get("pid")), None)
+            if p is None:
+                return self._send(404, {"ok": False, "error": "no existe el temporizador en pausa"})
+            PAUSED.remove(p)
+            if act == "cancel":
+                return self._send(200, {"ok": True, "deleted": 1})
+            aid = _next_id[0]; _next_id[0] += 1
+            a = {"id": aid, "kind": "timer", "label": p["label"], "trigger_at": _now_ms() + p["remaining_ms"]}
+            ALARMS.append(a)
+            return self._send(200, {"ok": True, "alarm": a})
+        a = next((x for x in ALARMS if x.get("id") == body.get("id") and x.get("kind") == "timer"), None)
+        if a is None:
+            return self._send(404, {"ok": False, "error": "no existe el temporizador"})
+        ALARMS.remove(a)
+        if act == "pause":
+            p = {"pid": _next_pid[0], "label": a["label"], "remaining_ms": max(1000, a["trigger_at"] - _now_ms())}
+            _next_pid[0] += 1
+            PAUSED.append(p)
+            return self._send(200, {"ok": True, "paused": p})
+        return self._send(200, {"ok": True, "deleted": 1})
 
     def _find(self, aid) -> dict | None:
         return next((a for a in ALARMS if a.get("id") == aid), None)
@@ -409,6 +482,7 @@ def reset():
     SOUNDS[:] = copy.deepcopy(DEFAULT_SOUNDS)
     DESIGN.clear(); DESIGN.update(copy.deepcopy(SAMPLE_DESIGN)); DESIGN_SAVED[0] = False
     BACKGROUNDS.clear(); BG_DATA.clear(); PREVIEW.clear()
+    STOPWATCH.update(running=False, base_ms=0, since=0); PAUSED.clear(); _next_pid[0] = 1
 
 
 def make_server(port: int = 0, token: str = "secreto") -> ThreadingHTTPServer:

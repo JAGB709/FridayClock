@@ -833,3 +833,11 @@ label.field.setting > span.setting-label:first-child { color: var(--text); }
   *, *::before, *::after { transition: none !important; animation: none !important; }
   .spinner { animation: spin 2400ms linear infinite !important; }
 }
+
+/* Cronómetro y temporizadores (Inicio) */
+.sw-time { font-size: var(--fs-7); font-weight: 300; text-align: center; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tm-row { padding: var(--space-2) 0; border-top: 1px solid var(--border); }
+.tm-row:first-child { border-top: 0; padding-top: 0; }
+.tm-label { font-size: var(--fs-2); }
+.tm-time { font-size: var(--fs-5); font-variant-numeric: tabular-nums; }
+.tm-row.paused .tm-time { color: var(--text-muted); }

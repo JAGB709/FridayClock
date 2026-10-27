@@ -8,6 +8,8 @@ import com.jarvis.clock.alarm.Alarm
 import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.alarm.AlarmStore
+import com.jarvis.clock.alarm.Stopwatch
+import com.jarvis.clock.alarm.TimerBook
 import com.jarvis.clock.bt.BluetoothControl
 import com.jarvis.clock.design.DesignSchema
 import com.jarvis.clock.design.DesignStore
@@ -84,7 +86,24 @@ object Actions {
             val secs = a.optLong("seconds").takeIf { it > 0 } ?: error("seconds > 0")
             ok().put("alarm", AlarmScheduler.createTimer(ctx, secs, a.optString("label", "Temporizador")).toJson())
         }
-        "cancel_timer" -> ok().put("deleted", cancelTimers(ctx))
+        "cancel_timer" -> when {
+            a.has("pid") -> ok().put("deleted", if (TimerBook.cancelPaused(a.getInt("pid"))) 1 else 0)
+            a.has("id") -> {
+                val t = AlarmStore.get(ctx, a.getInt("id"))?.takeIf { it.kind == Alarm.Kind.TIMER }
+                    ?: error("no existe el temporizador ${a.optInt("id")}")
+                ok().put("deleted", if (AlarmScheduler.delete(ctx, t.id)) 1 else 0)
+            }
+            else -> ok().put("deleted", cancelTimers(ctx))
+        }
+        "pause_timer" -> {
+            val p = TimerBook.pause(ctx, a.optInt("id", -1)) ?: error("no existe el temporizador ${a.optInt("id")}")
+            ok().put("paused", JSONObject().put("pid", p.pid).put("label", p.label).put("remaining_ms", p.remainingMs))
+        }
+        "resume_timer" -> {
+            val t = TimerBook.resume(ctx, a.optInt("pid", -1)) ?: error("no existe el temporizador en pausa ${a.optInt("pid")}")
+            ok().put("alarm", t.toJson())
+        }
+        "stopwatch" -> ok().put("stopwatch", Stopwatch.apply(a.optString("action", "status")))
         "stop_alarm" -> { AlarmRingService.dismiss(ctx); ok() }
         "snooze_alarm" -> { AlarmRingService.snooze(ctx); ok() }
         "display" -> { Events.display(a); ok() }
@@ -148,7 +167,7 @@ object Actions {
     }
 
     fun cancelTimers(ctx: Context): Int =
-        AlarmStore.all(ctx).filter { it.kind == Alarm.Kind.TIMER }.count { AlarmScheduler.delete(ctx, it.id) }
+        AlarmStore.all(ctx).filter { it.kind == Alarm.Kind.TIMER }.count { AlarmScheduler.delete(ctx, it.id) } + TimerBook.clearPaused()
 
     /** Volumen de voz/multimedia en porcentaje. [delta] != 0 -> relativo. */
     fun setVolume(ctx: Context, percent: Int, delta: Int): Int {

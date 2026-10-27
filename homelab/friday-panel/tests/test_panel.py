@@ -141,3 +141,24 @@ def test_post_without_csrf_header_is_forbidden(clock_url):
     assert r.status_code == 403 and r.json() == {"ok": False, "error": "Petición no permitida"}
     assert bare.post("/login", json={}).status_code == 403
     assert bare.get("/api/status").status_code == 200
+
+
+def test_timers_and_stopwatch_proxy(client):
+    t = client.post("/api/timer", json={"minutes": 5, "label": "Pasta", "extra": 1}).json()["alarm"]
+    listed = client.get("/api/timers").json()
+    assert listed["now"] > 0 and listed["timers"][0]["label"] == "Pasta" and listed["timers"][0]["paused"] is False
+    p = client.post("/api/timer", json={"action": "pause", "id": t["id"]}).json()
+    assert p["ok"] and client.get("/api/timers").json()["timers"][0]["paused"] is True
+    assert client.post("/api/timer", json={"action": "resume", "pid": p["paused"]["pid"]}).status_code == 200
+    assert client.post("/api/timer", json={"action": "cancel", "id": 999}).status_code == 404
+    assert client.post("/api/timer", json={"action": "cancel"}).json()["deleted"] == 1
+
+    assert client.post("/api/stopwatch", json={"action": "toggle"}).json()["stopwatch"]["running"] is True
+    assert client.get("/api/stopwatch").json()["stopwatch"]["running"] is True
+    assert client.post("/api/stopwatch", json={"action": "reset"}).status_code == 200
+    assert client.post("/api/stopwatch", json={"action": "salta"}).status_code == 400
+
+
+def test_face_data_includes_timers_and_stopwatch(client):
+    d = client.get("/api/face-data").json()
+    assert d["now"] > 0 and d["stopwatch"]["running"] is False and d["timers"] == []

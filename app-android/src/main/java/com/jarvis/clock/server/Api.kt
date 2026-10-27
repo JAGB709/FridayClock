@@ -7,6 +7,8 @@ import com.jarvis.clock.Prefs
 import com.jarvis.clock.alarm.AlarmRingService
 import com.jarvis.clock.alarm.AlarmScheduler
 import com.jarvis.clock.alarm.AlarmStore
+import com.jarvis.clock.alarm.Stopwatch
+import com.jarvis.clock.alarm.TimerBook
 import com.jarvis.clock.alarm.Sounds
 import com.jarvis.clock.assistant.Actions
 import com.jarvis.clock.assistant.Assistant
@@ -61,6 +63,9 @@ class Api(private val ctx: Context) {
             "GET" to "/alarms" -> Response.ok(JSONObject().put("alarms", alarms()))
             "POST" to "/alarm" -> alarm(r.json())
             "POST" to "/timer" -> timer(r.json())
+            "GET" to "/timers" -> Response.ok(timersState())
+            "GET" to "/stopwatch" -> Response.ok(JSONObject().put("stopwatch", Stopwatch.json()))
+            "POST" to "/stopwatch" -> stopwatch(r.json())
             "POST" to "/display" -> {
                 val j = r.json()
                 if (j.optString("action") == "clear") Events.post(Events.Event.DisplayClear) else Events.display(j)
@@ -151,8 +156,31 @@ class Api(private val ctx: Context) {
         }
     }
 
+    private fun timersState() = JSONObject().put("timers", TimerBook.json(ctx)).put("now", System.currentTimeMillis())
+
+    private fun stopwatch(j: JSONObject): Response {
+        val action = j.optString("action", "status")
+        if (action !in Stopwatch.ACTIONS) return Response.error(400, "action debe ser ${Stopwatch.ACTIONS.joinToString(", ")}")
+        return result(Actions.execute(ctx, JSONObject().put("type", "stopwatch").put("action", action)))
+    }
+
     private fun timer(j: JSONObject): Response {
-        if (j.optString("action") == "cancel") return result(Actions.execute(ctx, JSONObject().put("type", "cancel_timer")))
+        // pause/resume/cancel con id (o pid, para los pausados); cancel sin id cancela todos.
+        val control = when (j.optString("action")) {
+            "pause" -> "pause_timer"
+            "resume" -> "resume_timer"
+            "cancel" -> "cancel_timer"
+            else -> null
+        }
+        if (control != null) {
+            val a = JSONObject().put("type", control)
+            for (k in listOf("id", "pid")) if (j.has(k)) a.put(k, j.optInt(k, -1))
+            return try {
+                result(Actions.execute(ctx, a))
+            } catch (e: IllegalStateException) {
+                Response.error(404, e.message ?: "no existe el temporizador")
+            }
+        }
         val secs = j.optLong("seconds", 0) + j.optLong("minutes", 0) * 60 + j.optLong("hours", 0) * 3600
         return result(Actions.execute(ctx, JSONObject().put("type", "set_timer").put("seconds", secs).put("label", j.optString("label", "Temporizador"))))
     }
@@ -173,6 +201,8 @@ class Api(private val ctx: Context) {
         put("bluetooth", com.jarvis.clock.bt.BluetoothControl.status(ctx))
         AlarmScheduler.nextAlarm(ctx)?.let { (a, at) -> put("next_alarm", a.toJson().put("at", at)) }
         put("alarms", alarms())
+        put("timers", TimerBook.json(ctx))
+        put("stopwatch", Stopwatch.json())
     }
 
     private fun authorized(r: Request): Boolean {

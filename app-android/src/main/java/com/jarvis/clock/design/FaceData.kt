@@ -4,6 +4,8 @@ import android.app.AlarmManager
 import android.content.Context
 import android.os.Build
 import com.jarvis.clock.alarm.AlarmScheduler
+import com.jarvis.clock.alarm.Stopwatch
+import com.jarvis.clock.alarm.TimerBook
 import com.jarvis.clock.weather.Weather
 import org.json.JSONArray
 import org.json.JSONObject
@@ -69,6 +71,9 @@ object FaceData {
             .put("forecast", forecastJson(w))
             .put("next_alarm", next?.let { (a, at) -> nextAlarmJson(a.label, a.timeText(), now, at) } ?: JSONObject.NULL)
             .put("exact_alarm_missing", exactMissing)
+            .put("now", now)
+            .put("stopwatch", Stopwatch.json(now))
+            .put("timers", TimerBook.json(ctx))
         if (ringingLabel != null) o.put("ringing_label", ringingLabel)
         return o
     }

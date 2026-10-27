@@ -13,7 +13,7 @@ object Events {
 
     sealed class Event {
         /** Mostrar contenido a pantalla completa (endpoint /display o acción del asistente). */
-        data class Display(val type: String, val content: String, val durationMs: Long) : Event()
+        data class Display(val type: String, val content: String, val durationMs: Long, val title: String = "") : Event()
         object DisplayClear : Event()
         /** Estado del asistente para la UI. */
         data class AssistantState(val state: State, val text: String = "") : Event()
@@ -58,6 +58,7 @@ object Events {
             Event.Display(
                 type = json.optString("type", "text"),
                 content = json.optString("content", ""),
+                title = json.optString("title", "").take(60),
                 durationMs = json.optLong("duration_ms", 15_000L).coerceIn(1_000L, 3_600_000L),
             )
         )

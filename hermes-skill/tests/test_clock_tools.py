@@ -196,3 +196,26 @@ def test_skill_pide_confirmacion_en_acciones_delicadas():
     assert "confirmación" in pitfalls
     for cmd in ("alarm-cancel --all", "design-reset", "settings-set", "show --type html"):
         assert cmd in pitfalls.split("## Verification")[0], cmd
+
+
+def test_timer_pause_resume_cancel_and_stopwatch(clock):
+    t = clock.clock_set_timer(minutes=10, label="Pasta")["alarm"]
+    assert clock.clock_timers()["timers"][0]["label"] == "Pasta"
+    p = clock.clock_timer_control("pause", id=t["id"])
+    assert p["ok"] and p["paused"]["remaining_ms"] > 0
+    listed = clock.clock_timers()["timers"]
+    assert listed[0]["paused"] is True and listed[0]["id"] == f"p{p['paused']['pid']}"
+    assert clock.clock_timer_control("resume", pid=p["paused"]["pid"])["ok"]
+    assert clock.clock_timers()["timers"][0]["paused"] is False
+    assert clock.clock_timer_control("cancel", id=999)["ok"] is False
+    assert clock.clock_timer_control("cancel")["deleted"] == 1
+    assert clock.clock_timers()["timers"] == []
+
+    assert clock.clock_stopwatch("start")["stopwatch"]["running"] is True
+    assert clock.clock_stopwatch("pause")["stopwatch"]["running"] is False
+    assert clock.clock_stopwatch("reset")["stopwatch"]["base_ms"] == 0
+    assert clock.clock_stopwatch("nada")["ok"] is False
+
+
+def test_display_markdown_with_title(clock):
+    assert clock.clock_display("# Hola\n- uno", type="markdown", title="Compra")["ok"]

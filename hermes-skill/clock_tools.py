@@ -97,14 +97,39 @@ def clock_set_timer(seconds: int = 0, minutes: int = 0, hours: int = 0, label: s
     return _call("POST", "/timer", {"seconds": seconds, "minutes": minutes, "hours": hours, "label": label})
 
 
+def clock_timers() -> dict:
+    """Temporizadores en marcha (con "at", instante de fin en ms) y en pausa (con "remaining_ms")."""
+    return _call("GET", "/timers")
+
+
+def clock_timer_control(action: str, id: int | None = None, pid: int | None = None) -> dict:
+    """Controla temporizadores. action: pause|resume|cancel. pause y cancel usan id (el de clock_timers);
+    resume y cancel de uno en pausa usan pid (el "p7" de clock_timers es pid 7). cancel sin id ni pid los cancela todos."""
+    body: dict = {"action": action}
+    if id is not None:
+        body["id"] = id
+    if pid is not None:
+        body["pid"] = pid
+    return _call("POST", "/timer", body)
+
+
+def clock_stopwatch(action: str = "status") -> dict:
+    """Cronómetro del reloj. action: start|pause|reset|toggle|status."""
+    return _call("POST", "/stopwatch", {"action": action})
+
+
 def clock_say(text: str) -> dict:
     """Dice un texto por el altavoz del reloj (frases cortas, sin markdown)."""
     return _call("POST", "/speak", {"text": text})
 
 
-def clock_display(content: str, type: str = "text", seconds: int = 20) -> dict:
-    """Muestra algo a pantalla completa. type: text|html|image|url."""
-    return _call("POST", "/display", {"type": type, "content": content, "duration_ms": seconds * 1000})
+def clock_display(content: str, type: str = "text", seconds: int = 20, title: str = "") -> dict:
+    """Muestra algo a pantalla completa. type: text|markdown|html|image|url. Con markdown (títulos #, viñetas -,
+    **negrita**, *cursiva*, `código`) y un title opcional se ve como una tarjeta; el HTML y los enlaces nunca se activan."""
+    body = {"type": type, "content": content, "duration_ms": seconds * 1000}
+    if title:
+        body["title"] = title
+    return _call("POST", "/display", body)
 
 
 def clock_set_volume(level: int) -> dict:
@@ -173,7 +198,7 @@ def clock_list_backgrounds() -> dict:
 
 TOOLS = [
     clock_status, clock_list_alarms, clock_set_alarm, clock_cancel_alarm,
-    clock_set_timer, clock_say, clock_display, clock_set_volume, clock_bluetooth,
+    clock_set_timer, clock_timers, clock_timer_control, clock_stopwatch, clock_say, clock_display, clock_set_volume, clock_bluetooth,
     clock_get_settings, clock_set_settings, clock_update_alarm, clock_list_sounds,
     clock_get_design, clock_set_design, clock_preview_design, clock_cancel_preview, clock_reset_design, clock_list_backgrounds,
 ]

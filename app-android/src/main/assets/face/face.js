@@ -305,7 +305,112 @@
     }
   }
 
+  // Botón de control (cronómetro y temporizadores). Solo en el reloj: ni en la edición ni en la vista previa.
+  // Frena pointerdown/up para que el toque no cuente como gesto de la carátula.
+  function ctrlButton(name, label, size, kind, id) {
+    var b = el("button", "ctl");
+    b.type = "button";
+    b.setAttribute("aria-label", label);
+    b.style.width = b.style.height = size + "px";
+    var ic = iconNode(name, "55%");
+    if (ic) b.appendChild(ic);
+    var stop = function (ev) { ev.stopPropagation(); };
+    b.addEventListener("pointerdown", stop);
+    b.addEventListener("pointerup", stop);
+    b.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      var cmd = Core.controlCommand(kind, id);
+      if (cmd) native("control", cmd);
+    });
+    return b;
+  }
+  function nowMs(now) { return now.getTime() + (S.offset || 0); }
+  function showControls(e) { return e.controls !== false && !S.opts.edit && !PREVIEW; }
+
   var builders = {
+    stopwatch: function (e, box, r) {
+      var wrap = el("div", "sw");
+      var controls = showControls(e);
+      var bsize = Math.max(24, Math.min(r.height * 0.28, r.width / 6));
+      var txt = el("div", "txt");
+      txt.style.height = (controls ? r.height - bsize - 8 : r.height) + "px";
+      wrap.appendChild(txt);
+      var toggle = null;
+      if (controls) {
+        var row = el("div", "ctlrow");
+        toggle = ctrlButton("play", "Iniciar o pausar el cronómetro", bsize, "stopwatch-toggle");
+        row.appendChild(toggle);
+        row.appendChild(ctrlButton("rotate-ccw", "Reiniciar el cronómetro", bsize, "stopwatch-reset"));
+        wrap.appendChild(row);
+      }
+      box.appendChild(wrap);
+      var last = "", lastRun = null;
+      S.updaters.push(function (now, data) {
+        var sw = data.stopwatch;
+        var s = Core.formatDuration(Core.stopwatchMs(sw, nowMs(now)), true);
+        if (s !== last) {
+          last = s;
+          txt.textContent = s;
+          txt.style.fontSize = Core.fitText(s.length, r.width, parseFloat(txt.style.height), 9999, "clock") + "px";
+        }
+        var run = !!(sw && sw.running);
+        if (toggle && run !== lastRun) {
+          lastRun = run;
+          toggle.textContent = "";
+          var ic = iconNode(run ? "pause" : "play", "55%");
+          if (ic) toggle.appendChild(ic);
+        }
+      });
+    },
+    timers: function (e, box, r) {
+      var n = Math.max(1, Math.min(3, e.count || 2));
+      var controls = showControls(e);
+      var wrap = el("div", "tms");
+      box.appendChild(wrap);
+      var rowH = r.height / n;
+      var structure = null, cells = [];
+      S.updaters.push(function (now, data) {
+        var items = Core.timerItems(data.timers, nowMs(now), n);
+        var key = items.map(function (t) { return t.id + (t.paused ? "p" : "r") + t.label; }).join("|");
+        if (key !== structure) {
+          structure = key;
+          cells = [];
+          wrap.textContent = "";
+          if (!items.length) {
+            var none = el("div", "tmempty");
+            none.textContent = "Sin temporizadores";
+            none.style.fontSize = Core.fitText(19, r.width, r.height, 9999, "line") + "px";
+            wrap.appendChild(none);
+            return;
+          }
+          var bsize = Math.max(24, Math.min(rowH * 0.7, r.width / 8));
+          for (var i = 0; i < items.length; i++) {
+            var t = items[i];
+            var row = el("div", "tmrow" + (t.paused ? " paused" : ""));
+            row.style.height = rowH + "px";
+            var lab = el("div", "tmlabel");
+            lab.textContent = t.label;
+            lab.style.fontSize = Math.max(10, Math.floor(rowH * 0.22)) + "px";
+            var tm = el("div", "tmtime");
+            tm.style.fontSize = Core.fitText(5, r.width * 0.5, rowH, 9999, "line") + "px";
+            var info = el("div", "tminfo");
+            info.appendChild(lab);
+            info.appendChild(tm);
+            row.appendChild(info);
+            if (controls) {
+              row.appendChild(ctrlButton(t.paused ? "play" : "pause", t.paused ? "Reanudar" : "Pausar", bsize,
+                t.paused ? "timer-resume" : "timer-pause", t.id));
+              row.appendChild(ctrlButton("x", "Cancelar el temporizador", bsize, "timer-cancel", t.id));
+            }
+            wrap.appendChild(row);
+            cells.push(tm);
+          }
+        }
+        for (var j = 0; j < items.length; j++) {
+          if (cells[j].textContent !== items[j].text) cells[j].textContent = items[j].text;
+        }
+      });
+    },
     photos: function (e, box, r) {
       var wrap = el("div", "photos");
       box.appendChild(wrap);
@@ -545,6 +650,7 @@
   function setData(data) {
     if (!rootEl || !contentEl) { pending.push(function () { setData(data); }); return; }
     S.data = data || {};
+    S.offset = Core.clockOffset(S.data, Date.now());
     updateAll();
   }
 

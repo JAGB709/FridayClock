@@ -55,7 +55,7 @@ test("todos los tipos tienen etiqueta, tamaño y campos", () => {
     const d = E.TYPES[t];
     assert.ok(d.label && d.w >= 1 && d.h >= 1 && Array.isArray(d.fields), t);
   }
-  assert.deepEqual(Object.keys(E.TYPES).sort(), ["clock", "date", "forecast", "next_alarm", "photos", "text", "weather_now"]);
+  assert.deepEqual(Object.keys(E.TYPES).sort(), ["clock", "date", "forecast", "next_alarm", "photos", "stopwatch", "text", "timers", "weather_now"]);
 });
 
 test("downscaleSize: reduce el lado largo y no amplia", () => {
@@ -207,4 +207,11 @@ test("copyToScreen: mantiene la posición si cabe, valida la rejilla de destino 
   const r2 = E.copyToScreen(src, "hora", dst, 6, 2);
   assert.notEqual(r2.ids[0], "hora");
   assert.deepEqual(pos(r2.list, r2.ids[0]), [0, 3]); // ocupado: va al primer hueco
+});
+
+test("stopwatch y timers se crean con sus valores por defecto", () => {
+  const sw = E.newElement("stopwatch", "cr", { x: 0, y: 0 });
+  assert.deepEqual([sw.type, sw.w, sw.h, sw.controls], ["stopwatch", 4, 3, true]);
+  const tm = E.newElement("timers", "tm", { x: 4, y: 0 });
+  assert.deepEqual([tm.type, tm.count, tm.controls], ["timers", 2, true]);
 });

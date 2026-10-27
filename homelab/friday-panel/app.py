@@ -208,6 +208,24 @@ def create_app(cfg: Config) -> FastAPI:
     async def delete_alarm(alarm_id: int):
         return await clock("POST", "/alarm", json={"action": "cancel", "id": alarm_id})
 
+    @app.get("/api/timers")
+    async def list_timers():
+        return await clock("GET", "/timers")
+
+    @app.post("/api/timer")
+    async def timer(body: dict = Body(default_factory=dict)):
+        # Crear (seconds/minutes/hours/label) o controlar (action pause|resume|cancel con id o pid).
+        allowed = {"action", "seconds", "minutes", "hours", "label", "id", "pid"}
+        return await clock("POST", "/timer", json={k: v for k, v in body.items() if k in allowed})
+
+    @app.get("/api/stopwatch")
+    async def get_stopwatch():
+        return await clock("GET", "/stopwatch")
+
+    @app.post("/api/stopwatch")
+    async def stopwatch(body: dict = Body(default_factory=dict)):
+        return await clock("POST", "/stopwatch", json={"action": str(body.get("action", "status"))})
+
     @app.get("/api/settings")
     async def get_settings():
         return await clock("GET", "/settings")
