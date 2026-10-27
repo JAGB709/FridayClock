@@ -410,26 +410,28 @@ function selectElement(id) {
   pushPreview();
 }
 
+// Aplica el resultado {list} o {error} de EditorCore a la lista del diseño; false si falló.
+function applyResult(r) {
+  if (r.error) { toast(r.error, true); return false; }
+  const list = currentElements();
+  list.splice(0, list.length, ...r.list);
+  touch(); paintSub();
+  return true;
+}
+
 function setRect(e, patch) {
   const cand = Object.assign({ x: e.x, y: e.y, w: e.w, h: e.h }, patch);
   if (!EditorCore.inBounds(cand, currentRows())) { toast("Se sale de la rejilla", true); return false; }
-  Object.assign(e, patch);
-  touch();
-  paintSub(); // los números ya salieron del foco (onchange): se refresca la lista
-  return true;
+  const moved = "x" in patch || "y" in patch;
+  const r = moved ? EditorCore.moveGroup(currentElements(), e.id, cand.x, cand.y, currentRows())
+    : EditorCore.resizeWithAnchors(currentElements(), e.id, cand.w, cand.h, currentRows());
+  return applyResult(r);
 }
 
 function resizeElement(id, w, hh) {
   const e = currentElements().find((x) => x.id === id);
   if (!e) return;
-  const cand = { x: e.x, y: e.y, w, h: hh };
-  if (EditorCore.inBounds(cand, currentRows())) {
-    e.w = w; e.h = hh; touch();
-  } else {
-    toast("Se sale de la rejilla", true);
-    pushPreview();
-  }
-  paintSub();
+  if (!applyResult(EditorCore.resizeWithAnchors(currentElements(), id, w, hh, currentRows()))) pushPreview();
 }
 
 function moveElement(id, x, y) {
@@ -437,14 +439,7 @@ function moveElement(id, x, y) {
   const e = currentElements().find((it) => it.id === id);
   if (!e) return;
   dz.selected = id;
-  const cand = { x, y, w: e.w, h: e.h };
-  if (EditorCore.inBounds(cand, currentRows())) {
-    e.x = x; e.y = y; touch();
-  } else {
-    toast("Se sale de la rejilla", true);
-    pushPreview();
-  }
-  paintSub();
+  if (!applyResult(EditorCore.moveGroup(currentElements(), id, x, y, currentRows()))) pushPreview();
 }
 
 function typedField(e, f) {
@@ -516,6 +511,85 @@ function reorder(fn) {
   touch(); paintSub();
 }
 
+const ALIGN_LABELS = [["left", "Izquierda"], ["center", "Centro"], ["right", "Derecha"], ["top", "Arriba"], ["middle", "Medio"], ["bottom", "Abajo"]];
+
+function otherScreens() {
+  const d = form.current;
+  const out = Object.keys(d.screens).filter((k) => dz.sub === "alarm" || k !== dz.screenId).map((k) => [k, d.screens[k].name]);
+  if (dz.sub !== "alarm") out.push(["__alarm", "Pantalla de alarma"]);
+  return out;
+}
+
+function copyElementTo(e, destKey) {
+  const d = form.current;
+  const alarm = destKey === "__alarm";
+  const dest = alarm ? d.alarm_screen.elements : d.screens[destKey].elements;
+  const r = EditorCore.copyToScreen(currentElements(), e.id, dest, alarm ? 4 : 6, alarm ? 1 : 2);
+  if (r.error) { toast(r.error, true); return; }
+  dest.splice(0, dest.length, ...r.list);
+  touch(); paintSub();
+  toast(alarm ? "Copiado a la pantalla de alarma" : `Copiado a ${d.screens[destKey].name}`);
+}
+
+// Relaciones entre elementos: agrupar, anclar, alinear y repartir, duplicar y copiar a otra pantalla.
+function relationsBlock(e) {
+  const rows = currentRows();
+  const list = currentElements();
+  const others = list.filter((o) => o.id !== e.id);
+  const label = (o) => typeInfo(o.type).label + (o.id.toLowerCase() !== String(typeInfo(o.type).label).toLowerCase() ? " · " + o.id : "");
+  const members = EditorCore.groupMembers(list, e.id);
+  const grouped = !!e.group;
+  const pick = { with: others.length ? others[0].id : "" };
+  const group = grouped
+    ? [h("p", { class: "muted hint" }, `Forma un grupo con ${members.length - 1} más: al mover una pieza se mueven todas.`),
+      h("div", { class: "grid2" },
+        btn("Desagrupar", () => applyResult({ list: EditorCore.ungroup(list, e.id) }), "ghost", "x"),
+        btn("Añadir otro", () => { if (pick.with) applyResult(EditorCore.groupElements(list, members.map((m) => m.id).concat([pick.with]))); }, "ghost", "plus")),
+      others.length ? labeled("Añadir al grupo", h("select", { onchange: (ev) => { pick.with = ev.target.value; } }, others.map((o) => h("option", { value: o.id }, label(o))))) : null]
+    : [others.length
+      ? h("div", { class: "grid2" },
+        labeled("Agrupar con", h("select", { onchange: (ev) => { pick.with = ev.target.value; } }, others.map((o) => h("option", { value: o.id }, label(o))))),
+        btn("Agrupar", () => { if (pick.with) applyResult(EditorCore.groupElements(list, [e.id, pick.with])); }, "ghost", "layers"))
+      : h("p", { class: "muted hint" }, "Añade otro elemento para poder agruparlos.")];
+  const arrange = members.length >= 2
+    ? [h("h3", { class: "sub-head" }, h("span", {}, "Alinear el grupo")),
+      h("div", { class: "grid3" }, ALIGN_LABELS.map(([m, t]) => btn(t, () => applyResult(EditorCore.alignElements(list, members.map((x) => x.id), m, rows)), "ghost small", null, { "aria-label": `Alinear el grupo: ${t.toLowerCase()}` }))),
+      members.length >= 3
+        ? h("div", { class: "grid2" },
+          btn("Repartir en horizontal", () => applyResult(EditorCore.distributeElements(list, members.map((x) => x.id), "h", rows)), "ghost small", null, { "aria-label": "Repartir el grupo en horizontal" }),
+          btn("Repartir en vertical", () => applyResult(EditorCore.distributeElements(list, members.map((x) => x.id), "v", rows)), "ghost small", null, { "aria-label": "Repartir el grupo en vertical" }))
+        : null]
+    : [];
+  const a = e.anchor;
+  const anchorTargets = [["", "Sin anclaje"]].concat(others.map((o) => [o.id, label(o)]));
+  const setA = (to, side, gap) => {
+    if (!to) { applyResult({ list: EditorCore.clearAnchor(list, e.id) }); return; }
+    applyResult(EditorCore.setAnchor(list, e.id, to, side, gap, rows));
+  };
+  const anchor = [
+    selectField("Anclar a", anchorTargets, a ? a.to : "", (v) => setA(v, a ? a.side : "right", a ? a.gap : 0)),
+    a ? h("div", { class: "grid2" },
+      selectField("Lado", EditorCore.SIDES, a.side, (v) => setA(a.to, v, a.gap)),
+      numberField("Separación (0 a 3)", a.gap || 0, 0, 3, (v) => setA(a.to, a.side, v))) : null,
+    a ? h("p", { class: "muted hint" }, "Al mover o cambiar de tamaño el elemento de destino, este lo sigue. Si lo mueves tú, se suelta.") : null,
+  ];
+  const dests = otherScreens();
+  const to = { v: dests.length ? dests[0][0] : "" };
+  return h("div", { class: "relations" },
+    h("h3", { class: "sub-head" }, h("span", {}, "Grupo"), h("span", { class: "aside" }, grouped ? `${members.length} elementos` : "sin grupo")),
+    group, arrange,
+    h("h3", { class: "sub-head" }, h("span", {}, "Anclaje")), anchor,
+    h("h3", { class: "sub-head" }, h("span", {}, "Duplicar y copiar")),
+    h("div", { class: "grid2" },
+      btn(grouped ? "Duplicar el grupo" : "Duplicar", () => {
+        const r = EditorCore.duplicateElements(list, e.id, rows, dz.sub === "alarm" ? 1 : 2);
+        if (applyResult(r)) { dz.selected = r.ids[0]; paintSub(); pushPreview(); }
+      }, "ghost", "copy"),
+      dests.length ? h("div", { class: "copy-to" },
+        labeled("Copiar a", h("select", { onchange: (ev) => { to.v = ev.target.value; } }, dests.map(([v, t]) => h("option", { value: v }, t)))),
+        btn("Copiar", () => copyElementTo(e, to.v), "ghost small", "copy")) : null));
+}
+
 function elementOptions(e) {
   const rows = currentRows();
   const els = currentElements();
@@ -548,6 +622,7 @@ function elementOptions(e) {
     h("div", { class: "grid2" },
       selectField("Color", EditorCore.COLOR_OPTIONS, e.color || "fg", (v) => { e.color = v; touch(); }),
       selectField("Alineación", [["left", "Izquierda"], ["center", "Centro"], ["right", "Derecha"]], e.align || "center", (v) => { e.align = v; touch(); })),
+    relationsBlock(e),
     fields.length ? h("h3", { class: "sub-head" }, h("span", {}, "Contenido")) : null,
     fields,
     h("div", { class: "block-foot" }, btn("Borrar elemento", () => {
@@ -555,7 +630,7 @@ function elementOptions(e) {
       // "Descartar lo recupera" solo es cierto si el elemento ya estaba en el diseño guardado.
       const saved = dz.sub === "alarm" ? form.original.alarm_screen : form.original.screens[dz.screenId];
       const wasSaved = !!saved && saved.elements.some((x) => x.id === e.id);
-      list.splice(list.indexOf(e), 1);
+      list.splice(0, list.length, ...EditorCore.removeElement(list, e.id));
       dz.selected = null;
       touch(); paintSub();
       if (wasSaved && dirty()) toast("Elemento borrado. Descartar lo recupera.");

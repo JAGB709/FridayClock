@@ -63,6 +63,8 @@ La carátula y la pantalla de alarma las dibuja un motor HTML/JS (`app-android/s
 
 Capas: el orden de la lista de elementos es el orden de dibujo (el último, delante); el fondo de tema admite `photos` (carrusel).
 
+Relaciones (3b): los elementos admiten `group` y `anchor` (validados en `DesignSchema.validateLinks`, resueltos en `face-core.resolveAnchors`, editados con `editor-core.js`); ver `docs/superpowers/specs/2026-10-27-elementos-conectados-design.md`.
+
 Sistema de diseño: `design-system/` (tokens.json e iconos Lucide) es la fuente; `tools/gen-tokens.py` y `tools/gen-icons.py` generan tokens.css, icons.js y los recursos nativos, y `--check` en ambos (más `tools/sync-face.sh --check`) lo exige la CI; cero emojis.
 
 Panel web: usa `homelab/friday-panel/static/ui.js` y los tokens de `tokens.css` (sin colores literales ni emojis); `tests/test_design_system.py` cubre también `static/`.
