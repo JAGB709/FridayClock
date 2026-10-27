@@ -1,0 +1,21 @@
+name: mi_smart_clock
+version: 1.0.0
+description: "Control tipado del reloj Mi Smart Clock (alarmas, temporizador, voz, pantalla, ajustes). Sin terminal."
+author: Mi Smart Clock
+kind: standalone
+provides_tools:
+  - clock_status
+  - clock_alarms
+  - clock_alarm_set
+  - clock_alarm_cancel
+  - clock_alarm_update
+  - clock_alarm_control
+  - clock_timer
+  - clock_say
+  - clock_display
+  - clock_volume
+  - clock_brightness
+  - clock_bluetooth
+  - clock_briefing
+  - clock_settings_get
+  - clock_settings_set

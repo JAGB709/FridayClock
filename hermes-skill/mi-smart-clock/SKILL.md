@@ -12,9 +12,11 @@ metadata:
 
 # Mi Smart Clock
 
+Esta variante con terminal es para Telegram/CLI. El canal del reloj NO tiene terminal: usa el plugin de tools tipadas `hermes-plugin/mi_smart_clock` (ver docs/hermes-seguro.md).
+
 Reloj despertador de la mesilla (Xiaomi Mi Smart Clock, app Friday, sin Google).
 Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock.py`
-(ruta relativa a esta skill); cada comando imprime JSON con `"ok": true|false`.
+(ruta ABSOLUTA bajo `$HERMES_HOME/skills/...`; el HOME del agente puede ser otro, no uses rutas relativas); cada comando imprime JSON con `"ok": true|false`.
 
 ## When to Use
 - El usuario pide alarmas, despertarse, temporizadores o recordatorios con hora.
@@ -24,9 +26,9 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
 - Rutinas programadas (p.ej. un cron que muestra la agenda al despertar).
 
 ## Procedure
-1. Consulta el estado si hace falta contexto: `python3 scripts/clock.py status`
+1. Consulta el estado si hace falta contexto: `python3 "${HERMES_HOME:-$HOME/.hermes}/skills/smart-home/mi-smart-clock/scripts/clock.py" status`
 2. Alarmas (hora 24h `HH:MM`):
-   - Crear: `python3 scripts/clock.py alarm-set 07:30 --label "Trabajo" --days weekdays`
+   - Crear: `python3 "${HERMES_HOME:-$HOME/.hermes}/skills/smart-home/mi-smart-clock/scripts/clock.py" alarm-set 07:30 --label "Trabajo" --days weekdays`
      (`--days`: vacío = una vez, `weekdays`, `weekend`, `daily`, o `mon,wed,fri`)
    - Borrar: `alarm-cancel --id 3` | `alarm-cancel --time 07:30` | `alarm-cancel --all`
    - Activar/desactivar: `alarm-enable 3` / `alarm-disable 3`
@@ -77,4 +79,4 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
   en texto breve para voz: el reloj lee tu respuesta en voz alta.
 
 ## Verification
-`python3 scripts/clock.py alarms` debe listar la alarma creada con `"enabled": true`.
+`python3 "${HERMES_HOME:-$HOME/.hermes}/skills/smart-home/mi-smart-clock/scripts/clock.py" alarms` debe listar la alarma creada con `"enabled": true`.

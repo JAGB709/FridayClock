@@ -62,3 +62,10 @@ clock_tools.clock_set_alarm("06:45", label="Gym", days="mon,wed,fri")
 
 Todas devuelven `{"ok": bool, ...}`; con el reloj apagado o el token mal,
 devuelven `{"ok": False, "error": ...}` en vez de lanzar excepción.
+
+## Plugin de tools tipadas (canal del reloj, sin terminal)
+
+`hermes-plugin/mi_smart_clock/` registra el toolset `mi-smart-clock` con 15 tools
+`clock_*` (alarmas, temporizador, voz, pantalla, ajustes). Las acciones que borran
+o cambian ajustes exigen `confirm=true`. Es lo que usa la API del puente: ver
+`docs/hermes-seguro.md`. Tests: `pytest -q tests/test_plugin.py`.

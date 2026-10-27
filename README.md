@@ -120,7 +120,7 @@ flowchart LR
 | **App Friday** (`app-android/`) | En el reloj | Launcher, carátula, alarmas, asistente, servidor HTTP. Kotlin, UI construida por código. |
 | **Motor de pantallas** (`app-android/src/main/assets/face/`) | Dentro de la app (WebView) y copiado al panel | Dibuja la carátula y la pantalla de alarma a partir de un diseño JSON. La misma vista previa en el reloj y en el panel. |
 | **clock-bridge** (`homelab/clock-bridge/`) | Homelab | Oídos y boca del reloj: Whisper, TTS, puerta de la palabra de activación y enrutado de las preguntas. |
-| **Skill de Hermes** (`hermes-skill/`) | Homelab (en Hermes) | Da a Hermes el control del reloj: alarmas, hablar, mostrar, Bluetooth, ajustes y diseño. |
+| **Skill de Hermes** (`hermes-skill/`) | Homelab (en Hermes) | Da a Hermes el control del reloj: alarmas, hablar, mostrar, Bluetooth, ajustes y diseño. Incluye un plugin de tools tipadas para el canal del reloj, sin terminal ([`docs/hermes-seguro.md`](docs/hermes-seguro.md)). |
 | **Panel web** (`homelab/friday-panel/`) | Homelab | Interfaz de móvil primero. El token del reloj no sale del servidor. |
 | **Kit de dispositivo** (`device-kit/`) | Tu ordenador | Scripts numerados para liberar el reloj con backup y rollback. |
 

@@ -3,7 +3,7 @@
 
 Configuración (la primera que exista):
   - variables de entorno CLOCK_URL y CLOCK_TOKEN
-  - ~/.config/mi-smart-clock.json  {"url": "http://100.x.y.z:8080", "token": "..."}
+  - $HERMES_HOME/.config/mi-smart-clock.json o ~/.config/mi-smart-clock.json  {"url": "http://100.x.y.z:8080", "token": "..."}
 """
 import argparse
 import json
@@ -15,11 +15,15 @@ import urllib.request
 
 def config():
     url, token = os.getenv("CLOCK_URL"), os.getenv("CLOCK_TOKEN")
-    path = os.path.expanduser("~/.config/mi-smart-clock.json")
-    if (not url or not token) and os.path.exists(path):
-        with open(path, encoding="utf-8") as f:
-            c = json.load(f)
-        url, token = url or c.get("url"), token or c.get("token")
+    candidatos = [os.path.expanduser("~/.config/mi-smart-clock.json")]
+    if os.getenv("HERMES_HOME"):
+        # El agente de Hermes puede tener otro HOME (p.ej. /opt/data/home)
+        candidatos.insert(0, os.path.join(os.environ["HERMES_HOME"], ".config", "mi-smart-clock.json"))
+    for path in candidatos:
+        if (not url or not token) and os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                c = json.load(f)
+            url, token = url or c.get("url"), token or c.get("token")
     if not url or not token:
         sys.exit("Falta CLOCK_URL/CLOCK_TOKEN (o ~/.config/mi-smart-clock.json)")
     return url.rstrip("/"), token
