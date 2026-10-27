@@ -5,13 +5,14 @@ banner "07_smoke_test — prueba de humo"
 
 : "${CLOCK_URL:?define CLOCK_URL=http://<ip-tailscale-reloj>:8080}"
 : "${CLOCK_TOKEN:?define CLOCK_TOKEN}"
-H=(-H "X-Auth-Token: $CLOCK_TOKEN" -H "Content-Type: application/json")
+# El token se pasa a curl por stdin (-K -), no por argv.
+curl_auth() { printf 'header = "X-Auth-Token: %s"\nheader = "Content-Type: application/json"\n' "$CLOCK_TOKEN" | curl -K - "$@"; }
 
 api() { # método path [json]
   local m="$1" p="$2" body="${3:-}"
   if [ "$DRY_RUN" = 0 ]; then
-    if [ -n "$body" ]; then curl -fsS -X "$m" "${H[@]}" -d "$body" "$CLOCK_URL$p";
-    else curl -fsS -X "$m" "${H[@]}" "$CLOCK_URL$p"; fi
+    if [ -n "$body" ]; then curl_auth -fsS -X "$m" -d "$body" "$CLOCK_URL$p";
+    else curl_auth -fsS -X "$m" "$CLOCK_URL$p"; fi
     echo
   else
     log "(dry-run) curl -X $m $CLOCK_URL$p ${body:+-d '$body'}"

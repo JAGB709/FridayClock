@@ -1,0 +1,7 @@
+# Cada cambio pide revision del propietario; lo sensible se lista aparte a proposito.
+*                       @JAGB709
+/.github/               @JAGB709
+/device-kit/            @JAGB709
+/app-android/build.gradle.kts @JAGB709
+/homelab/               @JAGB709
+/SECURITY.md            @JAGB709

@@ -1,7 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// Firma de release: keystore propio leido de variables de entorno o de local.properties (ignorado
+// por el control de versiones). Variables: FRIDAY_KEYSTORE, FRIDAY_KEYSTORE_PASSWORD,
+// FRIDAY_KEY_ALIAS, FRIDAY_KEY_PASSWORD. Si faltan, el release cae a la clave debug con un aviso.
+// Ver docs/firma-release.md.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun signingValue(name: String): String? =
+    (System.getenv(name) ?: localProps.getProperty(name))?.takeIf { it.isNotBlank() }
+val releaseKeystore = signingValue("FRIDAY_KEYSTORE")?.let { rootProject.file(it) }?.takeIf { it.isFile }
+val releaseSigningReady = releaseKeystore != null &&
+    listOf("FRIDAY_KEYSTORE_PASSWORD", "FRIDAY_KEY_ALIAS").all { signingValue(it) != null }
 
 android {
     namespace = "com.jarvis.clock"
@@ -15,13 +31,28 @@ android {
         versionName = "2.0"
     }
 
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("friday") {
+                storeFile = releaseKeystore
+                storePassword = signingValue("FRIDAY_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("FRIDAY_KEY_ALIAS")
+                keyPassword = signingValue("FRIDAY_KEY_PASSWORD") ?: signingValue("FRIDAY_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Firma con la clave debug para poder instalar el release sin keystore propio.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseSigningReady) {
+                signingConfigs.getByName("friday")
+            } else {
+                logger.warn("AVISO: sin keystore de release (FRIDAY_KEYSTORE...); el release se firma con la clave DEBUG. Ver docs/firma-release.md")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

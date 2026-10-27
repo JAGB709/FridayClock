@@ -85,6 +85,9 @@ class Backend(private val ctx: Context) {
         request(path, body.toString().toByteArray(), "application/json; charset=utf-8")
 
     private fun request(path: String, body: ByteArray, contentType: String, readTimeoutMs: Int = 90_000): JSONObject {
+        if (!CleartextPolicy.allowed(Prefs.backendUrl)) {
+            error("URL del puente no permitida: usa https o una dirección de Tailscale/LAN")
+        }
         val c = URL(Prefs.backendUrl + path).openConnection() as HttpURLConnection
         try {
             c.requestMethod = "POST"

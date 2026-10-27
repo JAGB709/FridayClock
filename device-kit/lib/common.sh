@@ -40,6 +40,12 @@ banner() {
 # Oculta valores de tokens antes de escribir un comando en el log.
 redact() { sed -E 's/(--es (token|backend_token) )[^ ]+/\1***/g'; }
 
+# Entrecomilla un valor para un shell remoto: ab'c -> 'ab'\''c'
+shq() { local s="$1" sq="'"; printf "'%s'" "${s//$sq/$sq\\$sq$sq}"; }
+
+# Oculta cualquier valor tras token/backend_token en la salida de adb.
+redact_all() { sed -E "s/(token|backend_token)( |=)('?)[^' ]+/\\1\\2\\3***/g"; }
+
 run() {
   if [ "$DRY_RUN" = 0 ]; then
     log "\$ $(printf '%s' "$*" | redact)"
@@ -61,9 +67,19 @@ mtk() {
 confirm_word() {
   local word="$1" ; shift
   local prompt="${*:-Esta acción es IRREVERSIBLE}"
+  # ASSUME_YES=1 solo existe para automatizar pasos REVERSIBLES (p. ej. DESHABILITAR) y exige
+  # además ASSUME_YES_ACK=SI_ASUMO_EL_RIESGO. Las confirmaciones irreversibles (desbloqueo,
+  # flasheo, rollback, copia del backup) siempre se teclean.
+  case "$word" in
+    DESHABILITAR) ;;
+    *) ASSUME_YES=0 ;;
+  esac
   if [ "${ASSUME_YES:-0}" = 1 ]; then
-    warn "ASSUME_YES=1: se omite la confirmación de '$word'"
-    return 0
+    if [ "${ASSUME_YES_ACK:-}" = "SI_ASUMO_EL_RIESGO" ]; then
+      warn "ASSUME_YES=1: se omite la confirmación de '$word'"
+      return 0
+    fi
+    warn "ASSUME_YES=1 ignorado: falta ASSUME_YES_ACK=SI_ASUMO_EL_RIESGO"
   fi
   echo ""
   echo ">>> $prompt"

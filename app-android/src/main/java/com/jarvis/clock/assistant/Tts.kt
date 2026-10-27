@@ -100,18 +100,19 @@ class Tts(private val ctx: Context) {
             MediaPlayer().apply {
                 setAudioAttributes(attrs)
                 setDataSource(f.absolutePath)
-                setOnCompletionListener { release(); if (player === it) player = null; onDone?.invoke() }
-                setOnErrorListener { mp, _, _ -> mp.release(); if (player === mp) player = null; onDone?.invoke(); true }
+                setOnCompletionListener { release(); f.delete(); if (player === it) player = null; onDone?.invoke() }
+                setOnErrorListener { mp, _, _ -> mp.release(); f.delete(); if (player === mp) player = null; onDone?.invoke(); true }
                 prepare()
                 start()
             }
-        }.onFailure { onDone?.invoke() }.getOrNull()
+        }.onFailure { f.delete(); onDone?.invoke() }.getOrNull()
     }
 
     fun stop() {
         tts?.stop()
         player?.let { runCatching { it.stop() }; it.release() }
         player = null
+        runCatching { File(ctx.cacheDir, "reply.audio").delete() }
         val cbs = synchronized(this) { callbacks.values.toList().also { callbacks.clear() } }
         cbs.forEach { it() }
     }

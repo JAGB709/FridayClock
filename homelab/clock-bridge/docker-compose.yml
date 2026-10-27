@@ -4,8 +4,12 @@ services:
     env_file: .env
     network_mode: host   # para llegar a Hermes en 127.0.0.1:8642 y exponerse por Tailscale
     volumes:
-      - ./models:/models            # voces de Piper
-      - whisper-cache:/root/.cache  # modelos de Whisper descargados
+      - ./models:/models:ro             # voces de Piper (solo lectura; deben ser legibles por el uid 10001)
+      - whisper-cache:/home/app/.cache  # modelos de Whisper descargados (usuario no root)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
 volumes:
   whisper-cache:

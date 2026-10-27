@@ -94,6 +94,6 @@ There is no on-device speech model (1 GB RAM). `WakeWord` (started by `ClockServ
 ### Constraints to respect
 
 - **Zero runtime dependencies** in the app (no AppCompat/Compose/OkHttp/Play Services) — framework + Kotlin stdlib only, for 1 GB RAM. UI is built programmatically (`ui/Ui.kt`), not via layouts. JUnit and `org.json` are test-only (the unit-test `android.jar` stubs `org.json`, hence the real artifact in `testImplementation`).
-- `minSdk 26`, `compileSdk/targetSdk 34`; the app targets only the Android 10 clock. Release is signed with the debug key on purpose.
+- `minSdk 26`, `compileSdk/targetSdk 34`; the app targets only the Android 10 clock. Release is signed with the user's keystore if `FRIDAY_KEYSTORE*` is set (env or `local.properties`, see `docs/firma-release.md`), otherwise with the debug key plus a warning.
 - Secrets/URLs (clock token, `CLOCK_URL`, bridge token) come from env, `~/.config/mi-smart-clock.json`, or ADB config (`ConfigReceiver`) — never hardcode.
 - `device-kit` scripts default to `DRY_RUN=1`; destructive steps need `DRY_RUN=0` and typed confirmation. Never `pm uninstall` — Google packages are only `pm disable-user`'d (reversible). Rooting uses the clock's own patched `boot` (decision D1), not the vendor boot with the port-1337 root shell.

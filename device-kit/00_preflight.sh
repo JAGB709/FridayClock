@@ -8,6 +8,12 @@ for c in python3 adb; do
   if command -v "$c" >/dev/null 2>&1; then info "OK comando $c"; else err "Falta $c"; fail=1; fi
 done
 [ -f "$MTK_PY" ] && info "OK mtkclient" || { err "Falta mtkclient ($MTK_PY)"; fail=1; }
+# mtkclient debe estar en el commit fijado.
+MTK_COMMIT="$(grep -v '^#' "$KIT_DIR/manifests/mtkclient.commit" | head -1 | tr -d '[:space:]')"
+if [ -d "$VENDOR_DIR/mtkclient/.git" ]; then
+  actual="$(git -C "$VENDOR_DIR/mtkclient" rev-parse HEAD 2>/dev/null || true)"
+  [ "$actual" = "$MTK_COMMIT" ] && info "OK mtkclient en el commit fijado" || { err "mtkclient no está en el commit fijado ($MTK_COMMIT)"; fail=1; }
+fi
 
 # Espacio: >= 8 GB libres para los backups.
 avail_kb="$(df -Pk "$KIT_DIR" | awk 'NR==2{print $4}')"
@@ -20,6 +26,14 @@ if [ -s "$KIT_DIR/manifests/checksums.sha256" ]; then
   ( cd "$KIT_DIR" && if [ "$DRY_RUN" = 0 ]; then sha256sum -c manifests/checksums.sha256; else sha256sum -c manifests/checksums.sha256 || warn "checksums no coinciden (dry-run informativo)"; fi ) | tee -a "$LOGFILE" || fail=1
 else
   warn "Sin manifests/checksums.sha256 (ok si aún no has puesto ficheros en vendor/)"
+fi
+
+# Checksums de los APK (Tailscale, HeliBoard, Friday firmado por ti), si has creado el manifiesto.
+if [ -s "$KIT_DIR/manifests/apks.sha256" ]; then
+  info "Verificando checksums de los APK"
+  ( cd "$KIT_DIR" && sha256sum -c manifests/apks.sha256 ) | tee -a "$LOGFILE" || fail=1
+else
+  warn "Sin manifests/apks.sha256: crea el tuyo con  (cd device-kit && sha256sum vendor/*.apk > manifests/apks.sha256)"
 fi
 
 # APK de Friday.
