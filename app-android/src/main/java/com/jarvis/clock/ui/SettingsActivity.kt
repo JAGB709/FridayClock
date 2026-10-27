@@ -2,18 +2,15 @@ package com.jarvis.clock.ui
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
-import android.widget.Button
-import android.widget.EditText
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
-import android.widget.Switch
-import android.widget.TextView
 import android.widget.Toast
 import com.jarvis.clock.ClockService
 import com.jarvis.clock.Prefs
@@ -36,13 +33,13 @@ class SettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val dp = { v: Int -> Ui.dp(this, v) }
+        window.setBackgroundDrawable(ColorDrawable(Tokens.Color.BG))
         form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(12), dp(20), dp(24))
-            setBackgroundColor(Color.BLACK)
+            setPadding(dp(24), dp(4), dp(24), dp(24))
         }
+        cur = form
 
-        title("Ajustes")
         info("Dirección: ${ips().joinToString(", ") { "$it:${Prefs.httpPort}" }.ifEmpty { "sin red" }}")
 
         section("Servidor del reloj")
@@ -58,9 +55,9 @@ class SettingsActivity : Activity() {
         text("Token del puente", Prefs.backendToken) { Prefs.backendToken = it }
         switch("Activar al decir \"${Prefs.assistantName}\" (escucha continua)", Prefs.wakeWord) { Prefs.wakeWord = it }
         switch("Seguir escuchando si pregunta algo", Prefs.followUp) { Prefs.followUp = it }
-        decimal("Velocidad de voz (0.5–2)", Prefs.ttsRate.toDouble()) { Prefs.ttsRate = it.toFloat() }
-        button("Probar conexión con Hermes") { testBackend() }
-        button("Ajustes de voz del sistema (TTS)") {
+        decimal("Velocidad de voz (de 0,5 a 2)", Prefs.ttsRate.toDouble()) { Prefs.ttsRate = it.toFloat() }
+        button("Probar conexión con Hermes", "cloud") { testBackend() }
+        button("Ajustes de voz del sistema (TTS)", "volume-2") {
             runCatching { startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
         }
 
@@ -74,7 +71,7 @@ class SettingsActivity : Activity() {
         number("Segundos de subida de volumen", Prefs.alarmRampSeconds) { Prefs.alarmRampSeconds = it }
         number("Minutos sonando antes de posponer sola", Prefs.alarmAutoSnoozeMinutes) { Prefs.alarmAutoSnoozeMinutes = it }
         switch("Buenos días del asistente al descartar", Prefs.morningBriefing) { Prefs.morningBriefing = it }
-        button("Probar alarma (suena en 10 s)") {
+        button("Probar alarma (suena en 10 s)", "bell") {
             saveAll()
             AlarmScheduler.createTimer(this, 10, "Prueba de alarma")
             toast("Sonará en 10 segundos")
@@ -88,10 +85,10 @@ class SettingsActivity : Activity() {
         number("Brillo de día (%)", Prefs.dayBrightness) { Prefs.dayBrightness = it }
 
         section("Altavoz Bluetooth")
-        button("Modo altavoz Bluetooth (conectar el móvil)") { startActivity(Intent(this, BluetoothActivity::class.java)) }
+        button("Modo altavoz Bluetooth (conectar el móvil)", "music") { startActivity(Intent(this, BluetoothActivity::class.java)) }
 
         section("Red")
-        button("Wi-Fi (elegir red y contraseña)") { startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) }
+        button("Wi-Fi (elegir red y contraseña)", "wifi") { startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) }
         button("Tailscale") {
             // La VPN mantiene el reloj accesible desde el homelab en cualquier Wi-Fi.
             packageManager.getLaunchIntentForPackage("com.tailscale.ipn")?.let { startActivity(it) }
@@ -99,16 +96,22 @@ class SettingsActivity : Activity() {
 
         section("Sistema")
         button("Elegir launcher predeterminado") { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
-        button("Ajustes de Android") { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+        button("Ajustes de Android", "settings") { startActivity(Intent(Settings.ACTION_SETTINGS)) }
 
-        val save = Button(this).apply {
-            text = "Guardar"; textSize = 20f; isAllCaps = false
-            setTextColor(Tokens.Color.ON_ACCENT); setBackgroundColor(Tokens.Color.ACCENT)
-            typeface = Fonts.semibold(this@SettingsActivity)
-            setOnClickListener { saveAll(); toast("Guardado"); finish() }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(24), dp(12), dp(24), dp(8))
         }
-        form.addView(save, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(20) })
-        setContentView(ScrollView(this).apply { addView(form); setBackgroundColor(Color.BLACK) })
+        header.addView(Widgets.iconButton(this, "chevron-left", "Volver sin guardar") { finish() },
+            LinearLayout.LayoutParams(dp(Widgets.TOUCH), dp(Widgets.TOUCH)))
+        header.addView(Widgets.label(this, "Ajustes", 28, Tokens.Color.TEXT, Fonts.semibold(this)).apply { setPadding(dp(8), 0, 0, 0) },
+            LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(Widgets.button(this, "Guardar", Widgets.Kind.PRIMARY, "check") { saveAll(); toast("Guardado"); finish() },
+            LinearLayout.LayoutParams(-2, dp(Widgets.TOUCH)))
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Tokens.Color.BG) }
+        root.addView(header)
+        root.addView(ScrollView(this).apply { addView(form) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(root)
     }
 
     private fun saveAll() = saves.forEach { runCatching { it() } }
@@ -130,21 +133,25 @@ class SettingsActivity : Activity() {
 
     // ------------------------------------------------------------------ helpers de formulario
 
-    private fun title(t: String) = form.addView(TextView(this).apply { text = t; textSize = 28f; setTextColor(Ui.TEXT); typeface = Fonts.semibold(this@SettingsActivity) })
-    private fun info(t: String) = form.addView(TextView(this).apply { text = t; textSize = 16f; setTextColor(Ui.ACCENT); typeface = Fonts.regular(this@SettingsActivity); setTextIsSelectable(true) })
+    private lateinit var cur: LinearLayout
 
-    private fun section(t: String) = form.addView(TextView(this).apply {
-        text = t; textSize = 18f; setTextColor(Ui.ACCENT); typeface = Fonts.semibold(this@SettingsActivity)
-        setPadding(0, Ui.dp(this@SettingsActivity, 20), 0, Ui.dp(this@SettingsActivity, 4))
-    })
+    private fun add(v: View, lp: LinearLayout.LayoutParams = LinearLayout.LayoutParams(-1, -2)) = cur.addView(v, lp)
+
+    private fun info(t: String) = add(Widgets.label(this, t, 16, Tokens.Color.ACCENT).apply { setTextIsSelectable(true) })
+
+    /** Cada sección es una tarjeta con su título encima. */
+    private fun section(t: String) {
+        form.addView(Widgets.label(this, t, 14, Tokens.Color.TEXT_MUTED, Fonts.semibold(this)).apply {
+            setPadding(Ui.dp(this@SettingsActivity, 4), Ui.dp(this@SettingsActivity, 20), 0, Ui.dp(this@SettingsActivity, 8))
+        })
+        cur = Widgets.card(this)
+        form.addView(cur)
+    }
 
     private fun field(label: String, value: String, type: Int, hint: String = "", onSave: (String) -> Unit) {
-        form.addView(TextView(this).apply { text = label; textSize = 14f; setTextColor(Ui.DIM); typeface = Fonts.regular(this@SettingsActivity) })
-        val e = EditText(this).apply {
-            setText(value); this.hint = hint; inputType = type; setSingleLine()
-            setTextColor(Color.WHITE); setHintTextColor(Color.DKGRAY)
-        }
-        form.addView(e)
+        add(Widgets.label(this, label, 14, Tokens.Color.TEXT_MUTED).apply { setPadding(0, Ui.dp(this@SettingsActivity, 8), 0, Ui.dp(this@SettingsActivity, 4)) })
+        val e = Widgets.field(this, value, type, hint)
+        add(e, LinearLayout.LayoutParams(-1, Ui.dp(this, Widgets.TOUCH)))
         saves += { onSave(e.text.toString()) }
     }
 
@@ -160,19 +167,14 @@ class SettingsActivity : Activity() {
         }
 
     private fun switch(label: String, value: Boolean, onSave: (Boolean) -> Unit) {
-        val s = Switch(this).apply {
-            text = label; isChecked = value; textSize = 16f; setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, Ui.dp(this@SettingsActivity, 8), 0, Ui.dp(this@SettingsActivity, 8))
-        }
-        form.addView(s)
+        val s = Widgets.switch(this, label, value)
+        add(s, LinearLayout.LayoutParams(-1, -2).apply { topMargin = Ui.dp(this@SettingsActivity, 4) })
         saves += { onSave(s.isChecked) }
     }
 
-    private fun button(label: String, onClick: () -> Unit) = form.addView(Button(this).apply {
-        text = label; isAllCaps = false
-        setOnClickListener { onClick() }
-    }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = Ui.dp(this@SettingsActivity, 6) })
+    private fun button(label: String, icon: String? = null, onClick: () -> Unit) =
+        add(Widgets.button(this, label, Widgets.Kind.SECONDARY, icon) { onClick() },
+            LinearLayout.LayoutParams(-1, Ui.dp(this, Widgets.TOUCH)).apply { topMargin = Ui.dp(this@SettingsActivity, 8) })
 
     private fun minuteOfDay(): Int {
         val c = Calendar.getInstance()
@@ -194,18 +196,12 @@ class SettingsActivity : Activity() {
 
     /** Deslizador de brillo actual: al soltar guarda el valor manual y lo aplica; el botón vuelve al del panel. */
     private fun brightnessRow() {
-        form.addView(TextView(this).apply {
-            text = "Brillo actual"; textSize = 14f; setTextColor(Ui.DIM); typeface = Fonts.regular(this@SettingsActivity)
-        })
-        val value = TextView(this).apply {
-            textSize = 16f; setTextColor(Ui.TEXT); typeface = Fonts.regular(this@SettingsActivity)
-        }
+        add(Widgets.label(this, "Brillo actual", 14, Tokens.Color.TEXT_MUTED))
+        val value = Widgets.label(this, "", 16, Tokens.Color.TEXT)
         val initial = currentBrightness()
         value.text = "$initial %"
         applyNow(initial)
-        val bar = SeekBar(this).apply {
-            max = 99 // 0..99 equivale a 1..100 %
-            progress = initial - 1
+        val bar = Widgets.seekBar(this, 99, initial - 1).apply { // 0..99 equivale a 1..100 %
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
                     value.text = "${p + 1} %"
@@ -220,9 +216,9 @@ class SettingsActivity : Activity() {
                 }
             })
         }
-        form.addView(bar, LinearLayout.LayoutParams(-1, Ui.dp(this, 48)))
-        form.addView(value)
-        button("Volver al brillo del panel") {
+        add(bar, LinearLayout.LayoutParams(-1, Ui.dp(this, Widgets.TOUCH)))
+        add(value)
+        button("Volver al brillo del panel", "rotate-ccw") {
             Brightness.clearManual()
             val pct = currentBrightness()
             bar.progress = pct - 1

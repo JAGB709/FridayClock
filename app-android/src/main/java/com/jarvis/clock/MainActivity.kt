@@ -351,6 +351,7 @@ class MainActivity : Activity() {
         contentDescription = description
         setBackgroundColor(Color.TRANSPARENT)
         isFocusable = true
+        defaultFocusHighlightEnabled = false // el gris del sistema tapaba el anillo de acento
         val ring = GradientDrawable().apply {
             shape = if (oval) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
             setColor(Color.TRANSPARENT)
