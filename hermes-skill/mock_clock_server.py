@@ -257,7 +257,7 @@ class Handler(BaseHTTPRequestHandler):
                     or body.get("repeat", "none") not in ("none", "daily", "weekdays", "weekly") \
                     or body.get("channel", "clock") not in ("clock", "telegram", "both"):
                 return self._send(400, {"detail": "datos no válidos"})
-            item = {"id": f"r{len(REMINDERS) + 1:011d}", "text": text, "at": body.get("at") or "en-%s-min" % body["in_minutes"],
+            item = {"id": f"{len(REMINDERS) + 1:012x}", "text": text, "at": body.get("at") or "en-%s-min" % body["in_minutes"],
                     "repeat": body.get("repeat", "none"), "channel": body.get("channel", "clock")}
             REMINDERS.append(item)
             return self._send(200, {"ok": True, "reminder": item})
