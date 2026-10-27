@@ -1,0 +1,4 @@
+# Commit de bkerler/mtkclient fijado (etiqueta v2.1.4.1). setup_host.sh lo clona y 00_preflight.sh
+# comprueba que vendor/mtkclient esta exactamente aqui. Para actualizar: revisa el cambio, prueba
+# con 01_backup_full.sh en DRY_RUN y cambia esta linea.
+5a863eece86fcaa97cb8325cf747e0aae3c307e4

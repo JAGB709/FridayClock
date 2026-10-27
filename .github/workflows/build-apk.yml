@@ -59,6 +59,8 @@ jobs:
         run: |
           pip install -q pytest httpx
           pytest -q
+      - name: Tests del device-kit (sin dispositivo)
+        run: bash device-kit/tests/test_common.sh
       - name: Tests del panel web
         working-directory: homelab/friday-panel
         run: |

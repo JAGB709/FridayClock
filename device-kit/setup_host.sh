@@ -17,14 +17,18 @@ else
   warn "Windows: instala Python, 'platform-tools' (adb) y UsbDk. Usa NORECONNECT=1."
 fi
 
-# mtkclient en vendor/ (pinned). Si no está, se explica cómo traerlo.
+# mtkclient en vendor/, fijado a un commit concreto (manifests/mtkclient.commit).
+MTK_COMMIT="$(grep -v '^#' "$KIT_DIR/manifests/mtkclient.commit" | head -1 | tr -d '[:space:]')"
 if [ ! -f "$MTK_PY" ]; then
   warn "No encuentro mtkclient en $MTK_PY"
-  info "Clónalo dentro de vendor/ (queda ignorado por git):"
-  echo "  git clone https://github.com/bkerler/mtkclient '$VENDOR_DIR/mtkclient'"
-  echo "  pip3 install -r '$VENDOR_DIR/mtkclient/requirements.txt'"
-else
-  info "mtkclient encontrado en $MTK_PY"
+  info "Clonando mtkclient en el commit fijado $MTK_COMMIT"
+  run git clone https://github.com/bkerler/mtkclient "$VENDOR_DIR/mtkclient"
+  run git -C "$VENDOR_DIR/mtkclient" checkout --detach "$MTK_COMMIT"
+fi
+if [ -f "$MTK_PY" ]; then
+  actual="$(git -C "$VENDOR_DIR/mtkclient" rev-parse HEAD 2>/dev/null || echo desconocido)"
+  [ "$actual" = "$MTK_COMMIT" ] || die "mtkclient está en $actual y debería estar en $MTK_COMMIT (git -C vendor/mtkclient checkout --detach $MTK_COMMIT)"
+  info "mtkclient en el commit fijado ($MTK_COMMIT)"
   run pip3 install -r "$VENDOR_DIR/mtkclient/requirements.txt"
 fi
 

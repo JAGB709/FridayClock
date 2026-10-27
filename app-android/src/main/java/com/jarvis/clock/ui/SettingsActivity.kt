@@ -46,7 +46,7 @@ class SettingsActivity : Activity() {
         info("Dirección: ${ips().joinToString(", ") { "$it:${Prefs.httpPort}" }.ifEmpty { "sin red" }}")
 
         section("Servidor del reloj")
-        text("Token (X-Auth-Token)", Prefs.authToken) { Prefs.authToken = it }
+        secret("Token (X-Auth-Token)", Prefs.authToken) { Prefs.authToken = it }
         number("Puerto HTTP", Prefs.httpPort) { if (it in 1024..65535 && it != Prefs.httpPort) { Prefs.httpPort = it; ClockService.restartServer(this) } }
         switch("Escuchar solo en Tailscale (recomendado)", Prefs.bindTailscaleOnly) {
             if (it != Prefs.bindTailscaleOnly) { Prefs.bindTailscaleOnly = it; ClockService.restartServer(this) }
@@ -55,7 +55,7 @@ class SettingsActivity : Activity() {
         section("Asistente")
         text("Nombre del asistente", Prefs.assistantName) { Prefs.assistantName = it }
         text("URL del puente del homelab", Prefs.backendUrl, hint = "http://100.x.y.z:8765") { Prefs.backendUrl = it }
-        text("Token del puente", Prefs.backendToken) { Prefs.backendToken = it }
+        secret("Token del puente", Prefs.backendToken) { Prefs.backendToken = it }
         switch("Activar al decir \"${Prefs.assistantName}\" (escucha continua)", Prefs.wakeWord) { Prefs.wakeWord = it }
         switch("Seguir escuchando si pregunta algo", Prefs.followUp) { Prefs.followUp = it }
         decimal("Velocidad de voz (0.5–2)", Prefs.ttsRate.toDouble()) { Prefs.ttsRate = it.toFloat() }
@@ -145,6 +145,27 @@ class SettingsActivity : Activity() {
             setTextColor(Color.WHITE); setHintTextColor(Color.DKGRAY)
         }
         form.addView(e)
+        saves += { onSave(e.text.toString()) }
+    }
+
+    /** Campo de token: oculto por defecto, con botón Mostrar/Ocultar. */
+    private fun secret(label: String, value: String, onSave: (String) -> Unit) {
+        form.addView(TextView(this).apply { text = label; textSize = 14f; setTextColor(Ui.DIM); typeface = Fonts.regular(this@SettingsActivity) })
+        val e = EditText(this).apply {
+            setText(value); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; setSingleLine()
+            setTextColor(Color.WHITE); setHintTextColor(Color.DKGRAY)
+            transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+        }
+        form.addView(e)
+        form.addView(Button(this).apply {
+            text = "Mostrar"; isAllCaps = false
+            setOnClickListener {
+                val hidden = e.transformationMethod is android.text.method.PasswordTransformationMethod
+                e.transformationMethod = if (hidden) android.text.method.HideReturnsTransformationMethod.getInstance()
+                    else android.text.method.PasswordTransformationMethod.getInstance()
+                text = if (hidden) "Ocultar" else "Mostrar"
+            }
+        }, LinearLayout.LayoutParams(-2, -2))
         saves += { onSave(e.text.toString()) }
     }
 

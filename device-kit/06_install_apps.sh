@@ -28,12 +28,19 @@ run adb shell dumpsys deviceidle whitelist +$pkg || true
 
 # Configurar el token (y opcionalmente backend/ciudad) por broadcast.
 if [ -n "${CLOCK_TOKEN:-}" ]; then
-  run adb shell am broadcast -a com.jarvis.clock.CONFIGURE -n "$pkg/.ConfigReceiver" \
-    --es token "$CLOCK_TOKEN" \
-    ${BACKEND_URL:+--es backend_url "$BACKEND_URL"} \
-    ${BACKEND_TOKEN:+--es backend_token "$BACKEND_TOKEN"} \
-    ${ASSISTANT_NAME:+--es assistant_name "$ASSISTANT_NAME"} \
-    --ez bind_tailscale_only true
+  # Los tokens viajan por stdin hacia 'adb shell' (no aparecen en argv ni en 'ps' del ordenador).
+  q() { shq "$1"; }   # entrecomilla para el shell del reloj
+  cfg="am broadcast -a com.jarvis.clock.CONFIGURE -n $pkg/.ConfigReceiver --es token $(q "$CLOCK_TOKEN")"
+  [ -n "${BACKEND_URL:-}" ] && cfg+=" --es backend_url $(q "$BACKEND_URL")"
+  [ -n "${BACKEND_TOKEN:-}" ] && cfg+=" --es backend_token $(q "$BACKEND_TOKEN")"
+  [ -n "${ASSISTANT_NAME:-}" ] && cfg+=" --es assistant_name $(q "$ASSISTANT_NAME")"
+  cfg+=" --ez bind_tailscale_only true"
+  if [ "$DRY_RUN" = 0 ]; then
+    log "\$ adb shell (config por stdin, tokens ocultos)"
+    printf '%s\nexit\n' "$cfg" | adb shell 2>&1 | redact_all | tee -a "$LOGFILE"
+  else
+    log "(dry-run) adb shell < broadcast CONFIGURE (tokens por stdin, ocultos)"
+  fi
 else
   warn "CLOCK_TOKEN sin definir: configúralo luego en Ajustes del reloj."
 fi

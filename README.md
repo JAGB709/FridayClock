@@ -278,7 +278,7 @@ ollama pull qwen2.5:7b-instruct       # equilibrado (GPU de 8 a 12 GB, o CPU con
 ```
 
 > [!IMPORTANT]
-> **Contexto.** Hermes necesita **al menos 64.000 tokens** de contexto o se niega a arrancar, y Ollama usa por defecto muy poco (4.096 con menos de 24 GB de VRAM). Sube el contexto y haz que escuche en la red para que Tailscale llegue.
+> **Contexto.** Hermes necesita **al menos 64.000 tokens** de contexto o se niega a arrancar, y Ollama usa por defecto muy poco (4.096 con menos de 24 GB de VRAM). Sube el contexto. Ollama escucha por defecto solo en `127.0.0.1`, y con eso basta: el puente corre con `network_mode: host` y llega por `127.0.0.1:11434`.
 
 ```bash
 sudo systemctl edit ollama    # crea un override; añade lo siguiente
@@ -287,11 +287,11 @@ sudo systemctl edit ollama    # crea un override; añade lo siguiente
 ```ini
 [Service]
 Environment="OLLAMA_CONTEXT_LENGTH=65536"
-Environment="OLLAMA_HOST=0.0.0.0:11434"
+Environment="OLLAMA_HOST=127.0.0.1:11434"
 ```
 
 > [!WARNING]
-> Ollama no tiene autenticación. Si lo haces escuchar en `0.0.0.0`, limita el puerto 11434 con el cortafuegos a Tailscale o a la red de Docker.
+> Ollama no tiene autenticación. Deja el bind en `127.0.0.1` (recomendado). Solo si de verdad necesitas llegar desde otro contenedor, escucha en la IP del puente de Docker (por ejemplo `172.17.0.1:11434`) o en `0.0.0.0` y, en ese caso, limita el puerto 11434 con el cortafuegos (ufw/nftables) a esa red de Docker o a Tailscale. Nunca lo abras al router.
 
 ```bash
 sudo systemctl restart ollama
@@ -350,7 +350,7 @@ API_SERVER_KEY=pon-aqui-una-clave-larga   # la reutiliza el puente
 Arranca el gateway (deja el proceso corriendo o instálalo como servicio):
 
 ```bash
-hermes gateway          # escucha en 127.0.0.1:8642
+hermes gateway          # escucha en 127.0.0.1:8642 (déjalo así: tiene terminal; si lo cambias, cortafuegos y clave larga)
 # prueba en otra terminal:
 curl http://localhost:8642/v1/models -H "Authorization: Bearer pon-aqui-una-clave-larga"
 ```
@@ -617,7 +617,7 @@ curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
 
 > [!WARNING]
 > El `adb shell` del reloj liberado es root sin autenticación y SELinux queda permisivo. Es razonable para un reloj de mesilla en tu casa, pero no lo expongas a una red no confiable.
-> El asistente (Hermes) puede ejecutar comandos en tu servidor y obedece a la voz que oye el reloj. No abras en el router los puertos 8080, 8642, 8765, 8770 ni 11434, usa token de al menos 16 caracteres, pon contraseña al panel y no dejes `hermes dashboard --insecure` accesible. El APK de release va firmado con la clave de depuración: verifica su SHA-256. Detalles en [SECURITY.md](SECURITY.md).
+> El asistente (Hermes) puede ejecutar comandos en tu servidor y obedece a la voz que oye el reloj. No abras en el router los puertos 8080, 8642, 8765, 8770 ni 11434, usa token de al menos 16 caracteres, pon contraseña al panel y no uses `hermes dashboard --insecure`: desactiva la autenticación del panel de Hermes y, si escucha fuera de `127.0.0.1`, cualquiera en tu red controla el agente. Por defecto deja Ollama (11434) y Hermes (8642) en `127.0.0.1` o tras la red de Docker con cortafuegos. El APK de release va firmado con la clave de depuración salvo que configures tu propio keystore ([docs/firma-release.md](docs/firma-release.md)): verifica su SHA-256. Detalles en [SECURITY.md](SECURITY.md).
 
 ---
 
