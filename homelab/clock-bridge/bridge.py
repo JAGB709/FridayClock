@@ -33,11 +33,15 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 import calc
+import reminders
 from route import needs_agent, needs_thinking
 from wake import split_wake
 
 log = logging.getLogger("clock-bridge")
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+# httpx registra en INFO la URL de cada petición, y la de Telegram lleva el token del bot.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # --------------------------------------------------------------------------- config
 
@@ -66,6 +70,20 @@ LOG_TRANSCRIPTS = os.getenv("LOG_TRANSCRIPTS", "0") == "1"
 
 def _shown(text: str) -> str:
     return repr(text) if LOG_TRANSCRIPTS else f"<{len(text)} car.>"
+
+
+# Recordatorios y avisos (/v1/notify, /v1/reminders). Ver docs/recordatorios.md.
+CLOCK_URL = os.getenv("CLOCK_URL", "").rstrip("/")
+CLOCK_TOKEN = os.getenv("CLOCK_TOKEN", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")  # el del bot de Hermes
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+REMINDERS_FILE = os.getenv("REMINDERS_FILE", "/data/reminders.json")
+REMINDER_TZ = os.getenv("REMINDER_TZ", "Europe/Madrid")
+REMINDER_GRACE_MIN = float(os.getenv("REMINDER_GRACE_MIN", "10"))
+REMINDER_TICK_S = float(os.getenv("REMINDER_TICK_S", "15"))
+REMINDERS_ENABLED = os.getenv("REMINDERS_ENABLED", "1") == "1"
+MAX_JSON_BYTES = 8 * 1024
+NOTIFY_TIMEOUT_S = 8.0
 
 PIPER_BIN = os.getenv("PIPER_BIN", "piper")
 PIPER_MODEL = os.getenv("PIPER_MODEL", "")  # p.ej. /models/es_ES-davefx-medium.onnx
@@ -594,6 +612,188 @@ def assist(req: AssistRequest) -> dict:
     if audio:
         out["audio_b64"] = audio
     return out
+
+
+# --------------------------------------------------------------------------- avisos y recordatorios
+# El texto es dato no fiable: se limpia, se acota y se envía tal cual a los canales. No pasa por Hermes.
+
+def _tz():
+    from zoneinfo import ZoneInfo
+
+    try:
+        return ZoneInfo(REMINDER_TZ)
+    except Exception:  # noqa: BLE001 - sin tzdata se usa UTC en vez de no arrancar
+        from datetime import timezone
+
+        log.warning("REMINDER_TZ no válida o sin tzdata: se usa UTC")
+        return timezone.utc
+
+
+_store: reminders.ReminderStore | None = None
+_store_lock = threading.Lock()
+
+
+def get_store() -> reminders.ReminderStore:
+    global _store
+    with _store_lock:
+        if _store is None:
+            _store = reminders.ReminderStore(REMINDERS_FILE, _tz())
+        return _store
+
+
+def _now():
+    from datetime import datetime
+
+    return datetime.now(get_store().tz)
+
+
+def notify_clock(text: str) -> bool:
+    """Aviso hablado en el reloj (su API /speak) y, de paso, en pantalla."""
+    if not CLOCK_URL or not CLOCK_TOKEN:
+        return False
+    headers = {"X-Auth-Token": CLOCK_TOKEN}
+    try:
+        r = httpx.post(CLOCK_URL + "/speak", json={"text": "Recordatorio. " + text}, headers=headers,
+                       timeout=NOTIFY_TIMEOUT_S)
+        ok = r.status_code == 200
+        if ok:
+            try:
+                httpx.post(CLOCK_URL + "/display", headers=headers, timeout=NOTIFY_TIMEOUT_S,
+                           json={"type": "text", "content": text, "duration_ms": 20000})
+            except httpx.HTTPError:
+                pass
+        return ok
+    except httpx.HTTPError as e:
+        log.warning("aviso al reloj falló (%s)", type(e).__name__)
+        return False
+
+
+def notify_telegram(text: str) -> bool:
+    """Mensaje por el bot de Hermes. Texto plano (sin parse_mode): no se interpreta nada."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return False
+    try:
+        r = httpx.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", timeout=NOTIFY_TIMEOUT_S,
+                       json={"chat_id": TELEGRAM_CHAT_ID, "text": "Recordatorio: " + text,
+                             "disable_web_page_preview": True})
+        return r.status_code == 200
+    except httpx.HTTPError as e:  # el mensaje de la excepción puede traer la URL con el token
+        log.warning("aviso a Telegram falló (%s)", type(e).__name__)
+        return False
+
+
+def notify(text: str, channel: str) -> dict:
+    results = {}
+    if channel in ("clock", "both"):
+        results["clock"] = notify_clock(text)
+    if channel in ("telegram", "both"):
+        results["telegram"] = notify_telegram(text)
+    return results
+
+
+def send_reminder(text: str, channel: str) -> bool:
+    """Un recordatorio cuenta como enviado si llegó por algún canal (así 'both' no duplica al reintentar)."""
+    return any(notify(text, channel).values())
+
+
+async def _read_json(request: Request) -> dict:
+    """JSON pequeño leído en streaming con tope (Content-Length se puede falsear u omitir)."""
+    try:
+        declared = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        raise HTTPException(400, "Content-Length no válido")
+    if declared > MAX_JSON_BYTES:
+        raise HTTPException(413, "petición demasiado grande")
+    buf = bytearray()
+    async for chunk in request.stream():
+        buf += chunk
+        if len(buf) > MAX_JSON_BYTES:
+            raise HTTPException(413, "petición demasiado grande")
+    try:
+        data = json.loads(bytes(buf) or b"{}")
+    except ValueError:
+        raise HTTPException(400, "JSON no válido")
+    if not isinstance(data, dict):
+        raise HTTPException(400, "se espera un objeto JSON")
+    return data
+
+
+class NotifyRequest(BaseModel):
+    text: str = Field(max_length=reminders.MAX_TEXT)
+    channel: str = Field(default="both", pattern=r"^(clock|telegram|both)$")
+
+
+class ReminderRequest(BaseModel):
+    text: str = Field(max_length=reminders.MAX_TEXT)
+    at: str | None = Field(default=None, max_length=40)
+    in_minutes: int | None = Field(default=None, ge=1, le=525600)
+    repeat: str = Field(default="none", pattern=r"^(none|daily|weekdays|weekly)$")
+    channel: str = Field(default="clock", pattern=r"^(clock|telegram|both)$")
+
+
+def _model(cls, data: dict):
+    from pydantic import ValidationError
+
+    try:
+        return cls(**data)
+    except ValidationError:
+        raise HTTPException(400, "datos no válidos (revisa texto, canal, fecha y repetición)")
+
+
+@app.post("/v1/notify", dependencies=[Depends(check_token)])
+async def notify_now(request: Request) -> dict:
+    req = _model(NotifyRequest, await _read_json(request))
+    try:
+        text = reminders.clean_text(req.text)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    results = await run_in_threadpool(notify, text, req.channel)
+    log.info("notify canal=%s resultado=%s (%d car.)", req.channel, results, len(text))
+    return {"ok": any(results.values()), "results": results}
+
+
+@app.get("/v1/reminders", dependencies=[Depends(check_token)])
+def list_reminders() -> dict:
+    return {"ok": True, "reminders": get_store().list()}
+
+
+@app.post("/v1/reminders", dependencies=[Depends(check_token)])
+async def add_reminder(request: Request) -> dict:
+    from datetime import timedelta
+
+    req = _model(ReminderRequest, await _read_json(request))
+    if (req.at is None) == (req.in_minutes is None):
+        raise HTTPException(400, "indica at o in_minutes (solo uno)")
+    store, now = get_store(), _now()
+    try:
+        at = reminders.parse_at(req.at, store.tz) if req.at else now + timedelta(minutes=req.in_minutes)
+        item = store.add(req.text, at, req.repeat, req.channel, now)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    log.info("recordatorio %s creado canal=%s repeticion=%s (%d car.)", item["id"], item["channel"], item["repeat"], len(item["text"]))
+    return {"ok": True, "reminder": item}
+
+
+@app.delete("/v1/reminders/{rid}", dependencies=[Depends(check_token)])
+def delete_reminder(rid: str) -> dict:
+    if not get_store().delete(rid):
+        raise HTTPException(404, "no existe ese recordatorio")
+    return {"ok": True}
+
+
+def _scheduler() -> None:
+    while True:
+        time.sleep(REMINDER_TICK_S)
+        try:
+            reminders.fire_due(get_store(), send_reminder, _now(), REMINDER_GRACE_MIN)
+        except Exception:  # noqa: BLE001 - el planificador no debe morir
+            log.exception("planificador de recordatorios")
+
+
+@app.on_event("startup")
+def _start_scheduler() -> None:
+    if REMINDERS_ENABLED:
+        threading.Thread(target=_scheduler, name="reminders", daemon=True).start()
 
 
 if __name__ == "__main__":

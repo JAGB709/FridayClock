@@ -6,6 +6,7 @@ services:
     volumes:
       - ./models:/models            # voces de Piper
       - whisper-cache:/root/.cache  # modelos de Whisper descargados
+      - ./data:/data                # recordatorios (reminders.json)
     restart: unless-stopped
 volumes:
   whisper-cache:
