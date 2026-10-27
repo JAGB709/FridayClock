@@ -1,289 +1,294 @@
+English | [Español](README.es.md)
+
 <div align="center">
 
 # Friday
 
-### Un despertador y asistente de voz propio, sin Google, en un Xiaomi Mi Smart Clock
+### Your own alarm clock and voice assistant, Google-free, on a Xiaomi Mi Smart Clock
 
-<sub>Xiaomi Mi Smart Clock (modelo X04G / LX04, MediaTek MT8167) &middot; root, sin Google, asistente de voz local, Hermes Agent, Ollama, Tailscale</sub>
+<sub>Xiaomi Mi Smart Clock (model X04G / LX04, MediaTek MT8167) &middot; root, no Google, local voice assistant, Hermes Agent, Ollama, Tailscale</sub>
 
 ![Android](https://img.shields.io/badge/Android-10-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-bridge%20y%20panel-009688?style=flat-square&logo=fastapi&logoColor=white)
-![Tailscale](https://img.shields.io/badge/Tailscale-red%20privada-242424?style=flat-square&logo=tailscale&logoColor=white)
-![Dependencias](https://img.shields.io/badge/dependencias%20en%20la%20app-0-FFB454?style=flat-square)
-![Idioma](https://img.shields.io/badge/idioma-espa%C3%B1ol-FFB454?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-bridge%20and%20panel-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Tailscale](https://img.shields.io/badge/Tailscale-private%20network-242424?style=flat-square&logo=tailscale&logoColor=white)
+![Dependencies](https://img.shields.io/badge/app%20dependencies-0-FFB454?style=flat-square)
+![Language](https://img.shields.io/badge/language-Spanish-FFB454?style=flat-square)
 
 <br>
 
-<img src="docs/images/reloj-pantallas.png" alt="Tres pantallas de la carátula de Friday: día, previsión del tiempo y noche" width="100%">
+<img src="docs/images/reloj-pantallas.png" alt="Three screens of the Friday watch face: day, weather forecast and night" width="100%">
 
 <br>
 
-**Despertador a prueba de fallos, asistente de voz que corre en tu casa y un panel web para el móvil.**
-El cerebro es Hermes Agent con Qwen (Ollama) en tu homelab. Reloj y homelab se hablan por Tailscale.
+**A fail-safe alarm clock, a voice assistant that runs in your home, and a web panel for your phone.**
+The brain is Hermes Agent with Qwen (Ollama) on your homelab. Clock and homelab talk over Tailscale.
 
 </div>
 
 ---
 
-## Índice
+## Contents
 
-- [Qué es Friday](#qué-es-friday)
-- [Capturas](#capturas)
-- [Arquitectura](#arquitectura)
-- [Cómo se ha construido](#cómo-se-ha-construido)
-- [Herramientas y tecnologías](#herramientas-y-tecnologías)
-- [Guía de instalación](#guía-de-instalación)
-  - [Qué necesitas](#qué-necesitas)
-  - [Parte A: montar el cerebro en el homelab](#parte-a-montar-el-cerebro-en-el-homelab)
-  - [Parte B: liberar el reloj e instalar Friday](#parte-b-liberar-el-reloj-e-instalar-friday)
-  - [Parte C: conectarlo todo y probar](#parte-c-conectarlo-todo-y-probar)
-- [Qué hace Friday](#qué-hace-friday)
-- [Seguridad y privacidad](#seguridad-y-privacidad)
-- [Desarrollo y pruebas](#desarrollo-y-pruebas)
-- [Solución de problemas](#solución-de-problemas)
-- [Hoja de ruta](#hoja-de-ruta)
-- [Documentación](#documentación)
-- [Créditos y licencias](#créditos-y-licencias)
+- [What is Friday](#what-is-friday)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [How it was built](#how-it-was-built)
+- [Tools and technologies](#tools-and-technologies)
+- [Installation guide](#installation-guide)
+  - [What you need](#what-you-need)
+  - [Part A: set up the brain on the homelab](#part-a-set-up-the-brain-on-the-homelab)
+  - [Part B: free the clock and install Friday](#part-b-free-the-clock-and-install-friday)
+  - [Part C: connect everything and test](#part-c-connect-everything-and-test)
+- [What Friday does](#what-friday-does)
+- [Security and privacy](#security-and-privacy)
+- [Development and testing](#development-and-testing)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [Documentation](#documentation)
+- [Credits and licenses](#credits-and-licenses)
+
+> [!NOTE]
+> The documents under `docs/` linked from this README are written in Spanish.
 
 ---
 
-## Qué es Friday
+## What is Friday
 
-El **Xiaomi Mi Smart Clock (X04G)** es un reloj de mesilla con pantalla táctil de 4 pulgadas, micrófono, altavoz y Android 10, pero atado a Google Assistant y a la nube de Xiaomi. **Friday** lo convierte en un aparato completamente tuyo:
+The **Xiaomi Mi Smart Clock (X04G)** is a bedside clock with a 4-inch touchscreen, a microphone, a speaker and Android 10, but it is tied to Google Assistant and the Xiaomi cloud. **Friday** turns it into a device that is entirely yours:
 
 | | |
 |---|---|
-| **Un despertador que no falla** | Las alarmas viven en el sistema (`AlarmManager.setAlarmClock()`), no en la red. Si se cae el homelab o el wifi, suenan igual. Aguantan reinicios y cambios de hora. |
-| **Un asistente de voz privado** | La voz se transcribe (Whisper) y se sintetiza (Piper, Kokoro o Magpie) en tu propio servidor. Nada va a Google ni a ninguna nube de voz. |
-| **Un cerebro que tú eliges** | Hermes Agent con un modelo Qwen local (Ollama). Entiende órdenes libres, usa herramientas y controla el reloj desde cualquier canal: Telegram, un cron o el propio reloj. |
-| **Una carátula personalizable** | Temas, pantallas en rejilla, perfiles por hora, fotos, carruseles, capas y gestos. Se diseña desde el móvil con una vista previa idéntica a la del reloj. |
-| **Un panel web para el móvil** | Alarmas con rueda de hora, ajustes, editor del diseño y el reloj en vivo. Mismo sistema de diseño que el reloj: negro, ámbar, Inter e iconos Lucide. |
-| **Ligero a propósito** | La app no tiene ninguna dependencia de runtime (ni AppCompat, ni Compose, ni OkHttp, ni Play Services): solo el framework de Android, para ir bien con 1 GB de RAM. |
+| **An alarm clock that does not fail** | Alarms live in the system (`AlarmManager.setAlarmClock()`), not on the network. If the homelab or the wifi goes down, they ring anyway. They survive reboots and time changes. |
+| **A private voice assistant** | Speech is transcribed (Whisper) and synthesized (Piper, Kokoro or Magpie) on your own server. Nothing goes to Google or to any voice cloud. |
+| **A brain you choose** | Hermes Agent with a local Qwen model (Ollama). It understands free-form commands, uses tools and controls the clock from any channel: Telegram, a cron job or the clock itself. |
+| **A customizable watch face** | Themes, grid screens, per-hour profiles, photos, carousels, layers and gestures. You design it from your phone with a preview identical to the clock's. |
+| **A web panel for your phone** | Alarms with a time wheel, settings, the design editor and the live clock. Same design system as the clock: black, amber, Inter and Lucide icons. |
+| **Lightweight on purpose** | The app has no runtime dependencies (no AppCompat, no Compose, no OkHttp, no Play Services): only the Android framework, to run well on 1 GB of RAM. |
 
-Principios de diseño que guían todo el proyecto:
+Design principles that guide the whole project:
 
-1. **El despertador no depende de nada externo.** Lo demás puede fallar; despertarte, no.
-2. **Lo importante se entiende en el propio reloj.** Las órdenes de alarmas, temporizadores, hora, tiempo y volumen se interpretan en español y sin modelo de lenguaje. Solo el resto va a Hermes.
-3. **Privacidad por defecto.** Voz local, API protegida por token y escuchando solo por la red privada.
-4. **Todo es reversible.** Los paquetes de Google se deshabilitan, nunca se desinstalan; hay backup completo y rollback.
-5. **Si algo falla, algo más lo cubre.** Si el WebView de la carátula falla, vuelve la carátula nativa. Si la voz del puente no está, el reloj usa su propio TTS. Si la GSI no trae tonos, la alarma suena con pitidos.
+1. **The alarm clock depends on nothing external.** Everything else may fail; waking you up may not.
+2. **The important things are understood on the clock itself.** Commands for alarms, timers, time, weather and volume are interpreted in Spanish and without a language model. Only the rest goes to Hermes.
+3. **Privacy by default.** Local voice, token-protected API and listening only on the private network.
+4. **Everything is reversible.** Google packages are disabled, never uninstalled; there is a full backup and a rollback.
+5. **If something fails, something else covers for it.** If the watch face WebView fails, the native watch face comes back. If the bridge voice is missing, the clock uses its own TTS. If the GSI has no ringtones, the alarm rings with beeps.
 
 ---
 
-## Capturas
+## Screenshots
 
-El panel web, pensado primero para el móvil. De izquierda a derecha: Inicio (con el reloj en vivo), lista de alarmas, editor de alarma con la rueda de hora, editor de pantallas con la vista previa fija y Ajustes.
+The web panel, designed mobile-first. From left to right: Home (with the live clock), alarm list, alarm editor with the time wheel, screen editor with the fixed preview, and Settings.
 
-<img src="docs/images/panel-movil.png" alt="Cinco pantallas del panel web de Friday en un móvil" width="100%">
+<img src="docs/images/panel-movil.png" alt="Five screens of the Friday web panel on a phone" width="100%">
 
 > [!NOTE]
-> Las capturas usan datos de ejemplo de un reloj simulado. La carátula del reloj real muestra el diseño que tú elijas, con tus fotos si quieres.
+> The screenshots use sample data from a simulated clock. The real clock's watch face shows the design you choose, with your photos if you like.
 
 ---
 
-## Arquitectura
+## Architecture
 
-Cuatro piezas independientes que se hablan por HTTP.
+Four independent pieces that talk over HTTP.
 
 ```mermaid
 flowchart LR
-    subgraph RELOJ["Mi Smart Clock (app Friday)"]
+    subgraph RELOJ["Mi Smart Clock (Friday app)"]
         direction TB
-        A1["Carátula y modo noche"]
-        A2["Alarmas (AlarmManager)"]
-        A3["Órdenes sin red: alarmas, temporizadores, hora, tiempo, volumen"]
-        A4["Micrófono, VAD y palabra de activación"]
-        A5["Servidor HTTP :8080 con token"]
+        A1["Watch face and night mode"]
+        A2["Alarms (AlarmManager)"]
+        A3["Offline commands: alarms, timers, time, weather, volume"]
+        A4["Microphone, VAD and wake word"]
+        A5["HTTP server :8080 with token"]
     end
 
-    subgraph HOMELAB["Homelab (red privada Tailscale)"]
+    subgraph HOMELAB["Homelab (private Tailscale network)"]
         direction TB
-        B1["clock-bridge :8765<br/>Whisper (voz a texto)<br/>Piper, Kokoro o Magpie (texto a voz)"]
-        B2["Hermes Agent :8642<br/>skill mi-smart-clock"]
+        B1["clock-bridge :8765<br/>Whisper (speech to text)<br/>Piper, Kokoro or Magpie (text to speech)"]
+        B2["Hermes Agent :8642<br/>mi-smart-clock skill"]
         B3["Ollama :11434<br/>Qwen"]
-        B4["friday-panel :8770<br/>panel web para el móvil"]
+        B4["friday-panel :8770<br/>web panel for your phone"]
     end
 
-    MOVIL["Móvil"]
+    MOVIL["Phone"]
 
-    A4 -- "audio WAV" --> B1
-    B1 -- "texto" --> B2
+    A4 -- "WAV audio" --> B1
+    B1 -- "text" --> B2
     B2 --> B3
-    B1 -- "voz sintetizada" --> A3
-    B2 -- "clock.py, API HTTP" --> A5
-    B4 -- "API HTTP con token" --> A5
-    MOVIL -- "navegador" --> B4
+    B1 -- "synthesized voice" --> A3
+    B2 -- "clock.py, HTTP API" --> A5
+    B4 -- "HTTP API with token" --> A5
+    MOVIL -- "browser" --> B4
 ```
 
-| Pieza | Dónde vive | Qué hace |
+| Piece | Where it lives | What it does |
 |---|---|---|
-| **App Friday** (`app-android/`) | En el reloj | Launcher, carátula, alarmas, asistente, servidor HTTP. Kotlin, UI construida por código. |
-| **Motor de pantallas** (`app-android/src/main/assets/face/`) | Dentro de la app (WebView) y copiado al panel | Dibuja la carátula y la pantalla de alarma a partir de un diseño JSON. La misma vista previa en el reloj y en el panel. |
-| **clock-bridge** (`homelab/clock-bridge/`) | Homelab | Oídos y boca del reloj: Whisper, TTS, puerta de la palabra de activación y enrutado de las preguntas. |
-| **Skill de Hermes** (`hermes-skill/`) | Homelab (en Hermes) | Da a Hermes el control del reloj: alarmas, hablar, mostrar, Bluetooth, ajustes y diseño. Incluye un plugin de tools tipadas para el canal del reloj, sin terminal ([`docs/hermes-seguro.md`](docs/hermes-seguro.md)). |
-| **Panel web** (`homelab/friday-panel/`) | Homelab | Interfaz de móvil primero. El token del reloj no sale del servidor. |
-| **Kit de dispositivo** (`device-kit/`) | Tu ordenador | Scripts numerados para liberar el reloj con backup y rollback. |
+| **Friday app** (`app-android/`) | On the clock | Launcher, watch face, alarms, assistant, HTTP server. Kotlin, UI built in code. |
+| **Screen engine** (`app-android/src/main/assets/face/`) | Inside the app (WebView) and copied to the panel | Draws the watch face and the alarm screen from a JSON design. The same preview on the clock and in the panel. |
+| **clock-bridge** (`homelab/clock-bridge/`) | Homelab | The clock's ears and mouth: Whisper, TTS, the wake word gate and question routing. |
+| **Hermes skill** (`hermes-skill/`) | Homelab (in Hermes) | Gives Hermes control of the clock: alarms, speak, display, Bluetooth, settings and design. Includes a typed-tools plugin for the clock channel, with no terminal ([`docs/hermes-seguro.md`](docs/hermes-seguro.md), in Spanish). |
+| **Web panel** (`homelab/friday-panel/`) | Homelab | Mobile-first interface. The clock token never leaves the server. |
+| **Device kit** (`device-kit/`) | Your computer | Numbered scripts to free the clock, with backup and rollback. |
 
-### El flujo de una pregunta por voz
+### The flow of a voice question
 
 ```mermaid
 sequenceDiagram
-    participant T as Tú
-    participant R as Reloj
+    participant T as You
+    participant R as Clock
     participant P as clock-bridge
-    participant H as Hermes y Qwen
-    T->>R: "Friday, qué tiempo hace"
-    R->>R: Órdenes locales (alarma, hora, tiempo...)
-    alt Lo entiende el reloj
-        R-->>T: Responde al momento, sin red
-    else Necesita al cerebro
-        R->>P: Audio WAV
-        P->>P: Whisper transcribe
-        P->>H: Texto (o respuesta rápida directa a Ollama)
-        H-->>P: Respuesta y acciones
-        P->>P: Sintetiza la voz
-        P-->>R: Texto, audio y acciones
-        R-->>T: Habla y ejecuta las acciones
+    participant H as Hermes and Qwen
+    T->>R: "Friday, what's the weather like"
+    R->>R: Local commands (alarm, time, weather...)
+    alt The clock understands it
+        R-->>T: Answers instantly, offline
+    else It needs the brain
+        R->>P: WAV audio
+        P->>P: Whisper transcribes
+        P->>H: Text (or quick direct answer from Ollama)
+        H-->>P: Answer and actions
+        P->>P: Synthesizes the voice
+        P-->>R: Text, audio and actions
+        R-->>T: Speaks and runs the actions
     end
 ```
 
-### Una sola capa de acciones, tres puertas de entrada
+### A single action layer, three entry points
 
-En la app, `Actions.kt` es el único sitio que ejecuta acciones del reloj (alarmas, temporizadores, hablar, mostrar, volumen, Bluetooth, diseño...). Lo reutilizan:
+In the app, `Actions.kt` is the only place that executes clock actions (alarms, timers, speak, display, volume, Bluetooth, design...). It is reused by:
 
-- **Órdenes locales** (`LocalIntents.kt`): interpretan alarmas, temporizadores, hora, tiempo y volumen en español, sin red y sin modelo.
-- **Respuestas del cerebro** (`Backend.kt`): lo que no entiende el reloj va al puente y a Hermes, que devuelve texto y una lista de acciones.
-- **API HTTP** (`Api.kt`): lo que usan Hermes, el panel y `clock.py`. Documentada en [`docs/api.md`](docs/api.md).
+- **Local commands** (`LocalIntents.kt`): interpret alarms, timers, time, weather and volume in Spanish, offline and without a model.
+- **Brain replies** (`Backend.kt`): whatever the clock does not understand goes to the bridge and to Hermes, which returns text and a list of actions.
+- **HTTP API** (`Api.kt`): what Hermes, the panel and `clock.py` use. Documented in [`docs/api.md`](docs/api.md) (in Spanish).
 
 ---
 
-## Cómo se ha construido
+## How it was built
 
-### 1. El punto de partida: liberar el hardware
+### 1. The starting point: freeing the hardware
 
-El reloj es un **MediaTek MT8167** de cuatro núcleos Cortex-A35 con **1 GB de RAM**, pantalla táctil de 800x480, doble micrófono, altavoz mono y tres botones físicos. De fábrica corre Android Go 10 con el asistente de Google.
+The clock is a **MediaTek MT8167** with four Cortex-A35 cores and **1 GB of RAM**, an 800x480 touchscreen, dual microphones, a mono speaker and three physical buttons. From the factory it runs Android Go 10 with Google Assistant.
 
-El camino elegido, con los porqués en [`docs/decisions.md`](docs/decisions.md) y las notas de investigación en [`docs/research-notes.md`](docs/research-notes.md):
+The chosen path, with the reasons in [`docs/decisions.md`](docs/decisions.md) and the research notes in [`docs/research-notes.md`](docs/research-notes.md) (both in Spanish):
 
-- **Backup completo y verificado** de todas las particiones antes de tocar nada, con `mtkclient` en modo BROM.
-- **Desbloquear el bootloader** y flashear un **`boot` parcheado con Magisk** a partir del `boot` propio del reloj (no el de terceros, que trae un root shell abierto en el puerto 1337).
-- **Deshabilitar Google, nunca desinstalarlo** (`pm disable-user`), de forma reversible.
-- Convertir a **Friday en el launcher** del reloj.
-- Todo con scripts numerados (`00_preflight` a `07_smoke_test`, más `99_rollback`) que arrancan en **modo simulacro** (`DRY_RUN=1`) y piden escribir una palabra para los pasos destructivos.
+- **Full, verified backup** of all partitions before touching anything, with `mtkclient` in BROM mode.
+- **Unlock the bootloader** and flash a **Magisk-patched `boot`** built from the clock's own `boot` (not the third-party one, which ships an open root shell on port 1337).
+- **Disable Google, never uninstall it** (`pm disable-user`), in a reversible way.
+- Make **Friday the launcher** of the clock.
+- Everything with numbered scripts (`00_preflight` to `07_smoke_test`, plus `99_rollback`) that start in **dry-run mode** (`DRY_RUN=1`) and ask you to type a word for destructive steps.
 
-### 2. La app del reloj
+### 2. The clock app
 
-Kotlin 1.9 con `minSdk 26` y `targetSdk 34`, **sin dependencias de runtime**. La interfaz nativa se construye por código (`ui/Ui.kt`), sin layouts XML. Piezas principales:
+Kotlin 1.9 with `minSdk 26` and `targetSdk 34`, **no runtime dependencies**. The native interface is built in code (`ui/Ui.kt`), with no XML layouts. Main pieces:
 
-- **Alarmas** (`alarm/`): `AlarmManager.setAlarmClock()`, servicio de sonido con volumen progresivo y pantalla de amanecer, `BootReceiver` que reprograma tras reiniciar. Nunca dependen de la red.
-- **Asistente** (`assistant/`): grabación con detección de voz (VAD), palabra de activación "Friday", conversación continua, TTS del puente o del sistema.
-- **Servidor HTTP** (`server/`): un servidor mínimo propio, con token. Por defecto escucha en todas las interfaces; activa en Ajustes "solo Tailscale" para limitarlo.
-- **Carátula**: un motor HTML y JavaScript dentro de un `WebView`, con respaldo nativo si falla.
-- **Clima** con Open-Meteo (sin clave de API), **Bluetooth** como altavoz del móvil y **brillo** con una regla propia entre panel y reloj.
+- **Alarms** (`alarm/`): `AlarmManager.setAlarmClock()`, a sound service with progressive volume and a sunrise screen, and a `BootReceiver` that reschedules after a reboot. They never depend on the network.
+- **Assistant** (`assistant/`): recording with voice activity detection (VAD), the "Friday" wake word, continuous conversation, TTS from the bridge or from the system.
+- **HTTP server** (`server/`): a minimal custom server, with token. By default it listens on all interfaces; turn on "Tailscale only" in Settings to restrict it.
+- **Watch face**: an HTML and JavaScript engine inside a `WebView`, with a native fallback if it fails.
+- **Weather** with Open-Meteo (no API key), **Bluetooth** as the phone's speaker and **brightness** with its own rule between panel and clock.
 
-### 3. El motor de pantallas
+### 3. The screen engine
 
-La carátula y la pantalla de alarma se describen en un **diseño JSON** validado de forma estricta (todo o nada) por `DesignSchema.kt`: temas, pantallas en una rejilla de 8 por 6, perfiles por hora y pantalla de alarma. El mismo motor, escrito en JavaScript clásico (el `WebView` del reloj es Chrome 74), corre en el reloj y, copiado con `tools/sync-face.sh`, en la vista previa del panel. Una versión (hash de los archivos del motor) permite avisar si reloj y panel difieren.
+The watch face and the alarm screen are described in a **JSON design** strictly validated (all or nothing) by `DesignSchema.kt`: themes, screens on an 8 by 6 grid, per-hour profiles and the alarm screen. The same engine, written in classic JavaScript (the clock's `WebView` is Chrome 74), runs on the clock and, copied with `tools/sync-face.sh`, in the panel preview. A version (a hash of the engine files) makes it possible to warn when clock and panel differ.
 
-Tiene redes de seguridad a propósito: comprobación de que el motor arrancó, límite de tiempo de carga, recuperación si muere el proceso de dibujo y vuelta a la carátula nativa. **Las alarmas nunca dependen del WebView.**
+It has deliberate safety nets: a check that the engine started, a load time limit, recovery if the rendering process dies, and a fallback to the native watch face. **Alarms never depend on the WebView.**
 
-### 4. El cerebro y la voz en el homelab
+### 4. The brain and the voice on the homelab
 
-- **`clock-bridge`** (FastAPI): `/v1/stt` con faster-whisper, `/v1/wake` como puerta de la palabra de activación, `/v1/assist` para preguntar. Enruta cada pregunta: una calculadora resuelve aritmética hablada al instante, los temas que necesitan herramientas van a **Hermes**, y el resto va directo a **Ollama** con un prompt corto y sin razonamiento (de 9 s a 0,4 s en la medición del proyecto con una GTX 1060).
-- **Hermes Agent** con **Qwen** local como modelo, y la **skill `mi-smart-clock`** para controlar el reloj desde cualquier canal.
-- **Voz de salida** configurable con tres motores que se encadenan como respaldo: Magpie (NVIDIA), Kokoro y Piper.
+- **`clock-bridge`** (FastAPI): `/v1/stt` with faster-whisper, `/v1/wake` as the wake word gate, `/v1/assist` for asking questions. It routes each question: a calculator solves spoken arithmetic instantly, topics that need tools go to **Hermes**, and the rest goes straight to **Ollama** with a short prompt and no reasoning (from 9 s down to 0.4 s in the project's measurement on a GTX 1060).
+- **Hermes Agent** with a local **Qwen** as the model, and the **`mi-smart-clock` skill** to control the clock from any channel.
+- **Output voice** configurable with three engines that chain as fallbacks: Magpie (NVIDIA), Kokoro and Piper.
 
-### 5. El panel web
+### 5. The web panel
 
-Una aplicación de **móvil primero**, en JavaScript vanilla sin librerías y con FastAPI como proxy: el token del reloj se queda en el servidor, las peticiones llevan una cabecera anti-CSRF y la contraseña es opcional. Tiene cuatro pestañas (Inicio con el reloj en vivo, Alarmas con rueda de hora, Pantallas con la vista previa fija y Ajustes) y pruebas automáticas que impiden que se cuelen emojis, colores sueltos o iconos inexistentes.
+A **mobile-first** application, in vanilla JavaScript with no libraries and with FastAPI as a proxy: the clock token stays on the server, requests carry an anti-CSRF header and the password is optional. It has four tabs (Home with the live clock, Alarms with a time wheel, Screens with the fixed preview, and Settings) and automated tests that prevent emojis, stray colors or nonexistent icons from slipping in.
 
-### 6. El sistema de diseño "Obsidiana"
+### 6. The "Obsidiana" design system
 
-Una sola fuente de verdad (`design-system/tokens.json`) genera los colores del reloj, del motor y del panel: negro verdadero (apto para OLED), un único acento ámbar, tipografía **Inter** con números tabulares e iconos **Lucide** con trazo uniforme. Los contrastes de todos los pares de color se comprueban en las pruebas. Más en [`docs/sistema-de-diseno.md`](docs/sistema-de-diseno.md).
+A single source of truth (`design-system/tokens.json`) generates the colors of the clock, the engine and the panel: true black (OLED friendly), a single amber accent, **Inter** typography with tabular numbers and **Lucide** icons with a uniform stroke. The contrast of every color pair is checked in the tests. More in [`docs/sistema-de-diseno.md`](docs/sistema-de-diseno.md) (in Spanish).
 
-### 7. El proceso de desarrollo
+### 7. The development process
 
-El proyecto se ha hecho por fases y subproyectos, cada uno con su especificación, su plan y sus pruebas, que se conservan en [`docs/superpowers/`](docs/superpowers/):
+The project was built in phases and subprojects, each with its specification, its plan and its tests, which are kept in [`docs/superpowers/`](docs/superpowers/) (in Spanish):
 
-| Etapa | Contenido |
+| Stage | Content |
 |---|---|
-| Fases 0 a 4 | Investigación, app, skill, kit de dispositivo y ejecución en el reloj |
-| Panel web | Alarmas personalizables, ajustes remotos y sonidos |
-| Pantallas y temas | Motor de pantallas, editor y vista previa en vivo |
-| Fotos y gestos | Fotos ajustables, carrusel, arrastrar elementos y deslizar para abrir Alarmas o Ajustes |
-| Capas y fondo | Elementos superpuestos con orden de capas y carrusel como fondo de tema |
-| Rediseño | Sistema de diseño Obsidiana, iconos Lucide, brillo y rediseño completo del panel |
+| Phases 0 to 4 | Research, app, skill, device kit and running on the clock |
+| Web panel | Customizable alarms, remote settings and sounds |
+| Screens and themes | Screen engine, editor and live preview |
+| Photos and gestures | Adjustable photos, carousel, dragging elements and swiping to open Alarms or Settings |
+| Layers and background | Overlapping elements with layer order and a carousel as theme background |
+| Redesign | Obsidiana design system, Lucide icons, brightness and a full panel redesign |
 
-Cada tarea pasó por revisión de especificación y de calidad, y cada subproyecto por una revisión final antes de integrarse. La integración continua ejecuta todas las pruebas y las comprobaciones de que lo generado está al día.
+Each task went through a specification review and a quality review, and each subproject went through a final review before being integrated. Continuous integration runs all the tests and the checks that generated files are up to date.
 
 ---
 
-## Herramientas y tecnologías
+## Tools and technologies
 
-| Área | Qué se ha usado |
+| Area | What was used |
 |---|---|
-| **Hardware** | Xiaomi Mi Smart Clock X04G (MediaTek MT8167, 1 GB de RAM, Android 10) |
-| **Liberar el reloj** | `mtkclient` (modo BROM), Magisk (boot parcheado), `adb`, `fastboot`, scripts de shell con `shellcheck` |
-| **App del reloj** | Kotlin 1.9, Android Gradle Plugin 8.5, Gradle, JDK 17, `AlarmManager`, `WebView`, JUnit 4 |
-| **Motor de pantallas** | HTML, CSS y JavaScript clásico (ES2017, Chrome 74), `node --test` |
-| **Cerebro** | Hermes Agent (Nous Research), Ollama, modelos Qwen |
-| **Voz** | faster-whisper (STT), Piper, Kokoro y NVIDIA Magpie (TTS) |
-| **Servicios del homelab** | Python 3.12, FastAPI, Uvicorn, httpx, Docker Compose |
-| **Panel web** | JavaScript vanilla, CSS con variables, FastAPI |
-| **Diseño** | Tokens propios en JSON, tipografía Inter (SIL OFL), iconos Lucide (ISC) |
-| **Red** | Tailscale (red privada reloj, homelab y móvil) |
-| **Clima** | Open-Meteo (gratis y sin clave) |
-| **Calidad** | pytest, JUnit, `node --test`, Chrome sin cabeza para comprobación visual, GitHub Actions |
-| **Asistente de desarrollo** | Claude Code (Anthropic), con flujo de especificación, plan, implementación y revisión |
+| **Hardware** | Xiaomi Mi Smart Clock X04G (MediaTek MT8167, 1 GB of RAM, Android 10) |
+| **Freeing the clock** | `mtkclient` (BROM mode), Magisk (patched boot), `adb`, `fastboot`, shell scripts with `shellcheck` |
+| **Clock app** | Kotlin 1.9, Android Gradle Plugin 8.5, Gradle, JDK 17, `AlarmManager`, `WebView`, JUnit 4 |
+| **Screen engine** | HTML, CSS and classic JavaScript (ES2017, Chrome 74), `node --test` |
+| **Brain** | Hermes Agent (Nous Research), Ollama, Qwen models |
+| **Voice** | faster-whisper (STT), Piper, Kokoro and NVIDIA Magpie (TTS) |
+| **Homelab services** | Python 3.12, FastAPI, Uvicorn, httpx, Docker Compose |
+| **Web panel** | Vanilla JavaScript, CSS with variables, FastAPI |
+| **Design** | Custom JSON tokens, Inter typography (SIL OFL), Lucide icons (ISC) |
+| **Network** | Tailscale (private network for clock, homelab and phone) |
+| **Weather** | Open-Meteo (free and keyless) |
+| **Quality** | pytest, JUnit, `node --test`, headless Chrome for visual checks, GitHub Actions |
+| **Development assistant** | Claude Code (Anthropic), with a specification, plan, implementation and review workflow |
 
 ---
 
-## Guía de instalación
+## Installation guide
 
-### Qué necesitas
+### What you need
 
 **Hardware**
 
-- Un **Xiaomi Mi Smart Clock X04G** (variante global).
-- Un **servidor o PC en tu casa** (el "cerebro"). Para Qwen en local va **mucho mejor con GPU**; en CPU funciona con un Qwen pequeño. Linux recomendado.
-- Un ordenador con **microUSB de datos** para liberar el reloj (Linux o macOS mejor).
+- A **Xiaomi Mi Smart Clock X04G** (global variant).
+- A **server or PC at home** (the "brain"). For local Qwen it works **much better with a GPU**; on CPU it works with a small Qwen. Linux recommended.
+- A computer with a **data-capable microUSB** to free the clock (Linux or macOS preferred).
 
-**Cuentas y software**
+**Accounts and software**
 
-- Una cuenta gratuita de **Tailscale** para la red privada reloj, homelab y móvil.
-- **Ollama** (modelos locales) y **Hermes Agent** (el agente). Nada de Google y nada de nube de voz.
-- **Docker** y **Git** en el homelab. **Docker Compose** es lo más cómodo.
+- A free **Tailscale** account for the private network of clock, homelab and phone.
+- **Ollama** (local models) and **Hermes Agent** (the agent). No Google and no voice cloud.
+- **Docker** and **Git** on the homelab. **Docker Compose** is the most convenient.
 
-**Tiempo estimado:** de una a dos horas el homelab y de una a dos horas el reloj, flasheo incluido.
+**Estimated time:** one to two hours for the homelab and one to two hours for the clock, flashing included.
 
 > [!WARNING]
-> La Parte B **modifica el firmware del reloj**. Hazla con calma y con el backup completo hecho y verificado. Es una modificación no oficial que puede anular la garantía y, si se hace mal, dejar el aparato inservible. Los scripts arrancan en modo simulacro y existe un rollback, pero la responsabilidad es tuya.
+> Part B **modifies the clock's firmware**. Take your time and do it with the full backup made and verified. It is an unofficial modification that may void the warranty and, if done wrong, leave the device unusable. The scripts start in dry-run mode and a rollback exists, but the responsibility is yours.
 
 ---
 
-### Parte A: montar el cerebro en el homelab
+### Part A: set up the brain on the homelab
 
-Todo esto se hace en tu servidor de casa. Al final tendrás a Qwen respondiendo por Hermes, con voz y accesible por Tailscale.
+All of this is done on your home server. At the end you will have Qwen answering through Hermes, with voice, and reachable over Tailscale.
 
-#### A1. Ollama y el modelo Qwen
+#### A1. Ollama and the Qwen model
 
 ```bash
-# 1. Instala Ollama
+# 1. Install Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 
-# 2. Descarga un modelo Qwen (elige según tu máquina)
-ollama pull qwen2.5:7b-instruct       # equilibrado (GPU de 8 a 12 GB, o CPU con paciencia)
-# ollama pull qwen2.5:14b-instruct    # mejor calidad, unos 16 GB de VRAM
-# ollama pull qwen2.5:3b-instruct     # ligero, para CPU o poca RAM
+# 2. Download a Qwen model (choose according to your machine)
+ollama pull qwen2.5:7b-instruct       # balanced (8 to 12 GB GPU, or CPU with patience)
+# ollama pull qwen2.5:14b-instruct    # better quality, about 16 GB of VRAM
+# ollama pull qwen2.5:3b-instruct     # lightweight, for CPU or low RAM
 ```
 
 > [!IMPORTANT]
-> **Contexto.** Hermes necesita **al menos 64.000 tokens** de contexto o se niega a arrancar, y Ollama usa por defecto muy poco (4.096 con menos de 24 GB de VRAM). Sube el contexto. Ollama escucha por defecto solo en `127.0.0.1`, y con eso basta: el puente corre con `network_mode: host` y llega por `127.0.0.1:11434`.
+> **Context.** Hermes needs **at least 64,000 tokens** of context or it refuses to start, and Ollama uses very little by default (4,096 with less than 24 GB of VRAM). Raise the context. Ollama listens only on `127.0.0.1` by default, and that is enough: the bridge runs with `network_mode: host` and reaches it at `127.0.0.1:11434`.
 
 ```bash
-sudo systemctl edit ollama    # crea un override; añade lo siguiente
+sudo systemctl edit ollama    # creates an override; add the following
 ```
 
 ```ini
@@ -293,38 +298,38 @@ Environment="OLLAMA_HOST=127.0.0.1:11434"
 ```
 
 > [!WARNING]
-> Ollama no tiene autenticación. Deja el bind en `127.0.0.1` (recomendado). Solo si de verdad necesitas llegar desde otro contenedor, escucha en la IP del puente de Docker (por ejemplo `172.17.0.1:11434`) o en `0.0.0.0` y, en ese caso, limita el puerto 11434 con el cortafuegos (ufw/nftables) a esa red de Docker o a Tailscale. Nunca lo abras al router.
+> Ollama has no authentication. Keep the bind on `127.0.0.1` (recommended). Only if you truly need to reach it from another container, listen on the Docker bridge IP (for example `172.17.0.1:11434`) or on `0.0.0.0` and, in that case, restrict port 11434 with the firewall (ufw/nftables) to that Docker network or to Tailscale. Never open it to the router.
 
 ```bash
 sudo systemctl restart ollama
-curl http://localhost:11434/api/tags     # comprueba que responde y lista Qwen
+curl http://localhost:11434/api/tags     # check that it responds and lists Qwen
 ```
 
-En CPU, un contexto de 64k con un modelo de 7B puede ir justo de RAM: si te quedas corto, usa `qwen2.5:3b-instruct`. La calidad baja, pero Friday sigue funcionando. (El proyecto se ha probado también con Qwen 3.5 de 4B en una GTX 1060.)
+On CPU, a 64k context with a 7B model can be tight on RAM: if you run short, use `qwen2.5:3b-instruct`. Quality drops, but Friday keeps working. (The project has also been tested with Qwen 3.5 4B on a GTX 1060.)
 
-#### A2. Instalar Hermes Agent
+#### A2. Install Hermes Agent
 
 ```bash
-# Instalación solo CLI (sin la app de escritorio)
+# CLI-only install (without the desktop app)
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-exec $SHELL -l          # recarga el PATH para tener el comando `hermes`
+exec $SHELL -l          # reloads the PATH so you get the `hermes` command
 hermes --version
 ```
 
-#### A3. Conectar Hermes a Qwen (Ollama local)
+#### A3. Connect Hermes to Qwen (local Ollama)
 
-Lo más rápido, de forma interactiva:
+The quickest way, interactively:
 
 ```bash
-hermes setup            # elige "Blank Slate" o "Full Setup" y activa al menos
-                        # los toolsets Terminal y File Operations
-hermes model            # elige "Custom Endpoint (OpenAI compatible)"
+hermes setup            # choose "Blank Slate" or "Full Setup" and enable at least
+                        # the Terminal and File Operations toolsets
+hermes model            # choose "Custom Endpoint (OpenAI compatible)"
                         #   URL:     http://localhost:11434/v1
-                        #   API key: (vacío, Ollama no la pide)
-                        #   Modelo:  qwen2.5:7b-instruct
+                        #   API key: (empty, Ollama does not ask for one)
+                        #   Model:   qwen2.5:7b-instruct
 ```
 
-O directamente en `~/.hermes/config.yaml`:
+Or directly in `~/.hermes/config.yaml`:
 
 ```yaml
 model:
@@ -334,105 +339,105 @@ model:
   context_length: 64000
 ```
 
-Comprueba que Qwen responde:
+Check that Qwen responds:
 
 ```bash
-hermes chat -q "Di 'hola' en una frase."
+hermes chat -q "Say 'hello' in one sentence."
 ```
 
-#### A4. Activar la API de Hermes (para que el reloj le hable)
+#### A4. Enable the Hermes API (so the clock can talk to it)
 
-En `~/.hermes/.env`:
+In `~/.hermes/.env`:
 
 ```bash
 API_SERVER_ENABLED=true
-API_SERVER_KEY=pon-aqui-una-clave-larga   # la reutiliza el puente
+API_SERVER_KEY=put-a-long-key-here   # reused by the bridge
 ```
 
-Arranca el gateway (deja el proceso corriendo o instálalo como servicio):
+Start the gateway (leave the process running or install it as a service):
 
 ```bash
-hermes gateway          # escucha en 127.0.0.1:8642 (déjalo así: tiene terminal; si lo cambias, cortafuegos y clave larga)
-# prueba en otra terminal:
-curl http://localhost:8642/v1/models -H "Authorization: Bearer pon-aqui-una-clave-larga"
+hermes gateway          # listens on 127.0.0.1:8642 (leave it that way: it has a terminal; if you change it, use a firewall and a long key)
+# test in another terminal:
+curl http://localhost:8642/v1/models -H "Authorization: Bearer put-a-long-key-here"
 ```
 
-#### A5. La voz de Friday: el puente Whisper y TTS (`homelab/clock-bridge`)
+#### A5. Friday's voice: the Whisper and TTS bridge (`homelab/clock-bridge`)
 
-Es el oído (Whisper) y la boca (Piper, Kokoro o Magpie) del reloj, en local. Habla con Hermes por su API.
+It is the clock's ear (Whisper) and mouth (Piper, Kokoro or Magpie), running locally. It talks to Hermes through its API.
 
 ```bash
 git clone https://github.com/JAGB709/FridayClock.git
 cd FridayClock/homelab/clock-bridge
 ```
 
-Crea un archivo `.env` con el contenido siguiente (ajusta los valores):
+Create a `.env` file with the following content (adjust the values):
 
 ```bash
-BRIDGE_TOKEN=otro-token-largo            # lo pondrás también en el reloj
+BRIDGE_TOKEN=another-long-token          # you will also put it on the clock
 HERMES_URL=http://127.0.0.1:8642
-HERMES_API_KEY=pon-aqui-una-clave-larga  # igual que API_SERVER_KEY de arriba
+HERMES_API_KEY=put-a-long-key-here       # same as API_SERVER_KEY above
 HERMES_MODEL=hermes-agent
-WHISPER_MODEL=small                      # tiny, base, small o medium
-WHISPER_DEVICE=cpu                       # con GPU NVIDIA: cuda
-WHISPER_COMPUTE=int8                     # con GPU: float16
+WHISPER_MODEL=small                      # tiny, base, small or medium
+WHISPER_DEVICE=cpu                       # with an NVIDIA GPU: cuda
+WHISPER_COMPUTE=int8                     # with a GPU: float16
 LANGUAGE=es
-# TTS_ENGINE=piper                       # piper (por defecto), kokoro o magpie
+# TTS_ENGINE=piper                       # piper (default), kokoro or magpie
 # PIPER_MODEL=/models/es_ES-sharvard-medium.onnx
 ```
 
-**Voz en español.** Descarga una voz de Piper (elígela escuchando las [muestras de Piper](https://rhasspy.github.io/piper-samples/), filtrando por Spanish, Spain) a `homelab/clock-bridge/models/` y apunta `PIPER_MODEL` a ella. El paso a paso completo, con Kokoro y la personalidad de Friday, está en [`docs/voz-friday.md`](docs/voz-friday.md). Sin motor de voz en el puente, el reloj usa su propio TTS.
+**Spanish voice.** Download a Piper voice (pick it by listening to the [Piper samples](https://rhasspy.github.io/piper-samples/), filtering by Spanish, Spain) into `homelab/clock-bridge/models/` and point `PIPER_MODEL` at it. The full step-by-step guide, with Kokoro and Friday's personality, is in [`docs/voz-friday.md`](docs/voz-friday.md) (in Spanish). Without a voice engine in the bridge, the clock uses its own TTS.
 
-| Motor | Variable | Notas |
+| Engine | Variable | Notes |
 |---|---|---|
-| **Piper** | `TTS_ENGINE=piper` y `PIPER_MODEL` | Neuronal y offline. Voces multihablante con `PIPER_SPEAKER` (en `sharvard`, 0 es hombre y 1 es mujer). |
-| **Kokoro** | `TTS_ENGINE=kokoro`, `KOKORO_VOICE=ef_dora` | Más natural. Los modelos van en `./models`. |
-| **Magpie** (NVIDIA) | `TTS_ENGINE=magpie`, `MAGPIE_URL`, `MAGPIE_KEY`, `MAGPIE_VOICE`, `MAGPIE_LANG` | Servido con `nemo-speech serve`. Usa el **índice** del hablante, no el nombre. Ocupa cerca de 1 GB de VRAM. |
+| **Piper** | `TTS_ENGINE=piper` and `PIPER_MODEL` | Neural and offline. Multi-speaker voices with `PIPER_SPEAKER` (in `sharvard`, 0 is male and 1 is female). |
+| **Kokoro** | `TTS_ENGINE=kokoro`, `KOKORO_VOICE=ef_dora` | More natural. Models go in `./models`. |
+| **Magpie** (NVIDIA) | `TTS_ENGINE=magpie`, `MAGPIE_URL`, `MAGPIE_KEY`, `MAGPIE_VOICE`, `MAGPIE_LANG` | Served with `nemo-speech serve`. Uses the speaker **index**, not the name. Takes about 1 GB of VRAM. |
 
-Cada motor cae en el siguiente si falla. Levántalo:
+Each engine falls back to the next one if it fails. Start it:
 
 ```bash
-docker compose up -d --build     # recomendado
-# o sin Docker:
+docker compose up -d --build     # recommended
+# or without Docker:
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 set -a; . ./.env; set +a; python bridge.py
 curl http://localhost:8765/health
 ```
 
-#### A6. Tailscale en el homelab
+#### A6. Tailscale on the homelab
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
-tailscale ip -4          # apunta esta IP (100.x.y.z): la usará el reloj
+tailscale ip -4          # note this IP (100.x.y.z): the clock will use it
 ```
 
-#### A7. Instalar la skill del reloj en Hermes
+#### A7. Install the clock skill in Hermes
 
-Deja que Friday controle el reloj (alarmas, hablar, mostrar, Bluetooth, ajustes y diseño) desde cualquier canal:
+Let Friday control the clock (alarms, speak, display, Bluetooth, settings and design) from any channel:
 
 ```bash
 cp -r ~/FridayClock/hermes-skill/mi-smart-clock ~/.hermes/skills/
-# la configuración del reloj (rellenarás la IP y el token en la Parte C)
+# the clock configuration (you will fill in the IP and token in Part C)
 cat > ~/.config/mi-smart-clock.json <<'JSON'
 {"url": "http://<ip-tailscale-reloj>:8080", "token": "<token-del-reloj>"}
 JSON
 ```
 
-La skill usa el toolset `terminal` de Hermes.
+The skill uses Hermes' `terminal` toolset.
 
-#### A8. El panel web para el móvil (`homelab/friday-panel`)
+#### A8. The web panel for your phone (`homelab/friday-panel`)
 
-Para configurar alarmas, ajustes y el diseño del reloj desde el móvil. El token del reloj se queda en el homelab.
+To configure alarms, settings and the clock's design from your phone. The clock token stays on the homelab.
 
-| Variable (`.env`) | Valor |
+| Variable (`.env`) | Value |
 |---|---|
-| `CLOCK_URL` | Obligatoria. `http://100.x.y.z:8080` (IP Tailscale del reloj). |
-| `CLOCK_TOKEN` | Obligatoria. El token del reloj. |
-| `PANEL_BIND` | Por defecto `127.0.0.1`. Pon la IP de Tailscale del homelab (`tailscale ip -4`). |
+| `CLOCK_URL` | Required. `http://100.x.y.z:8080` (the clock's Tailscale IP). |
+| `CLOCK_TOKEN` | Required. The clock's token. |
+| `PANEL_BIND` | Defaults to `127.0.0.1`. Set the homelab's Tailscale IP (`tailscale ip -4`). |
 | `PANEL_PORT` | `8770` |
-| `PANEL_PASSWORD` | Opcional. Si la pones, el panel pide contraseña. |
+| `PANEL_PASSWORD` | Optional. If you set it, the panel asks for a password. |
 | `CLOCK_TIMEOUT_S` | `5` |
 
 ```bash
@@ -448,59 +453,59 @@ FIN
 docker compose up -d --build
 ```
 
-Abre `http://<ip-tailscale-homelab>:8770` en el móvil. Puedes añadirlo a la pantalla de inicio como una aplicación. Si el reloj está apagado o sin red, el panel lo dice y no guarda nada; las alarmas siguen sonando igual.
+Open `http://<ip-tailscale-homelab>:8770` on your phone. You can add it to the home screen as an app. If the clock is off or offline, the panel says so and saves nothing; alarms keep ringing regardless.
 
-**Fin de la Parte A.** Ya tienes cerebro (Qwen y Hermes), voz (Whisper y TTS) y red (Tailscale).
+**End of Part A.** You now have a brain (Qwen and Hermes), a voice (Whisper and TTS) and a network (Tailscale).
 
 ---
 
-### Parte B: liberar el reloj e instalar Friday
+### Part B: free the clock and install Friday
 
 > [!WARNING]
-> Esto modifica el firmware. El detalle, con puntos de control y rollback, está en [`RUNBOOK.md`](RUNBOOK.md). Los porqués están en [`docs/research-notes.md`](docs/research-notes.md) y [`docs/decisions.md`](docs/decisions.md).
+> This modifies the firmware. The details, with checkpoints and rollback, are in [`RUNBOOK.md`](RUNBOOK.md) (in Spanish). The reasons are in [`docs/research-notes.md`](docs/research-notes.md) and [`docs/decisions.md`](docs/decisions.md) (in Spanish).
 
-#### B1. Preparar el ordenador de flasheo
+#### B1. Prepare the flashing computer
 
 ```bash
 cd ~/FridayClock
-./device-kit/setup_host.sh                      # instala mtkclient, adb y udev
+./device-kit/setup_host.sh                      # installs mtkclient, adb and udev
 git clone https://github.com/bkerler/mtkclient device-kit/vendor/mtkclient
 pip3 install -r device-kit/vendor/mtkclient/requirements.txt
 ```
 
-#### B2. Backup completo (imprescindible) y root
+#### B2. Full backup (essential) and root
 
-Los scripts van en **modo simulacro por defecto** (no escriben nada). Repites con `DRY_RUN=0` cuando lo veas claro. Resumen (detalle en `RUNBOOK.md`):
+The scripts run in **dry-run mode by default** (they write nothing). Repeat with `DRY_RUN=0` when you are sure. Summary (details in `RUNBOOK.md`):
 
 ```bash
 ./device-kit/00_preflight.sh
-DRY_RUN=0 ./device-kit/01_backup_full.sh        # copia TODAS las particiones y las verifica
-DRY_RUN=0 ./device-kit/02_unlock.sh             # desbloquea el bootloader (borra los datos)
-DRY_RUN=0 ./device-kit/03_flash_boot.sh         # boot rooteado con Magisk (opción B)
-DRY_RUN=0 ./device-kit/04_verify_root.sh        # comprueba arranque y root
-DRY_RUN=0 ./device-kit/05_debloat.sh            # DESHABILITA Google (reversible)
+DRY_RUN=0 ./device-kit/01_backup_full.sh        # copies ALL partitions and verifies them
+DRY_RUN=0 ./device-kit/02_unlock.sh             # unlocks the bootloader (wipes the data)
+DRY_RUN=0 ./device-kit/03_flash_boot.sh         # Magisk-rooted boot (option B)
+DRY_RUN=0 ./device-kit/04_verify_root.sh        # checks boot and root
+DRY_RUN=0 ./device-kit/05_debloat.sh            # DISABLES Google (reversible)
 ```
 
-Si algo va mal: `DRY_RUN=0 LEVEL=2 ./device-kit/99_rollback.sh` restaura el boot original.
+If something goes wrong: `DRY_RUN=0 LEVEL=2 ./device-kit/99_rollback.sh` restores the original boot.
 
-#### B3. Obtener el APK de Friday
+#### B3. Get the Friday APK
 
-Elige una de las tres formas:
+Pick one of three ways:
 
-1. **Descargar el release** (lo más fácil): baja `Friday-clock-v2.0.apk` desde la sección **Releases** del repositorio.
-2. **Descargar el artefacto de la CI:** en **GitHub Actions, Build APK, Artifacts**, el artefacto `friday-apk`.
-3. **Compilarlo tú** con JDK 17 y el SDK de Android:
+1. **Download the release** (easiest): get `Friday-clock-v2.0.apk` from the repository's **Releases** section.
+2. **Download the CI artifact:** in **GitHub Actions, Build APK, Artifacts**, the `friday-apk` artifact.
+3. **Build it yourself** with JDK 17 and the Android SDK:
    ```bash
    ./gradlew assembleRelease
-   # APK en app-android/build/outputs/apk/release/app-android-release.apk
+   # APK at app-android/build/outputs/apk/release/app-android-release.apk
    ```
 
 > [!NOTE]
-> El APK se firma con la clave de depuración a propósito, para poder instalarlo sin tener un keystore propio. Para actualizar una instalación existente con `adb install -r` el APK debe estar firmado con la misma clave que el instalado; si no, desinstala primero.
+> The APK is signed with the debug key on purpose, so it can be installed without having your own keystore. To update an existing install with `adb install -r`, the APK must be signed with the same key as the installed one; otherwise, uninstall first.
 
-#### B4. Instalar Friday y Tailscale en el reloj
+#### B4. Install Friday and Tailscale on the clock
 
-Descarga el **APK de Tailscale** de [F-Droid](https://f-droid.org/packages/com.tailscale.ipn/) (el reloj es Android 10, compatible) y déjalo en `device-kit/vendor/`. Luego:
+Download the **Tailscale APK** from [F-Droid](https://f-droid.org/packages/com.tailscale.ipn/) (the clock is Android 10, compatible) and put it in `device-kit/vendor/`. Then:
 
 ```bash
 DRY_RUN=0 CLOCK_TOKEN="$(head -c16 /dev/urandom | base64 | tr -dc a-z0-9 | head -c20)" \
@@ -510,96 +515,98 @@ DRY_RUN=0 CLOCK_TOKEN="$(head -c16 /dev/urandom | base64 | tr -dc a-z0-9 | head 
   ./device-kit/06_install_apps.sh
 ```
 
-Ese script instala ambas aplicaciones, concede permisos, fija **Friday como launcher** y configura el token por ADB. **Apunta el `CLOCK_TOKEN`** que se ha generado: lo necesita Hermes y el panel.
+That script installs both apps, grants permissions, sets **Friday as the launcher** and configures the token over ADB. **Write down the `CLOCK_TOKEN`** that was generated: Hermes and the panel need it.
 
-En el reloj, abre **Tailscale** e inicia sesión para unirlo a tu red.
+On the clock, open **Tailscale** and sign in to join it to your network.
 
-#### B5. La voz del reloj (motor TTS)
+#### B5. The clock's voice (TTS engine)
 
-Una GSI limpia puede venir **sin motor de voz**. Dos opciones:
+A clean GSI may come **without a speech engine**. Two options:
 
-- Usar el TTS del **puente** (Parte A5): el reloj solo reproduce el audio. Es lo recomendado.
-- O instalar en el reloj **RHVoice** o **eSpeak NG** (F-Droid) con voz española, para que hable aunque el puente no mande audio. En los Ajustes del reloj hay acceso a la voz del sistema y a la velocidad.
+- Use the **bridge** TTS (Part A5): the clock only plays the audio. This is the recommended option.
+- Or install **RHVoice** or **eSpeak NG** (F-Droid) with a Spanish voice on the clock, so it speaks even if the bridge sends no audio. In the clock's Settings there is access to the system voice and the speed.
 
-#### B6. El altavoz Bluetooth (usar el reloj como altavoz del móvil)
+#### B6. The Bluetooth speaker (using the clock as your phone's speaker)
 
-Ya está integrado: dile a Friday **"activa el bluetooth"** (o Ajustes, **Modo altavoz Bluetooth**), empareja el móvil buscando **"Friday"** y su música sonará por el reloj. Que el audio se enrute de verdad depende de que tu GSI traiga el perfil **A2DP sink**; cómo comprobarlo y activarlo está en [`docs/altavoz-bluetooth.md`](docs/altavoz-bluetooth.md).
+It is already built in: tell Friday **"activa el bluetooth"** (or go to Settings, **Bluetooth speaker mode**), pair your phone by looking for **"Friday"** and its music will play through the clock. Whether the audio is actually routed depends on your GSI shipping the **A2DP sink** profile; how to check and enable it is in [`docs/altavoz-bluetooth.md`](docs/altavoz-bluetooth.md) (in Spanish).
 
 ---
 
-### Parte C: conectarlo todo y probar
+### Part C: connect everything and test
 
-1. **Dile a Hermes la IP y el token del reloj.** Edita `~/.config/mi-smart-clock.json` (Parte A7) con la IP de Tailscale del reloj (`tailscale ip -4` en el reloj o el panel de Tailscale) y el `CLOCK_TOKEN` de B4. Pon el mismo valor en el `.env` del panel (A8) si todavía no lo hiciste.
+1. **Tell Hermes the clock's IP and token.** Edit `~/.config/mi-smart-clock.json` (Part A7) with the clock's Tailscale IP (`tailscale ip -4` on the clock or the Tailscale admin panel) and the `CLOCK_TOKEN` from B4. Put the same value in the panel's `.env` (A8) if you have not yet.
 
-2. **Prueba el reloj desde el homelab, por Tailscale:**
+2. **Test the clock from the homelab, over Tailscale:**
    ```bash
    python3 ~/.hermes/skills/mi-smart-clock/scripts/clock.py status
    python3 ~/.hermes/skills/mi-smart-clock/scripts/clock.py say "Hola, soy Friday"
    ```
 
-3. **Prueba la voz completa:** en el reloj, pulsa el micro (o doble toque en la hora) y di *"Friday, ¿qué tiempo hace?"*. Debe transcribir (Whisper), pensar (Qwen y Hermes) y responder por el altavoz.
+3. **Test the full voice path:** on the clock, press the mic (or double-tap the time) and say *"Friday, ¿qué tiempo hace?"* ("Friday, what's the weather like?"). It should transcribe (Whisper), think (Qwen and Hermes) and answer through the speaker.
 
-4. **Prueba el despertador sin red:** *"pon una alarma dentro de 2 minutos"* y comprueba que suena aunque apagues el homelab.
+4. **Test the alarm clock offline:** *"pon una alarma dentro de 2 minutos"* ("set an alarm in 2 minutes") and check that it rings even if you turn off the homelab.
 
-5. **Prueba que Friday controla el reloj:** por Telegram u otro canal de Hermes, *"muéstrame 'Hola' en el reloj y pon una alarma a las 7"*.
+5. **Test that Friday controls the clock:** through Telegram or another Hermes channel, *"muéstrame 'Hola' en el reloj y pon una alarma a las 7"* ("show me 'Hola' on the clock and set an alarm for 7").
 
-6. **Abre el panel** en el móvil y comprueba que ves el reloj en vivo, tus alarmas y el editor de pantallas. En Ajustes, la tarjeta de conexión debe mostrar la **misma versión del motor** en el reloj y en el panel.
+6. **Open the panel** on your phone and check that you see the live clock, your alarms and the screen editor. In Settings, the connection card should show the **same engine version** on the clock and in the panel.
 
-Si algo no responde, empieza por `clock.py status` y por `curl .../health` del puente y de Hermes. Consulta también la [solución de problemas](#solución-de-problemas).
+If something does not respond, start with `clock.py status` and with `curl .../health` on the bridge and on Hermes. See also [troubleshooting](#troubleshooting).
 
 ---
 
-## Qué hace Friday
+## What Friday does
 
-### Despertador
+### Alarm clock
 
-- Alarmas únicas o repetitivas (L M X J V S D, entre semana, fines de semana), cada una con **su sonido, su volumen máximo, su subida de volumen y su tiempo de posponer**.
-- **Volumen progresivo** y pantalla de **amanecer**: el brillo sube con el volumen.
-- Posponer configurable; si nadie la toca, se pospone sola. Pitidos de reserva si la GSI no trae tonos: nunca se queda muda.
-- **Buenos días** al descartar: hora, tiempo, agenda (si Hermes la tiene) y próxima alarma.
-- Temporizadores con etiqueta y sonidos propios (mp3, ogg, wav o m4a) subidos desde el panel.
+- One-time or repeating alarms (M T W T F S S, weekdays, weekends), each with **its own sound, maximum volume, volume ramp-up and snooze time**.
+- **Progressive volume** and a **sunrise** screen: brightness rises with the volume.
+- Configurable snooze; if nobody touches it, it snoozes itself. Fallback beeps if the GSI has no ringtones: it never goes silent.
+- **Good morning** on dismissal: time, weather, agenda (if Hermes has it) and next alarm.
+- Timers with labels and custom sounds (mp3, ogg, wav or m4a) uploaded from the panel.
 
-### Asistente
+### Assistant
 
-- Micro por botón, **doble toque** en la carátula, **palabra de activación "Friday"** o `POST /listen`. Un detector de voz corta al callar.
-- Voz a texto con Whisper local y texto a voz con Piper, Kokoro, Magpie o el TTS del reloj.
-- **Modo conversación**: si Friday pregunta, el reloj vuelve a escuchar solo.
-- **Respuestas rápidas**: la aritmética hablada se resuelve al instante y las preguntas simples van directo a Ollama sin pasar por el agente.
+- Mic by button, **double-tap** on the watch face, **"Friday" wake word** or `POST /listen`. A voice detector cuts when you stop talking.
+- Speech to text with local Whisper and text to speech with Piper, Kokoro, Magpie or the clock's TTS.
+- **Conversation mode**: if Friday asks a question, the clock listens again on its own.
+- **Quick answers**: spoken arithmetic is solved instantly and simple questions go straight to Ollama without going through the agent.
 
-### Órdenes que funcionan sin red (y sin Hermes)
+### Commands that work offline (and without Hermes)
 
-| Dices | Hace |
+Commands are spoken in Spanish; the English gloss is shown in parentheses.
+
+| You say | It does |
 |---|---|
-| "pon una alarma a las siete y media entre semana" | alarma 07:30 de lunes a viernes |
-| "despiértame a las 6:45", "a las diez de la noche para la pastilla" | alarma puntual con etiqueta |
-| "temporizador de 5 minutos para la pasta", "avísame en media hora" | temporizador |
-| "quita la alarma de las 7:30", "cancela todas las alarmas" | borra |
-| "¿qué alarmas tengo?" | las lee y dice la próxima |
-| "pospón", "apaga la alarma" | posponer o descartar |
-| "¿qué hora es?", "¿qué día es?", "¿qué tiempo hace?" | responde al momento |
-| "sube el volumen", "volumen al 40" | volumen |
-| "activa el bluetooth", "modo altavoz" | modo altavoz Bluetooth |
+| "pon una alarma a las siete y media entre semana" ("set an alarm for half past seven on weekdays") | alarm at 07:30 from Monday to Friday |
+| "despiértame a las 6:45", "a las diez de la noche para la pastilla" ("wake me at 6:45", "at ten at night for the pill") | one-off alarm with a label |
+| "temporizador de 5 minutos para la pasta", "avísame en media hora" ("5 minute timer for the pasta", "alert me in half an hour") | timer |
+| "quita la alarma de las 7:30", "cancela todas las alarmas" ("remove the 7:30 alarm", "cancel all alarms") | deletes |
+| "¿qué alarmas tengo?" ("what alarms do I have?") | reads them out and says the next one |
+| "pospón", "apaga la alarma" ("snooze", "turn off the alarm") | snooze or dismiss |
+| "¿qué hora es?", "¿qué día es?", "¿qué tiempo hace?" ("what time is it?", "what day is it?", "what's the weather like?") | answers instantly |
+| "sube el volumen", "volumen al 40" ("turn the volume up", "volume to 40") | volume |
+| "activa el bluetooth", "modo altavoz" ("turn on bluetooth", "speaker mode") | Bluetooth speaker mode |
 
-Todo lo demás ("¿tengo algo mañana?", "recuérdame llamar a mamá el viernes"...) va a Hermes y a Qwen.
+Everything else ("¿tengo algo mañana?", "recuérdame llamar a mamá el viernes"... meaning "do I have anything tomorrow?", "remind me to call mom on Friday") goes to Hermes and Qwen.
 
-### Carátula, pantallas y temas
+### Watch face, screens and themes
 
-- Hora, fecha, tiempo (Open-Meteo, sin clave), previsión y próxima alarma, con **modo noche** (acentos cálidos tenues, brillo mínimo) y **anti-quemado**.
-- **Temas, pantallas y perfiles por hora** que se diseñan desde el panel con una vista previa idéntica a la del reloj y un botón **Probar** que lo muestra en el reloj sin guardarlo.
-- **Fotos** como fondo, **carruseles** como elemento o como fondo del tema, ajuste de encaje, zoom y posición, **capas** con orden y solapes, y arrastrar elementos para colocarlos.
-- **Gestos**: deslizar de izquierda a derecha abre Alarmas, de derecha a izquierda abre Ajustes y en vertical cambia de pantalla del perfil.
-- **Brillo** con una regla clara: manda el del panel, y si lo cambias en el reloj ese valor manda hasta que cambie el perfil o el panel.
+- Time, date, weather (Open-Meteo, keyless), forecast and next alarm, with **night mode** (dim warm accents, minimum brightness) and **anti burn-in**.
+- **Themes, screens and per-hour profiles** designed from the panel with a preview identical to the clock's and a **Try** button that shows it on the clock without saving it.
+- **Photos** as background, **carousels** as an element or as the theme background, fit adjustment, zoom and position, **layers** with order and overlaps, and dragging elements to place them.
+- **Gestures**: swiping left to right opens Alarms, right to left opens Settings, and vertically switches the profile's screen.
+- **Brightness** with a clear rule: the panel's value rules, and if you change it on the clock, that value rules until the profile or the panel changes.
 
-Todo el detalle del diseño JSON, los límites y los campos está en [`docs/pantallas-y-temas.md`](docs/pantallas-y-temas.md).
+The full detail of the JSON design, its limits and fields is in [`docs/pantallas-y-temas.md`](docs/pantallas-y-temas.md) (in Spanish).
 
-### Altavoz Bluetooth y botones físicos
+### Bluetooth speaker and physical buttons
 
-- Modo altavoz del móvil, con emparejamiento visible como "Friday".
-- Los botones físicos funcionan: volumen más y menos en pasos del 5 por ciento, y el botón central silencia o activa el micrófono.
+- Phone speaker mode, with pairing visible as "Friday".
+- The physical buttons work: volume up and down in 5 percent steps, and the center button mutes or unmutes the microphone.
 
-### API para otras herramientas
+### API for other tools
 
-El reloj expone una API HTTP con token (alarmas, ajustes, sonidos, diseño, fotos, hablar, mostrar, volumen, brillo, Bluetooth y acciones en lote) que usan Hermes, el panel y `clock.py`. Está documentada en [`docs/api.md`](docs/api.md).
+The clock exposes a token-protected HTTP API (alarms, settings, sounds, design, photos, speak, display, volume, brightness, Bluetooth and batch actions) used by Hermes, the panel and `clock.py`. It is documented in [`docs/api.md`](docs/api.md) (in Spanish).
 
 ```bash
 curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
@@ -609,141 +616,143 @@ curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
 
 ---
 
-## Seguridad y privacidad
+## Security and privacy
 
-- **La voz es local.** Whisper y el motor de TTS corren en tu servidor; no hay nube de voz ni Google. El puente no registra lo que se dice cuando la palabra de activación no coincide.
-- **La API del reloj exige token** (comparado en tiempo constante) y, sin token configurado, responde 503 a todo. Por defecto escucha en todas las interfaces del reloj (accesible desde tu red local). Activa **solo Tailscale** en Ajustes para que escuche únicamente en esa IP; si Tailscale no está activo en ese momento, vuelve a escuchar en todas. No abras el puerto a internet.
-- **El token del reloj no sale del homelab:** el panel hace de proxy, el navegador nunca lo ve. Las peticiones del panel llevan una cabecera anti-CSRF, las subidas tienen límites de tamaño y se puede proteger con contraseña.
-- **Todo se valida de forma estricta.** El diseño de pantallas se valida entero o no se guarda; las fotos se reducen y se comprueban; los nombres de archivo se sanean.
-- **Reversible.** Los paquetes de Google solo se deshabilitan, hay backup completo previo y un script de rollback.
+- **Voice is local.** Whisper and the TTS engine run on your server; there is no voice cloud and no Google. The bridge does not log what is said when the wake word does not match.
+- **The clock API requires a token** (compared in constant time) and, with no token configured, answers 503 to everything. By default it listens on all of the clock's interfaces (reachable from your local network). Turn on **Tailscale only** in Settings so it listens only on that IP; if Tailscale is not active at that moment, it goes back to listening on all of them. Do not open the port to the internet.
+- **The clock token never leaves the homelab:** the panel acts as a proxy, the browser never sees it. Panel requests carry an anti-CSRF header, uploads have size limits and it can be password protected.
+- **Everything is strictly validated.** The screen design is validated entirely or not saved; photos are downscaled and checked; file names are sanitized.
+- **Reversible.** Google packages are only disabled, there is a full prior backup and a rollback script.
 
 > [!WARNING]
-> El `adb shell` del reloj liberado es root sin autenticación y SELinux queda permisivo. Es razonable para un reloj de mesilla en tu casa, pero no lo expongas a una red no confiable.
-> El asistente (Hermes) puede ejecutar comandos en tu servidor y obedece a la voz que oye el reloj. No abras en el router los puertos 8080, 8642, 8765, 8770 ni 11434, usa token de al menos 16 caracteres, pon contraseña al panel y no uses `hermes dashboard --insecure`: desactiva la autenticación del panel de Hermes y, si escucha fuera de `127.0.0.1`, cualquiera en tu red controla el agente. Por defecto deja Ollama (11434) y Hermes (8642) en `127.0.0.1` o tras la red de Docker con cortafuegos. El APK de release va firmado con la clave de depuración salvo que configures tu propio keystore ([docs/firma-release.md](docs/firma-release.md)): verifica su SHA-256. Detalles en [SECURITY.md](SECURITY.md).
+> The freed clock's `adb shell` is root without authentication and SELinux is left permissive. That is reasonable for a bedside clock in your home, but do not expose it to an untrusted network.
+> The assistant (Hermes) can run commands on your server and obeys the voice the clock hears. Do not open ports 8080, 8642, 8765, 8770 or 11434 on your router, use tokens of at least 16 characters, put a password on the panel and do not use `hermes dashboard --insecure`: it disables the Hermes panel authentication and, if it listens outside `127.0.0.1`, anyone on your network controls the agent. By default keep Ollama (11434) and Hermes (8642) on `127.0.0.1` or behind the Docker network with a firewall. The release APK is signed with the debug key unless you configure your own keystore ([docs/firma-release.md](docs/firma-release.md), in Spanish): verify its SHA-256. Details in [SECURITY.md](SECURITY.md).
 
 ---
 
-## Desarrollo y pruebas
+## Development and testing
 
-El proyecto tiene unas **240 pruebas automáticas** (121 de JVM, 80 de Python y 39 de Node), unas 5.700 líneas de Kotlin en la app, unas 3.800 de HTML, CSS y JavaScript entre el motor y el panel, y unas 1.650 de Python.
+The project has about **240 automated tests** (121 JVM, 80 Python and 39 Node), about 5,700 lines of Kotlin in the app, about 3,800 of HTML, CSS and JavaScript between the engine and the panel, and about 1,650 of Python.
 
 ```bash
-# App del reloj (JDK 17 y SDK de Android)
+# Clock app (JDK 17 and Android SDK)
 ./gradlew testDebugUnitTest
-./gradlew assembleDebug assembleRelease        # APK en app-android/build/outputs/apk/
+./gradlew assembleDebug assembleRelease        # APK in app-android/build/outputs/apk/
 
-# Skill de Hermes (contra un reloj simulado, sin dispositivo)
+# Hermes skill (against a simulated clock, no device)
 cd hermes-skill && pip install pytest httpx && pytest -q
 
-# Panel web
+# Web panel
 cd homelab/friday-panel && pip install -r requirements.txt pytest && pytest -q
 
-# Puente de voz (módulos puros)
+# Voice bridge (pure modules)
 cd homelab/clock-bridge && pytest -q test_wake.py test_route.py test_calc.py
 
-# Motor de pantallas y editor (Node 20 o superior)
+# Screen engine and editor (Node 20 or later)
 node --test app-android/face-tests/*.test.js homelab/friday-panel/tests-js/*.test.js
 
-# Sistema de diseño: lo generado debe estar al día
+# Design system: generated files must be up to date
 python tools/gen-tokens.py --check
 python tools/gen-icons.py --check
 bash tools/sync-face.sh --check
 ```
 
-La integración continua (`.github/workflows/build-apk.yml`) ejecuta exactamente eso y publica los APK como artefactos.
+Continuous integration (`.github/workflows/build-apk.yml`) runs exactly that and publishes the APKs as artifacts.
 
-### Estructura del repositorio
+### Repository structure
 
 ```text
-app-android/                      App Friday del reloj (Kotlin, sin dependencias de runtime)
-  src/main/assets/face/           Motor de pantallas (HTML, CSS y JS), copiado al panel
-design-system/                    Tokens (JSON) e iconos Lucide: la fuente de verdad del diseño
-tools/                            gen-tokens, gen-icons y sync-face (con --check)
+app-android/                      Friday app for the clock (Kotlin, no runtime dependencies)
+  src/main/assets/face/           Screen engine (HTML, CSS and JS), copied to the panel
+design-system/                    Tokens (JSON) and Lucide icons: the source of truth for design
+tools/                            gen-tokens, gen-icons and sync-face (with --check)
 homelab/
-  clock-bridge/                   Whisper, TTS y enrutado de preguntas (FastAPI)
-  friday-panel/                   Panel web para el móvil (FastAPI y JS vanilla)
-hermes-skill/                     Skill y tools de Hermes, más un reloj simulado para pruebas
-device-kit/                       Scripts para liberar el reloj (simulacro por defecto)
-docs/                             API, pantallas y temas, diseño, voz, Bluetooth, decisiones, specs y planes
-RUNBOOK.md                        Liberar el reloj paso a paso, con el reloj delante
-PLAN.md                           El plan original por fases
+  clock-bridge/                   Whisper, TTS and question routing (FastAPI)
+  friday-panel/                   Web panel for your phone (FastAPI and vanilla JS)
+hermes-skill/                     Hermes skill and tools, plus a simulated clock for tests
+device-kit/                       Scripts to free the clock (dry run by default)
+docs/                             API, screens and themes, design, voice, Bluetooth, decisions, specs and plans
+RUNBOOK.md                        Freeing the clock step by step, with the clock in front of you
+PLAN.md                           The original phased plan
 ```
 
 ---
 
-## Solución de problemas
+## Troubleshooting
 
-| Síntoma | Causa probable | Qué hacer |
+| Symptom | Likely cause | What to do |
 |---|---|---|
-| Hermes se niega a arrancar | Contexto de Ollama menor de 64.000 tokens | Sube `OLLAMA_CONTEXT_LENGTH=65536` (A1) y reinicia Ollama. |
-| El reloj no habla | La GSI no trae motor de voz y el puente no manda audio | Configura el TTS del puente (A5) o instala RHVoice o eSpeak NG (B5). |
-| Las alarmas no suenan tras un `am force-stop` | Android descarta los receptores de la app | Reinicia el reloj (`adb reboot`). No uses `force-stop`; para reiniciar la app basta `adb install -r`. |
-| Tailscale no vuelve tras reiniciar | Falta la VPN siempre activa | `settings put secure always_on_vpn_app com.tailscale.ipn` y `appops set com.tailscale.ipn ACTIVATE_VPN allow`. |
-| El micro oye poco o inventa textos | El micro digital es muy bajo y mete un pop al abrirse | La app ya normaliza y descarta el pop y los golpes. Habla cerca y sin golpear el aparato. |
-| Los botones de volumen o silencio no responden | La propiedad `ro.mi.handle_volume_key_in_oem_app` sigue en `true` | El `boot` parcheado la pone en `false` (`overlay.d/init.adb.rc`). Reaplica el paso B2. |
-| El audio Bluetooth no sale por el reloj | La GSI no trae el perfil A2DP sink | Sigue [`docs/altavoz-bluetooth.md`](docs/altavoz-bluetooth.md). |
-| El panel avisa de versiones distintas del motor | Reloj y panel se actualizaron por separado | Instala el APK actual en el reloj o redespliega el panel. |
-| La carátula vuelve a la versión nativa | El WebView falló o tardó en cargar | Es la red de seguridad prevista; las alarmas no se ven afectadas. Reinicia la app con `adb install -r`. |
-| El panel dice que el reloj no responde | Reloj apagado, sin red o Tailscale caído | Comprueba `clock.py status` y que ambos estén en la tailnet. |
+| Hermes refuses to start | Ollama context below 64,000 tokens | Set `OLLAMA_CONTEXT_LENGTH=65536` (A1) and restart Ollama. |
+| The clock does not speak | The GSI has no speech engine and the bridge sends no audio | Configure the bridge TTS (A5) or install RHVoice or eSpeak NG (B5). |
+| Alarms do not ring after an `am force-stop` | Android discards the app's receivers | Reboot the clock (`adb reboot`). Do not use `force-stop`; to restart the app, `adb install -r` is enough. |
+| Tailscale does not come back after a reboot | Always-on VPN is missing | `settings put secure always_on_vpn_app com.tailscale.ipn` and `appops set com.tailscale.ipn ACTIVATE_VPN allow`. |
+| The mic hears little or invents text | The digital mic is very quiet and adds a pop when it opens | The app already normalizes and discards the pop and bumps. Speak close and do not hit the device. |
+| The volume or mute buttons do not respond | The `ro.mi.handle_volume_key_in_oem_app` property is still `true` | The patched `boot` sets it to `false` (`overlay.d/init.adb.rc`). Redo step B2. |
+| Bluetooth audio does not play through the clock | The GSI has no A2DP sink profile | Follow [`docs/altavoz-bluetooth.md`](docs/altavoz-bluetooth.md). |
+| The panel warns about different engine versions | Clock and panel were updated separately | Install the current APK on the clock or redeploy the panel. |
+| The watch face falls back to the native one | The WebView failed or took too long to load | It is the intended safety net; alarms are not affected. Restart the app with `adb install -r`. |
+| The panel says the clock does not respond | Clock off, offline or Tailscale down | Check `clock.py status` and that both are on the tailnet. |
 
 ---
 
-## Hoja de ruta
+## Roadmap
 
-**Hecho**
+**Done**
 
-- Liberación del reloj, app, alarmas a prueba de fallos, asistente de voz local con palabra de activación y conversación continua.
-- Panel web, motor de pantallas, temas, perfiles, fotos, carruseles, capas y gestos.
-- Sistema de diseño Obsidiana, iconos Lucide y rediseño completo del panel.
-- Pantallas nativas del reloj (Alarmas, Ajustes, Bluetooth, alarma sonando y diálogos) con el sistema Obsidiana.
-- Botón físico de silencio del micrófono, brillo con regla propia y altavoz Bluetooth.
+- Freeing the clock, app, fail-safe alarms, local voice assistant with wake word and continuous conversation.
+- Web panel, screen engine, themes, profiles, photos, carousels, layers and gestures.
+- Obsidiana design system, Lucide icons and a full panel redesign.
+- Native clock screens (Alarms, Settings, Bluetooth, ringing alarm and dialogs) with the Obsidiana system.
+- Physical microphone mute button, brightness with its own rule and Bluetooth speaker.
 
-**Pendiente**
+**Pending**
 
-- **Cronómetro y temporizadores en pantalla, panel de control con tarjetas genéricas y vista de contenido del agente.**
-- **Recordatorios:** aviso hablado en el reloj y mensaje por Telegram a través del bot de Hermes.
-- **Elementos conectados:** datos del agente dentro de las pantallas de la carátula.
-- Reproductor de radio y podcasts por el altavoz, para escuchar sin Bluetooth.
-- Que los errores de validación de alarmas lleguen como un mapa por campo, en vez de un texto.
+- **On-screen stopwatch and timers, a control panel with generic cards and an agent content view.**
+- **Reminders:** spoken notice on the clock and a Telegram message through the Hermes bot.
+- **Connected elements:** agent data inside the watch face screens.
+- Radio and podcast player through the speaker, to listen without Bluetooth.
+- Alarm validation errors delivered as a per-field map, instead of a text.
 
 ---
 
-## Documentación
+## Documentation
 
-| Documento | Para qué sirve |
+The documents under `docs/` are written in Spanish.
+
+| Document | What it is for |
 |---|---|
-| [`RUNBOOK.md`](RUNBOOK.md) | Liberar el reloj con puntos de control y rollback |
-| [`docs/api.md`](docs/api.md) | Referencia completa de la API HTTP del reloj |
-| [`docs/pantallas-y-temas.md`](docs/pantallas-y-temas.md) | Diseño JSON, fotos, carruseles, capas y gestos |
-| [`docs/sistema-de-diseno.md`](docs/sistema-de-diseno.md) | Tokens, tipografía, iconos y regla de brillo |
-| [`docs/voz-friday.md`](docs/voz-friday.md) | Ponerle voz a Friday: Whisper, Piper, Kokoro y Telegram |
-| [`docs/recordatorios.md`](docs/recordatorios.md) | Recordatorios con aviso hablado en el reloj y mensaje por Telegram: API del puente, variables de entorno y seguridad |
-| [`docs/altavoz-bluetooth.md`](docs/altavoz-bluetooth.md) | Usar el reloj como altavoz del móvil |
-| [`docs/decisions.md`](docs/decisions.md) y [`docs/research-notes.md`](docs/research-notes.md) | Por qué cada decisión y lo investigado |
-| [`hermes-skill/README.md`](hermes-skill/README.md) | La skill y las tools de Hermes |
-| [`homelab/friday-panel/README.md`](homelab/friday-panel/README.md) | El panel web |
-| [`docs/superpowers/`](docs/superpowers/) | Especificaciones y planes de cada subproyecto |
+| [`RUNBOOK.md`](RUNBOOK.md) | Freeing the clock with checkpoints and rollback (in Spanish) |
+| [`docs/api.md`](docs/api.md) | Complete reference for the clock's HTTP API (in Spanish) |
+| [`docs/pantallas-y-temas.md`](docs/pantallas-y-temas.md) | JSON design, photos, carousels, layers and gestures (in Spanish) |
+| [`docs/sistema-de-diseno.md`](docs/sistema-de-diseno.md) | Tokens, typography, icons and the brightness rule (in Spanish) |
+| [`docs/voz-friday.md`](docs/voz-friday.md) | Giving Friday a voice: Whisper, Piper, Kokoro and Telegram (in Spanish) |
+| [`docs/recordatorios.md`](docs/recordatorios.md) | Reminders with a spoken notice on the clock and a Telegram message: bridge API, environment variables and security (in Spanish) |
+| [`docs/altavoz-bluetooth.md`](docs/altavoz-bluetooth.md) | Using the clock as your phone's speaker (in Spanish) |
+| [`docs/decisions.md`](docs/decisions.md) and [`docs/research-notes.md`](docs/research-notes.md) | Why each decision was made and what was researched (in Spanish) |
+| [`hermes-skill/README.md`](hermes-skill/README.md) | The Hermes skill and tools |
+| [`homelab/friday-panel/README.md`](homelab/friday-panel/README.md) | The web panel |
+| [`docs/superpowers/`](docs/superpowers/) | Specifications and plans for each subproject (in Spanish) |
 
 ---
 
-## Créditos y licencias
+## Credits and licenses
 
-Friday se apoya en el trabajo de mucha gente. Gracias a:
+Friday builds on the work of many people. Thanks to:
 
-- **Investigación del reloj:** [`AyraHikari/xiaomi-x04g-lx04`](https://github.com/AyraHikari/xiaomi-x04g-lx04) y [`octathorp/x04g_tools`](https://github.com/octathorp/x04g_tools).
-- **Herramientas de liberación:** [`mtkclient`](https://github.com/bkerler/mtkclient) de bkerler y [Magisk](https://github.com/topjohnwu/Magisk).
-- **Cerebro y modelos:** [Hermes Agent](https://hermes-agent.nousresearch.com/) de Nous Research, [Ollama](https://ollama.com/) y los modelos Qwen de Alibaba Cloud.
-- **Voz:** [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [Piper](https://github.com/rhasspy/piper) de Rhasspy, [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) y NVIDIA Magpie.
-- **Red y servicios:** [Tailscale](https://tailscale.com/), [FastAPI](https://fastapi.tiangolo.com/) y [Open-Meteo](https://open-meteo.com/).
-- **Diseño:** iconos [Lucide](https://lucide.dev/) (licencia ISC) y tipografía [Inter](https://rsms.me/inter/) (licencia SIL Open Font).
+- **Clock research:** [`AyraHikari/xiaomi-x04g-lx04`](https://github.com/AyraHikari/xiaomi-x04g-lx04) and [`octathorp/x04g_tools`](https://github.com/octathorp/x04g_tools).
+- **Freeing tools:** [`mtkclient`](https://github.com/bkerler/mtkclient) by bkerler and [Magisk](https://github.com/topjohnwu/Magisk).
+- **Brain and models:** [Hermes Agent](https://hermes-agent.nousresearch.com/) by Nous Research, [Ollama](https://ollama.com/) and the Qwen models from Alibaba Cloud.
+- **Voice:** [faster-whisper](https://github.com/SYSTRAN/faster-whisper), [Piper](https://github.com/rhasspy/piper) by Rhasspy, [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) and NVIDIA Magpie.
+- **Network and services:** [Tailscale](https://tailscale.com/), [FastAPI](https://fastapi.tiangolo.com/) and [Open-Meteo](https://open-meteo.com/).
+- **Design:** [Lucide](https://lucide.dev/) icons (ISC license) and [Inter](https://rsms.me/inter/) typography (SIL Open Font license).
 
-El código se publica bajo [Apache-2.0](LICENSE); los componentes de terceros están en [NOTICE](NOTICE).
+The code is released under [Apache-2.0](LICENSE); third-party components are listed in [NOTICE](NOTICE).
 
 > [!NOTE]
-> Este es un proyecto personal y no oficial, sin ninguna relación con Xiaomi, Google, Nous Research ni ninguna de las empresas citadas. Modificar el firmware de un dispositivo es responsabilidad de quien lo hace.
+> This is a personal, unofficial project with no relationship to Xiaomi, Google, Nous Research or any of the companies mentioned. Modifying a device's firmware is the responsibility of whoever does it.
 
 <div align="center">
 
-<sub>Hecho con paciencia, un destornillador mental y mucho café, para despertar mejor.</sub>
+<sub>Made with patience, a mental screwdriver and a lot of coffee, to wake up better.</sub>
 
 </div>
