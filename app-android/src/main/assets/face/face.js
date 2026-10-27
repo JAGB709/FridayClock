@@ -134,7 +134,7 @@
     contentEl.textContent = "";
     S.updaters = [];
     var screen = S.screens[S.index] || { elements: [] };
-    var list = screen.elements || [];
+    var list = Core.resolveAnchors(screen.elements || [], S.rows);
     for (var i = 0; i < list.length; i++) {
       try { contentEl.appendChild(buildElement(list[i])); }
       catch (e) { native("error", "elemento " + list[i].id + ": " + e.message); }
@@ -161,6 +161,8 @@
     var r = Core.cellRect(e, S.W, S.H, S.rows);
     var box = el("div", "el");
     box.setAttribute("data-id", e.id);
+    if (e.group) box.setAttribute("data-group", e.group);
+    if (e.anchor) box.setAttribute("data-anchor", e.anchor.to);
     box.style.left = r.left + "px"; box.style.top = r.top + "px";
     box.style.width = r.width + "px"; box.style.height = r.height + "px";
     box.style.color = "var(--" + (e.color || "fg") + ")";
