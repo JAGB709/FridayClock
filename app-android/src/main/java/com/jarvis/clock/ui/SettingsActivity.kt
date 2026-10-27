@@ -157,22 +157,19 @@ class SettingsActivity : Activity() {
 
     /** Campo de token: oculto por defecto, con botón Mostrar/Ocultar. */
     private fun secret(label: String, value: String, onSave: (String) -> Unit) {
-        form.addView(TextView(this).apply { text = label; textSize = 14f; setTextColor(Ui.DIM); typeface = Fonts.regular(this@SettingsActivity) })
-        val e = EditText(this).apply {
-            setText(value); inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD; setSingleLine()
-            setTextColor(Color.WHITE); setHintTextColor(Color.DKGRAY)
-            transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+        add(Widgets.label(this, label, 14, Tokens.Color.TEXT_MUTED).apply { setPadding(0, Ui.dp(this@SettingsActivity, 8), 0, Ui.dp(this@SettingsActivity, 4)) })
+        val e = Widgets.field(this, value, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        e.transformationMethod = android.text.method.PasswordTransformationMethod.getInstance()
+        add(e, LinearLayout.LayoutParams(-1, Ui.dp(this, Widgets.TOUCH)))
+        var shown = false
+        val toggle = Widgets.button(this, "Mostrar", Widgets.Kind.GHOST) {}
+        toggle.setOnClickListener {
+            shown = !shown
+            e.transformationMethod = if (shown) android.text.method.HideReturnsTransformationMethod.getInstance()
+                else android.text.method.PasswordTransformationMethod.getInstance()
+            toggle.text = if (shown) "Ocultar" else "Mostrar"
         }
-        form.addView(e)
-        form.addView(Button(this).apply {
-            text = "Mostrar"; isAllCaps = false
-            setOnClickListener {
-                val hidden = e.transformationMethod is android.text.method.PasswordTransformationMethod
-                e.transformationMethod = if (hidden) android.text.method.HideReturnsTransformationMethod.getInstance()
-                    else android.text.method.PasswordTransformationMethod.getInstance()
-                text = if (hidden) "Ocultar" else "Mostrar"
-            }
-        }, LinearLayout.LayoutParams(-2, -2))
+        add(toggle, LinearLayout.LayoutParams(-2, Ui.dp(this, Widgets.TOUCH)))
         saves += { onSave(e.text.toString()) }
     }
 
