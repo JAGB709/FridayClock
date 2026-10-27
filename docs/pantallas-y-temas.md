@@ -36,3 +36,21 @@ sujeta dos, y libera la saliente justo después, para cuidar el reloj (1 GB de R
 **Gestos.** En la carátula, deslizar de izquierda a derecha abre Alarmas y de derecha a
 izquierda abre Ajustes; para cambiar de pantalla del perfil se desliza en vertical. En la pantalla de
 alarma sonando, deslizar no hace nada.
+
+**Cronómetro y temporizadores.** Dos elementos nuevos de la carátula. `stopwatch` (`controls`,
+por defecto `true`) muestra el cronómetro con los botones iniciar o pausar y reiniciar. `timers`
+(`count` de 1 a 3, `controls`) muestra los temporizadores que quedan, primero los que antes
+acaban y después los pausados, con los botones pausar o reanudar y cancelar. Los botones solo
+existen en el reloj (no en la vista previa ni en el editor) y son una lista cerrada de órdenes;
+la alarma de un temporizador sigue siendo una alarma del sistema, no depende del motor. Los datos
+llevan tiempos absolutos y la hora del reloj, así que la cuenta es correcta aunque el navegador
+del panel vaya desfasado. Los mismos controles están en Inicio del panel (tarjetas Cronómetro y
+Temporizadores) y en la API (`/stopwatch`, `/timer`, `/timers`, ver `docs/api.md`). Pausar un
+temporizador borra su alarma y guarda lo que faltaba (en memoria); reanudarlo crea otra con ese
+tiempo.
+
+**Vista de contenido del agente.** `POST /display` con `type` `text` o `markdown` (y `title`
+opcional) pinta una tarjeta con título y texto con estilo (títulos, viñetas, citas, negrita,
+cursiva y código; hasta 4000 caracteres y 40 bloques). Nunca interpreta HTML ni activa enlaces o
+imágenes. La lista blanca de acciones del asistente sigue bloqueando `display`: solo la API
+autenticada lo muestra.
