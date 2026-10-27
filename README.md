@@ -4,6 +4,8 @@
 
 ### Un despertador y asistente de voz propio, sin Google, en un Xiaomi Mi Smart Clock
 
+<sub>Xiaomi Mi Smart Clock (modelo X04G / LX04, MediaTek MT8167) &middot; root, sin Google, asistente de voz local, Hermes Agent, Ollama, Tailscale</sub>
+
 ![Android](https://img.shields.io/badge/Android-10-3DDC84?style=flat-square&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-1.9-7F52FF?style=flat-square&logo=kotlin&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
@@ -360,8 +362,8 @@ curl http://localhost:8642/v1/models -H "Authorization: Bearer pon-aqui-una-clav
 Es el oído (Whisper) y la boca (Piper, Kokoro o Magpie) del reloj, en local. Habla con Hermes por su API.
 
 ```bash
-git clone https://github.com/JAGB709/Mi-Smart-Clock.git
-cd Mi-Smart-Clock/homelab/clock-bridge
+git clone https://github.com/JAGB709/FridayClock.git
+cd FridayClock/homelab/clock-bridge
 ```
 
 Crea un archivo `.env` con el contenido siguiente (ajusta los valores):
@@ -411,7 +413,7 @@ tailscale ip -4          # apunta esta IP (100.x.y.z): la usará el reloj
 Deja que Friday controle el reloj (alarmas, hablar, mostrar, Bluetooth, ajustes y diseño) desde cualquier canal:
 
 ```bash
-cp -r ~/Mi-Smart-Clock/hermes-skill/mi-smart-clock ~/.hermes/skills/
+cp -r ~/FridayClock/hermes-skill/mi-smart-clock ~/.hermes/skills/
 # la configuración del reloj (rellenarás la IP y el token en la Parte C)
 cat > ~/.config/mi-smart-clock.json <<'JSON'
 {"url": "http://<ip-tailscale-reloj>:8080", "token": "<token-del-reloj>"}
@@ -460,7 +462,7 @@ Abre `http://<ip-tailscale-homelab>:8770` en el móvil. Puedes añadirlo a la pa
 #### B1. Preparar el ordenador de flasheo
 
 ```bash
-cd ~/Mi-Smart-Clock
+cd ~/FridayClock
 ./device-kit/setup_host.sh                      # instala mtkclient, adb y udev
 git clone https://github.com/bkerler/mtkclient device-kit/vendor/mtkclient
 pip3 install -r device-kit/vendor/mtkclient/requirements.txt
