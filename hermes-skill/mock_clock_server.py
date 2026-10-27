@@ -16,6 +16,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
 TOKEN = "secreto"
+BRIDGE_TOKEN = "token-del-puente-1234"  # el puente usa Authorization: Bearer
+REMINDERS: list[dict] = []
+NOTIFIED: list[dict] = []
 ALARMS: list[dict] = []
 _next_id = [1]
 
@@ -272,7 +275,41 @@ class Handler(BaseHTTPRequestHandler):
     def _query(self) -> dict:
         return {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
 
+    def _bridge(self, method: str):
+        """Imita /v1/notify y /v1/reminders del puente (otro servicio, otro token)."""
+        if self.headers.get("Authorization") != f"Bearer {BRIDGE_TOKEN}":
+            return self._send(401, {"detail": "token inválido"})
+        path = self._path
+        body = self._read() if method in ("POST",) else {}
+        if method == "GET" and path == "/v1/reminders":
+            return self._send(200, {"ok": True, "reminders": REMINDERS})
+        if method == "POST" and path == "/v1/reminders":
+            text = str(body.get("text", "")).strip()
+            if not text or len(text) > 300 or (("at" in body) == ("in_minutes" in body)) \
+                    or body.get("repeat", "none") not in ("none", "daily", "weekdays", "weekly") \
+                    or body.get("channel", "clock") not in ("clock", "telegram", "both"):
+                return self._send(400, {"detail": "datos no válidos"})
+            item = {"id": f"{len(REMINDERS) + 1:012x}", "text": text, "at": body.get("at") or "en-%s-min" % body["in_minutes"],
+                    "repeat": body.get("repeat", "none"), "channel": body.get("channel", "clock")}
+            REMINDERS.append(item)
+            return self._send(200, {"ok": True, "reminder": item})
+        if method == "DELETE" and path.startswith("/v1/reminders/"):
+            rid = path.rsplit("/", 1)[1]
+            before = len(REMINDERS)
+            REMINDERS[:] = [r for r in REMINDERS if r["id"] != rid]
+            if len(REMINDERS) == before:
+                return self._send(404, {"detail": "no existe ese recordatorio"})
+            return self._send(200, {"ok": True})
+        if method == "POST" and path == "/v1/notify":
+            if not str(body.get("text", "")).strip():
+                return self._send(400, {"detail": "datos no válidos"})
+            NOTIFIED.append(body)
+            return self._send(200, {"ok": True, "results": {"clock": True}})
+        return self._send(404, {"detail": "no existe"})
+
     def do_GET(self):
+        if self._path.startswith("/v1/"):
+            return self._bridge("GET")
         if self._path == "/health":
             return self._send(200, {"ok": True})
         if not self._auth():
@@ -305,6 +342,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, {"ok": False, "error": "no existe"})
 
     def do_PUT(self):
+        if self._path.startswith("/v1/"):
+            return self._bridge("PUT")
         if not self._auth():
             return self._send(401, {"ok": False, "error": "token inválido"})
         if self._path == "/settings":
@@ -323,6 +362,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, {"ok": False, "error": "no existe"})
 
     def do_DELETE(self):
+        if self._path.startswith("/v1/"):
+            return self._bridge("DELETE")
         if not self._auth():
             return self._send(401, {"ok": False, "error": "token inválido"})
         if self._path.startswith("/sounds/"):
@@ -345,6 +386,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, {"ok": False, "error": "no existe"})
 
     def do_POST(self):
+        if self._path.startswith("/v1/"):
+            return self._bridge("POST")
         if not self._auth():
             return self._send(401, {"ok": False, "error": "token inválido"})
         if self._path == "/sounds":
@@ -477,6 +520,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def reset():
     ALARMS.clear()
+    REMINDERS.clear(); NOTIFIED.clear()
     _next_id[0] = 1
     SETTINGS.clear(); SETTINGS.update(copy.deepcopy(DEFAULT_SETTINGS))
     SOUNDS[:] = copy.deepcopy(DEFAULT_SOUNDS)

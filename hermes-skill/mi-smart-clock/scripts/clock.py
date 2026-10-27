@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
@@ -27,6 +28,41 @@ def config():
     if not url or not token:
         sys.exit("Falta CLOCK_URL/CLOCK_TOKEN (o ~/.config/mi-smart-clock.json)")
     return url.rstrip("/"), token
+
+
+def bridge_config():
+    url, token = os.getenv("BRIDGE_URL"), os.getenv("BRIDGE_TOKEN")
+    path = os.path.expanduser("~/.config/mi-smart-clock.json")
+    if (not url or not token) and os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            c = json.load(f)
+        url, token = url or c.get("bridge_url"), token or c.get("bridge_token")
+    if not url or not token:
+        sys.exit("Falta BRIDGE_URL/BRIDGE_TOKEN (o bridge_url/bridge_token en ~/.config/mi-smart-clock.json)")
+    return url.rstrip("/"), token
+
+
+def bridge_call(method, path, body=None):
+    """Recordatorios: los guarda y planifica el puente (homelab), no el reloj."""
+    url, token = bridge_config()
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(
+        url + path, data=data, method=method,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            out = json.load(r)
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read() or b"{}").get("detail")
+        except ValueError:
+            detail = None
+        out = {"ok": False, "error": str(detail) if detail else f"HTTP {e.code}"}
+    except OSError as e:
+        out = {"ok": False, "error": f"puente inalcanzable: {type(e).__name__}"}
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0 if out.get("ok") else 1
 
 
 def call(method, path, body=None):
@@ -132,7 +168,29 @@ def main():
     sub.add_parser("design-reset", help="restaurar el diseño inicial")
     sub.add_parser("backgrounds", help="fondos de pantalla subidos")
 
+    ra = sub.add_parser("reminder-add", help="recordatorio con aviso hablado en el reloj y/o Telegram")
+    ra.add_argument("text", help="texto del aviso (máx. 300 caracteres)")
+    rg = ra.add_mutually_exclusive_group(required=True)
+    rg.add_argument("--at", help="AAAA-MM-DDTHH:MM en hora local")
+    rg.add_argument("--in-minutes", type=int, help="dentro de N minutos")
+    ra.add_argument("--repeat", choices=["none", "daily", "weekdays", "weekly"], default="none")
+    ra.add_argument("--channel", choices=["clock", "telegram", "both"], default="clock")
+    sub.add_parser("reminder-list", help="recordatorios pendientes")
+    rd = sub.add_parser("reminder-delete", help="borrar un recordatorio por id")
+    rd.add_argument("id")
+
     x = p.parse_args()
+    if x.cmd == "reminder-add":
+        body = {"text": x.text, "repeat": x.repeat, "channel": x.channel}
+        if x.at:
+            body["at"] = x.at
+        else:
+            body["in_minutes"] = x.in_minutes
+        return bridge_call("POST", "/v1/reminders", body)
+    if x.cmd == "reminder-list":
+        return bridge_call("GET", "/v1/reminders")
+    if x.cmd == "reminder-delete":
+        return bridge_call("DELETE", "/v1/reminders/" + urllib.parse.quote(x.id, safe=""))
     if x.cmd == "status":
         return call("GET", "/status")
     if x.cmd == "alarms":

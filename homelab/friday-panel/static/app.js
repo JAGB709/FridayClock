@@ -45,7 +45,9 @@ async function api(method, path, body, raw) {
   }
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && data.login_required) { showLogin(); }
-  if (res.status === 502) setConn(false); else if (res.ok) setConn(true);
+  // Un 502 de /api/reminders es del puente de voz, no del reloj.
+  const fromBridge = path.startsWith("/api/reminders");
+  if (res.status === 502 && !fromBridge) setConn(false); else if (res.ok) setConn(true);
   return { ok: res.ok && data.ok !== false, status: res.status, data };
 }
 
@@ -483,8 +485,70 @@ function alarmCard(a) {
   return card;
 }
 
+// ------------------------------------------------------------------ Recordatorios (en Alarmas)
+
+// Lo escrito en el formulario sobrevive a los repintados de la lista.
+const remForm = { text: "", at: "", repeat: "none", channel: "clock" };
+
+function reminderRow(it, reload) {
+  const C = window.RemindersCore;
+  const del = async () => {
+    if (!await confirmInPage(`¿Borrar el recordatorio "${it.text}"?`, "Borrar")) return;
+    const r = await api("DELETE", `/api/reminders/${encodeURIComponent(it.id)}`);
+    toast(r.ok ? "Recordatorio borrado" : errText(r), !r.ok);
+    reload();
+  };
+  return h("div", { class: "row between rem-item" },
+    h("div", { class: "rem-main" },
+      h("div", { class: "rem-text" }, it.text),
+      h("div", { class: "muted rem-meta" }, `${C.whenLabel(it.at)} · ${C.repeatLabel(it.repeat)} · ${C.channelLabel(it.channel)}`)),
+    iconButton("trash-2", `Borrar el recordatorio ${it.text}`, del));
+}
+
+function reminderForm(reload) {
+  const C = window.RemindersCore;
+  if (!remForm.at) remForm.at = C.defaultAt(new Date());
+  const text = h("input", { type: "text", maxlength: String(C.MAX_TEXT), placeholder: "Qué quieres recordar…", enterkeyhint: "done",
+    "aria-label": "Texto del recordatorio", value: remForm.text, oninput: (ev) => { remForm.text = ev.target.value; } });
+  const at = h("input", { type: "datetime-local", "aria-label": "Fecha y hora del recordatorio", value: remForm.at,
+    onchange: (ev) => { remForm.at = ev.target.value; } });
+  const repeat = h("select", { "aria-label": "Repetición", onchange: (ev) => { remForm.repeat = ev.target.value; } },
+    C.REPEATS.map(([v, l]) => h("option", { value: v, selected: v === remForm.repeat }, l)));
+  const channel = segmented(C.CHANNELS, remForm.channel, (v) => { remForm.channel = v; });
+  const submit = async (ev) => {
+    ev.preventDefault();
+    const bad = C.validate(remForm.text, remForm.at);
+    if (bad) { toast(bad, true); return; }
+    const r = await api("POST", "/api/reminders", { text: remForm.text.trim(), at: remForm.at, repeat: remForm.repeat, channel: remForm.channel });
+    if (!r.ok) { toast(errText(r), true); return; }
+    remForm.text = "";
+    remForm.at = "";
+    toast("Recordatorio creado");
+    reload();
+  };
+  return h("form", { class: "stack rem-form", onsubmit: submit },
+    text, at, repeat, channel,
+    btn("Añadir recordatorio", null, "", "plus", { type: "submit" }));
+}
+
+// Tarjeta con la lista y el formulario. El puente de voz los guarda; sin él se explica qué falta.
+function remindersCard(rr, reload) {
+  const head = h("h2", {}, "Recordatorios");
+  const intro = h("p", { class: "muted" }, "Avisan hablando en el reloj, por Telegram o por ambos.");
+  if (!rr.ok && rr.data.configured === false) {
+    return h("div", { class: "card reminders stack" }, head, warnBox("Los recordatorios no están configurados en el panel (BRIDGE_URL y BRIDGE_TOKEN)."));
+  }
+  if (!rr.ok) {
+    return h("div", { class: "card reminders stack" }, head, errorState(errText(rr), reload));
+  }
+  const items = rr.data.reminders || [];
+  return h("div", { class: "card reminders stack" }, head, intro,
+    items.length ? h("div", {}, items.map((it) => reminderRow(it, reload))) : emptyState("clock", "No hay recordatorios"),
+    reminderForm(reload));
+}
+
 async function renderAlarms() {
-  const r = await api("GET", "/api/alarms");
+  const [r, rr] = await Promise.all([api("GET", "/api/alarms"), api("GET", "/api/reminders")]);
   if (route.tab !== "alarms" || route.edit != null) return;
   if (!r.ok) { showError(r); return; }
   const all = r.data.alarms || [];
@@ -505,6 +569,7 @@ async function renderAlarms() {
           const r2 = await api("DELETE", `/api/alarms/${a.id}`);
           toast(r2.ok ? "Cancelado" : errText(r2), !r2.ok); renderAlarms();
         }, "small ghost", "x", { "aria-label": `Cancelar ${a.label || "temporizador"}` })))) : null,
+    remindersCard(rr, renderAlarms),
   );
   setFab(h("button", { id: "fab", type: "button", class: "fab", "aria-label": "Nueva alarma", title: "Nueva alarma", onclick: create }, icon("plus", 28)));
 }

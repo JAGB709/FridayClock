@@ -15,6 +15,8 @@ Variables de entorno (`.env`):
 | `PANEL_PASSWORD` | opcional; si la pones, el panel pide contraseña |
 | `PANEL_ALLOWED_HOSTS` | opcional; nombres de Host aceptados, separados por comas (frena el DNS rebinding) |
 | `PANEL_COOKIE_SECURE` | `1` si lo sirves por HTTPS (Tailscale Serve) |
+| `BRIDGE_URL` | opcional, activa los recordatorios: `http://127.0.0.1:8765` (puente en el mismo equipo) |
+| `BRIDGE_TOKEN` | opcional, el `BRIDGE_TOKEN` del puente; el navegador nunca lo ve. Ver [`docs/recordatorios.md`](../../docs/recordatorios.md) |
 | `CLOCK_TIMEOUT_S` | `5` |
 
 **Nota:** El motor de la vista previa (`static/face/`) es una copia del del APK: tras cambiar `app-android/src/main/assets/face/` ejecuta `bash tools/sync-face.sh`.

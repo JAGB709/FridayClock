@@ -41,3 +41,4 @@ hwparam.json
 *.onnx
 *.gguf
 models/
+homelab/clock-bridge/data/

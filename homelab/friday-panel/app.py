@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import tempfile
 import time
@@ -51,6 +52,7 @@ FACE_FILES = ("index.html", "tokens.css", "face.css", "icons.js", "face-core.js"
 BG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 BG_MIME = {"image/jpeg", "image/png", "image/webp"}
 MAX_BG_BYTES = 8 * 1024 * 1024
+MAX_REMINDER_TEXT = 300
 
 
 SPOOL_RAM_BYTES = 256 * 1024  # por encima de esto la subida va a un fichero temporal, no a RAM
@@ -101,6 +103,8 @@ class Config:
     timeout_s: float = 5.0
     allowed_hosts: str = ""  # nombres de Host aceptados, separados por comas; vacío = cualquiera
     cookie_secure: bool = False
+    bridge_url: str = ""    # puente del homelab (recordatorios); opcional
+    bridge_token: str = ""
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -111,7 +115,8 @@ class Config:
         if not url.startswith(("http://", "https://")):
             raise SystemExit("CLOCK_URL debe empezar por http:// o https:// (p. ej. http://100.x.y.z:8080)")
         return cls(url, token, os.getenv("PANEL_PASSWORD", ""), float(os.getenv("CLOCK_TIMEOUT_S", "5")),
-                   os.getenv("PANEL_ALLOWED_HOSTS", ""), os.getenv("PANEL_COOKIE_SECURE", "") == "1")
+                   os.getenv("PANEL_ALLOWED_HOSTS", ""), os.getenv("PANEL_COOKIE_SECURE", "") == "1",
+                   os.getenv("BRIDGE_URL", "").rstrip("/"), os.getenv("BRIDGE_TOKEN", ""))
 
 
 def _error(status: int, msg: str) -> JSONResponse:
@@ -162,6 +167,30 @@ def create_app(cfg: Config) -> FastAPI:
         if not isinstance(data, dict):
             data = {"ok": r.is_success, "data": data}
         return JSONResponse(data, status_code=r.status_code)
+
+    async def bridge(method: str, path: str, *, json: dict | None = None) -> JSONResponse:
+        """Recordatorios: los guarda el puente (BRIDGE_URL). El token del puente tampoco llega al navegador."""
+        if not cfg.bridge_url or not cfg.bridge_token:
+            return JSONResponse({"ok": False, "configured": False,
+                                 "error": "Los recordatorios no están configurados (BRIDGE_URL y BRIDGE_TOKEN)"},
+                                status_code=503)
+        try:
+            async with httpx.AsyncClient(base_url=cfg.bridge_url, timeout=cfg.timeout_s) as c:
+                r = await c.request(method, path, json=json, headers={"Authorization": f"Bearer {cfg.bridge_token}"})
+        except httpx.HTTPError:
+            return _error(502, "El puente de voz no responde")
+        if r.status_code in (401, 503):
+            return _error(502, "El token del puente (BRIDGE_TOKEN) no es válido o falta en el puente")
+        try:
+            data = r.json()
+        except ValueError:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        if not r.is_success:
+            detail = data.get("detail")
+            return _error(r.status_code, detail if isinstance(detail, str) else f"El puente respondió {r.status_code}")
+        return JSONResponse({**data, "ok": True})
 
     @app.middleware("http")
     async def host_origin(request: Request, call_next):
@@ -311,6 +340,31 @@ def create_app(cfg: Config) -> FastAPI:
             return _error(404, f"acción desconocida: {action}")
         path, payload = QUICK_ACTIONS[action]
         return await clock("POST", path, json=payload)
+
+    @app.get("/api/reminders")
+    async def list_reminders():
+        return await bridge("GET", "/v1/reminders")
+
+    @app.post("/api/reminders")
+    async def create_reminder(body: dict = Body(...)):
+        # Solo se reenvían los campos conocidos, con su tipo: el puente vuelve a validar todo.
+        text = body.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return _error(400, "Escribe el texto del recordatorio")
+        if len(text) > MAX_REMINDER_TEXT:
+            return _error(400, f"El texto supera {MAX_REMINDER_TEXT} caracteres")
+        at = body.get("at")
+        if not isinstance(at, str) or not at:
+            return _error(400, "Elige la fecha y la hora")
+        out = {"text": text, "at": at[:40], "repeat": str(body.get("repeat", "none"))[:20],
+               "channel": str(body.get("channel", "clock"))[:20]}
+        return await bridge("POST", "/v1/reminders", json=out)
+
+    @app.delete("/api/reminders/{rid}")
+    async def delete_reminder(rid: str):
+        if not re.fullmatch(r"[0-9a-f]{12}", rid):
+            return _error(404, "No existe ese recordatorio")
+        return await bridge("DELETE", f"/v1/reminders/{rid}")
 
     panel_face_version = face_version(STATIC / "face")
 

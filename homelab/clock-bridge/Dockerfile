@@ -5,7 +5,7 @@ RUN useradd --system --create-home --uid 10001 app \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY bridge.py wake.py route.py calc.py .
+COPY bridge.py wake.py route.py calc.py reminders.py .
 ENV PORT=8765 HOME=/home/app
 EXPOSE 8765
 USER app

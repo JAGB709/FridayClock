@@ -40,6 +40,8 @@ Sin token configurado, el servidor responde 503 a todo.
 | `POST /volume` · `/brightness` | `{"level":40}` | volumen multimedia y brillo (el brillo fija el valor manual del reloj, ver "Sistema de diseño") |
 | `POST /actions` | `{"actions":[{"type":"set_alarm",…},…]}` | lote de acciones |
 
+Los recordatorios y avisos no pasan por el reloj: los sirve el puente de voz (`/v1/notify` y `/v1/reminders`, con `Authorization: Bearer <BRIDGE_TOKEN>`). Ver [`recordatorios.md`](recordatorios.md). El puente avisa al reloj con `POST /speak` y `POST /display` de esta misma API.
+
 ```bash
 curl -X POST http://<ip-reloj>:8080/alarm -H "X-Auth-Token: <token>" \
   -H "Content-Type: application/json" \

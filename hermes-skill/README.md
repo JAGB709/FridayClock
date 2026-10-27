@@ -21,6 +21,8 @@ export CLOCK_URL="http://<ip-tailscale-reloj>:8080"
 export CLOCK_TOKEN="<token del reloj>"   # Ajustes del reloj > Token, o por ADB
 ```
 
+Los recordatorios (`reminder-add`, `reminder-list`, `reminder-delete`; funciones `reminder_*`) hablan con el puente del homelab, no con el reloj, y necesitan `BRIDGE_URL` (por ejemplo `http://127.0.0.1:8765`) y `BRIDGE_TOKEN`. Ver [`docs/recordatorios.md`](../docs/recordatorios.md).
+
 La skill acepta además `~/.config/mi-smart-clock.json`:
 
 ```json

@@ -135,7 +135,7 @@ button[aria-busy=true] { cursor: progress; }
 label.field, div.field { display: block; margin: var(--space-4) 0; }
 label.field > span:first-child, div.field > span:first-child { display: block; color: var(--text-muted); font-size: var(--fs-2); margin-bottom: var(--space-2); }
 
-input[type=text], input[type=number], input[type=time], input[type=password], input[type=search], select, textarea {
+input[type=text], input[type=number], input[type=time], input[type=datetime-local], input[type=password], input[type=search], select, textarea {
   width: 100%;
   min-height: var(--touch);
   padding: 0 var(--space-3);
@@ -332,6 +332,14 @@ body:has(#fab) #view { padding-bottom: calc(56px + var(--space-4)); }
 .fab { animation: pop var(--dur-base) var(--ease); }
 .fab:focus-visible { outline-offset: 3px; }
 .fab:active:not(:disabled) { transform: scale(.94); }
+/* Recordatorios (pestaña Alarmas) */
+.reminders { margin-top: var(--space-4); }
+.rem-item { min-height: 56px; gap: var(--space-3); border-top: 1px solid var(--border); }
+.rem-item:first-of-type { border-top: 0; }
+.rem-main { flex: 1 1 auto; min-width: 0; }
+.rem-text { overflow-wrap: anywhere; }
+.rem-meta { font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.rem-form { margin-top: var(--space-3); }
 .others-row { min-height: 56px; border-top: 1px solid var(--border); }
 .others-row:first-of-type { border-top: 0; }
 .others-row .t { font-variant-numeric: tabular-nums; color: var(--text-muted); }

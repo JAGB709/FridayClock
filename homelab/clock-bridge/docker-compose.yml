@@ -6,6 +6,7 @@ services:
     volumes:
       - ./models:/models:ro             # voces de Piper (solo lectura; deben ser legibles por el uid 10001)
       - whisper-cache:/home/app/.cache  # modelos de Whisper descargados (usuario no root)
+      - ./data:/data                    # recordatorios (reminders.json); debe ser escribible por el uid 10001
     security_opt:
       - no-new-privileges:true
     cap_drop:
