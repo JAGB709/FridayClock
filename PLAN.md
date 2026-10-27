@@ -15,7 +15,7 @@ Este documento tiene dos usos:
 - Objetivo: rootear la firmware global con un `boot.img` parcheado con Magisk,
   **deshabilitar (no desinstalar)** Google Assistant y servicios de Google, e instalar
   la app propia **Friday** como launcher. El "cerebro" (Hermes Agent) vive en un
-  servidor en Madrid; el reloj está en Países Bajos. Se comunican por **Tailscale**.
+  servidor y reloj en sitios distintos de la misma tailnet. Se comunican por **Tailscale**.
 - Repos de referencia (leídos, no asumidos): `AyraHikari/xiaomi-x04g-lx04`,
   `octathorp/x04g_tools`, `bkerler/mtkclient`. Hallazgos en `docs/research-notes.md`.
 

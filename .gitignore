@@ -42,3 +42,4 @@ hwparam.json
 *.gguf
 models/
 homelab/clock-bridge/data/
+.claude/

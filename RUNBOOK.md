@@ -89,7 +89,7 @@ y solo cuando estés seguro repites con `DRY_RUN=0`.
    ```
    Inicia sesión en **Tailscale** en el reloj.
 
-9. **Prueba de humo** (desde el ordenador y desde Madrid por Tailscale):
+9. **Prueba de humo** (desde el ordenador y desde otra red por Tailscale):
    ```bash
    DRY_RUN=0 CLOCK_URL="http://<ip-tailscale-reloj>:8080" CLOCK_TOKEN="$CLOCK_TOKEN" \
      ./device-kit/07_smoke_test.sh

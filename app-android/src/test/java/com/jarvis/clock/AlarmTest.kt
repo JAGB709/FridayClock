@@ -17,7 +17,7 @@ import java.util.TimeZone
 class AlarmTest {
 
     // nextTrigger usa la zona por defecto del dispositivo; en el reloj es la suya.
-    // En los tests fijamos Europe/Amsterdam (donde vive el reloj) para reproducirlo.
+    // En los tests fijamos Europe/Amsterdam (la zona horaria de ejemplo) para reproducirlo.
     private val saved = TimeZone.getDefault()
     @Before fun setUp() { TimeZone.setDefault(TimeZone.getTimeZone("Europe/Amsterdam")) }
     @After fun tearDown() { TimeZone.setDefault(saved) }
