@@ -1,6 +1,8 @@
-fastapi>=0.110
-uvicorn>=0.29
-httpx>=0.27
-faster-whisper>=1.0
-kokoro-onnx>=0.4   # voz neural más natural (opcional, TTS_ENGINE=kokoro)
-# Opcional, voz neural local: pip install piper-tts  (y descarga una voz es_ES)
+# Versiones exactas. Dependabot propone las subidas.
+# Para fijar tambien las transitivas con hashes: pip-compile --generate-hashes requirements.txt
+fastapi==0.142.2
+uvicorn==0.54.0
+httpx==0.28.1
+faster-whisper==1.2.1
+kokoro-onnx==0.6.1   # voz neural mas natural (opcional, TTS_ENGINE=kokoro)
+piper-tts==1.8.0     # voz local por defecto

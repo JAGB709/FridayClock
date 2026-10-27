@@ -1,3 +1,5 @@
-fastapi>=0.110
-uvicorn>=0.29
-httpx>=0.27
+# Versiones exactas (las probadas por los tests). Dependabot propone las subidas.
+# Para fijar tambien las transitivas con hashes: pip-compile --generate-hashes requirements.txt
+fastapi==0.142.2
+uvicorn==0.54.0
+httpx==0.28.1
