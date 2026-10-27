@@ -74,3 +74,28 @@ def test_cabeceras_de_seguridad(client):
     assert f["x-frame-options"] == "SAMEORIGIN"
     # también en errores de otros middlewares
     assert client.post("/login", headers={"X-Friday": "0"}).headers["x-frame-options"] == "DENY"
+
+
+def test_subida_sin_content_length_se_corta_al_pasar_el_tope(make_client):
+    c = make_client()
+
+    def trozos():
+        for _ in range(7):  # 7 MB en trozos, sin Content-Length
+            yield b"x" * (1024 * 1024)
+    r = c.post("/api/sounds", params={"name": "grande.mp3"}, content=trozos())
+    assert r.status_code == 413
+
+
+def test_subida_valida_grande_pasa_por_disco(make_client):
+    c = make_client()
+    r = c.post("/api/backgrounds", params={"name": "ok.jpg"}, content=b"\xff\xd8" + b"x" * (3 * 1024 * 1024))
+    assert r.status_code == 200
+    assert c.delete("/api/backgrounds/ok.jpg").status_code == 200
+
+
+def test_api_bg_limita_el_tamano_de_la_respuesta(make_client, monkeypatch):
+    c = make_client()
+    c.post("/api/backgrounds", params={"name": "a.jpg"}, content=b"\xff\xd8" + b"x" * 100)
+    assert c.get("/api/bg/a.jpg").status_code == 200
+    monkeypatch.setattr(panel, "MAX_BG_BYTES", 50)
+    assert c.get("/api/bg/a.jpg").status_code == 502

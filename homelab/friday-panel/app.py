@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,6 +51,38 @@ FACE_FILES = ("index.html", "tokens.css", "face.css", "icons.js", "face-core.js"
 BG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 BG_MIME = {"image/jpeg", "image/png", "image/webp"}
 MAX_BG_BYTES = 8 * 1024 * 1024
+
+
+SPOOL_RAM_BYTES = 256 * 1024  # por encima de esto la subida va a un fichero temporal, no a RAM
+CHUNK = 64 * 1024
+
+
+async def spool_body(request: Request, limit: int):
+    """Vuelca el cuerpo a un fichero temporal cortando al pasar `limit`.
+
+    Devuelve (fichero, tamaño) o (None, tamaño) si se supera el tope. No confía en Content-Length.
+    """
+    f = tempfile.SpooledTemporaryFile(max_size=SPOOL_RAM_BYTES)
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > limit:
+            f.close()
+            return None, size
+        f.write(chunk)
+    f.seek(0)
+    return f, size
+
+
+async def iter_file(f):
+    try:
+        while True:
+            chunk = f.read(CHUNK)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        f.close()
 
 
 def face_version(face_dir: Path) -> str:
@@ -106,11 +139,13 @@ def create_app(cfg: Config) -> FastAPI:
         return True
 
     async def clock(method: str, path: str, *, json: dict | None = None,
-                    content: bytes | None = None, params: dict | None = None,
-                    timeout: float | None = None) -> JSONResponse:
+                    content=None, params: dict | None = None,
+                    timeout: float | None = None, length: int | None = None) -> JSONResponse:
         headers = {"X-Auth-Token": cfg.clock_token}
         if content is not None:
             headers["Content-Type"] = "application/octet-stream"
+            if length is not None:  # el reloj no acepta Transfer-Encoding: chunked
+                headers["Content-Length"] = str(length)
         try:
             async with httpx.AsyncClient(base_url=cfg.clock_url, timeout=timeout or cfg.timeout_s) as c:
                 r = await c.request(method, path, json=json, content=content, params=params, headers=headers)
@@ -230,12 +265,14 @@ def create_app(cfg: Config) -> FastAPI:
             return _error(400, "Content-Length no válido")
         if content_length > MAX_SOUND_BYTES:
             return _error(413, "El sonido supera 5 MB")
-        data = await request.body()
-        if not data:
-            return _error(400, "Archivo vacío")
-        if len(data) > MAX_SOUND_BYTES:
+        f, size = await spool_body(request, MAX_SOUND_BYTES)
+        if f is None:
             return _error(413, "El sonido supera 5 MB")
-        return await clock("POST", "/sounds", content=data, params={"name": name}, timeout=UPLOAD_TIMEOUT_S)
+        if size == 0:
+            f.close()
+            return _error(400, "Archivo vacío")
+        return await clock("POST", "/sounds", content=iter_file(f), length=size, params={"name": name},
+                           timeout=UPLOAD_TIMEOUT_S)
 
     @app.delete("/api/sounds/{name}")
     async def delete_sound(name: str):
@@ -301,12 +338,14 @@ def create_app(cfg: Config) -> FastAPI:
             return _error(400, "Content-Length no válido")
         if content_length > MAX_BG_BYTES:
             return _error(413, "La imagen supera 8 MB")
-        data = await request.body()
-        if not data:
-            return _error(400, "Archivo vacío")
-        if len(data) > MAX_BG_BYTES:
+        f, size = await spool_body(request, MAX_BG_BYTES)
+        if f is None:
             return _error(413, "La imagen supera 8 MB")
-        return await clock("POST", "/backgrounds", content=data, params={"name": name}, timeout=UPLOAD_TIMEOUT_S)
+        if size == 0:
+            f.close()
+            return _error(400, "Archivo vacío")
+        return await clock("POST", "/backgrounds", content=iter_file(f), length=size, params={"name": name},
+                           timeout=UPLOAD_TIMEOUT_S)
 
     @app.delete("/api/backgrounds/{name}")
     async def delete_background(name: str):
@@ -318,19 +357,28 @@ def create_app(cfg: Config) -> FastAPI:
             return _error(400, "Nombre no válido")
         try:
             async with httpx.AsyncClient(base_url=cfg.clock_url, timeout=cfg.timeout_s) as c:
-                r = await c.get(f"/backgrounds/{quote(name, safe='')}", headers={"X-Auth-Token": cfg.clock_token})
-        except httpx.HTTPError:
+                async with c.stream("GET", f"/backgrounds/{quote(name, safe='')}",
+                                    headers={"X-Auth-Token": cfg.clock_token}) as r:
+                    if r.status_code == 401:
+                        return _error(502, "El token del reloj (CLOCK_TOKEN) no es válido")
+                    if r.status_code == 404:
+                        return _error(404, "No existe ese fondo")
+                    if r.status_code != 200:
+                        return _error(502, "No se pudo leer el fondo")
+                    declared = int(r.headers.get("content-length") or 0)
+                    if declared > MAX_BG_BYTES:
+                        return _error(502, "El fondo del reloj es demasiado grande")
+                    body = bytearray()
+                    async for chunk in r.aiter_bytes():
+                        body += chunk
+                        if len(body) > MAX_BG_BYTES:
+                            return _error(502, "El fondo del reloj es demasiado grande")
+                    ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
+        except (httpx.HTTPError, ValueError):
             return _error(502, "El reloj no responde")
-        if r.status_code == 401:
-            return _error(502, "El token del reloj (CLOCK_TOKEN) no es válido")
-        if r.status_code == 404:
-            return _error(404, "No existe ese fondo")
-        if r.status_code != 200:
-            return _error(502, "No se pudo leer el fondo")
-        ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
         if ctype not in BG_MIME:
             ctype = "application/octet-stream"
-        return Response(content=r.content, media_type=ctype,
+        return Response(content=bytes(body), media_type=ctype,
                         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
     @app.middleware("http")
