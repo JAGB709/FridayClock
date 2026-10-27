@@ -18,6 +18,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.jarvis.clock.design.Backgrounds
+import com.jarvis.clock.design.FaceControl
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.FileInputStream
@@ -36,6 +37,8 @@ class FaceHost private constructor(private val ctx: Context, private val listene
         fun onLongPress()
         fun onSwipe(direction: String)
         fun onPermission()
+        /** Orden de un botón del motor (cronómetro, temporizadores); ya es de la lista cerrada de FaceControl. */
+        fun onControl(cmd: String) {}
         /** [kind] es uno de REASON_*: solo REASON_RENDERER merece un reintento. */
         fun onFailure(kind: String, reason: String)
     }
@@ -148,6 +151,7 @@ class FaceHost private constructor(private val ctx: Context, private val listene
         @JavascriptInterface fun longPress() { main.post { listener.onLongPress() } }
         @JavascriptInterface fun swipe(direction: String) { main.post { listener.onSwipe(direction) } }
         @JavascriptInterface fun permission() { main.post { listener.onPermission() } }
+        @JavascriptInterface fun control(cmd: String) { if (FaceControl.parse(cmd) != null) main.post { listener.onControl(cmd) } }
         @JavascriptInterface fun error(msg: String) { Log.w(TAG, "motor: $msg") }
     }
 

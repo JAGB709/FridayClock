@@ -32,6 +32,8 @@ object DesignSchema {
         "forecast" to setOf("mode", "count"),
         "next_alarm" to setOf("show_label"),
         "text" to setOf("mode", "text", "quotes"),
+        "stopwatch" to setOf("controls"),
+        "timers" to setOf("count", "controls"),
         "photos" to setOf("images", "interval_s", "transition", "order", "fit", "zoom", "pos_x", "pos_y"),
     )
 
@@ -196,6 +198,8 @@ object DesignSchema {
             "weather_now" -> bool(c, e, "detail", p)
             "forecast" -> { oneOf(c, e, "mode", p, setOf("hours", "days")); if (e.has("count")) int(c, e, "count", p, 2, 5) }
             "next_alarm" -> bool(c, e, "show_label", p)
+            "stopwatch" -> bool(c, e, "controls", p)
+            "timers" -> { if (e.has("count")) int(c, e, "count", p, 1, 3); bool(c, e, "controls", p) }
             "photos" -> {
                 val imgs = e.optJSONArray("images")
                 if (imgs == null || imgs.length() !in 1..20) c.err("$p.images", "debe ser una lista de 1 a 20 fotos")

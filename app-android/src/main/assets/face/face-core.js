@@ -193,7 +193,50 @@
     return out;
   }
 
+  /* Cronómetro y temporizadores. Los datos traen tiempos absolutos del reloj (epoch en ms) y su
+     propia hora `now`: el motor calcula la diferencia con la hora local para no depender de que
+     el reloj y el navegador del panel estén en hora. */
+  function clockOffset(data, localNow) {
+    return data && typeof data.now === "number" ? data.now - localNow : 0;
+  }
+
+  function stopwatchMs(sw, nowMs) {
+    if (!sw) return 0;
+    var base = typeof sw.base_ms === "number" ? sw.base_ms : 0;
+    var extra = sw.running && typeof sw.since === "number" ? Math.max(0, nowMs - sw.since) : 0;
+    return Math.max(0, base + extra);
+  }
+
+  /* "mm:ss" y, desde la hora, "h:mm:ss". `down` redondea hacia abajo (cronómetro); si no, hacia arriba (cuenta atrás). */
+  function formatDuration(ms, down) {
+    var total = Math.max(0, down ? Math.floor(ms / 1000) : Math.ceil(ms / 1000));
+    var h = Math.floor(total / 3600), m = Math.floor(total / 60) % 60, s = total % 60;
+    return h > 0 ? h + ":" + pad(m) + ":" + pad(s) : pad(m) + ":" + pad(s);
+  }
+
+  /* Filas de temporizadores: primero los que antes acaban, luego los pausados. */
+  function timerItems(timers, nowMs, count) {
+    var n = Math.max(1, Math.min(3, count || 2));
+    var items = (timers || []).map(function (t) {
+      var paused = !!t.paused;
+      var left = paused ? (t.remaining_ms || 0) : Math.max(0, (t.at || 0) - nowMs);
+      return { id: t.id, label: t.label || "Temporizador", paused: paused, left: left, text: formatDuration(left, false) };
+    });
+    items.sort(function (a, b) { return ((a.paused ? 1 : 0) - (b.paused ? 1 : 0)) || (a.left - b.left); });
+    return items.slice(0, n);
+  }
+
+  /* Órdenes que el motor puede mandar al reloj (lista cerrada); null si no vale. */
+  function controlCommand(kind, id) {
+    if (kind === "stopwatch-toggle") return "stopwatch:toggle";
+    if (kind === "stopwatch-reset") return "stopwatch:reset";
+    if (/^timer-(pause|resume|cancel)$/.test(kind) && /^p?\d{1,9}$/.test(String(id))) return "timer:" + kind.slice(6) + ":" + id;
+    return null;
+  }
+
   return {
+    clockOffset: clockOffset, stopwatchMs: stopwatchMs, formatDuration: formatDuration,
+    timerItems: timerItems, controlCommand: controlCommand,
     COLS: COLS, cellRect: cellRect, minutesOf: minutesOf, activeProfile: activeProfile,
     dayOfYear: dayOfYear, dailyQuote: dailyQuote, formatClock: formatClock, formatDate: formatDate,
     analogAngles: analogAngles, fitText: fitText, weatherParts: weatherParts, nextAlarmParts: nextAlarmParts,

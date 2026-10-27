@@ -31,9 +31,12 @@ Tiene pantalla táctil pequeña, altavoz y micro. Se controla con `scripts/clock
    - Borrar: `alarm-cancel --id 3` | `alarm-cancel --time 07:30` | `alarm-cancel --all`
    - Activar/desactivar: `alarm-enable 3` / `alarm-disable 3`
    - Si suena: `alarm-stop` o `alarm-snooze`
-3. Temporizadores: `timer --minutes 10 --label "Pasta"`; cancelar: `timer-cancel`
+3. Temporizadores: `timer --minutes 10 --label "Pasta"`; ver: `timers`; pausar: `timer-pause 3`;
+   reanudar: `timer-resume 1` (el pid del pausado); cancelar uno: `timer-cancel --id 3`, todos: `timer-cancel`.
+   Cronómetro: `stopwatch start|pause|reset|toggle|status`
 4. Voz: `say "Te ha llegado un paquete"` (frases cortas, sin markdown).
 5. Pantalla: `show "Reunión a las 10" --seconds 30`;
+   tarjeta con formato: `show "- uno\n- dos" --type markdown --title "Compra"` (solo texto con estilo);
    HTML: `show "<h1 style='color:white'>Hola</h1>" --type html`;
    imagen: `show https://.../img.png --type image`; limpiar: `show-clear`
 6. Altavoz Bluetooth: `bluetooth speaker` enciende el BT del reloj y lo hace visible

@@ -46,7 +46,9 @@ import com.jarvis.clock.assistant.Assistant
 import com.jarvis.clock.design.Brightness
 import com.jarvis.clock.design.DesignSchema
 import com.jarvis.clock.design.DesignStore
+import com.jarvis.clock.design.FaceControl
 import com.jarvis.clock.design.FaceData
+import com.jarvis.clock.ui.DisplayView
 import com.jarvis.clock.ui.FaceHost
 import org.json.JSONObject
 import com.jarvis.clock.ui.AlarmsActivity
@@ -109,6 +111,11 @@ class MainActivity : Activity() {
         override fun onSwipe(direction: String) { handleSwipe(direction) }
         override fun onPermission() {
             startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
+        }
+        override fun onControl(cmd: String) {
+            val action = FaceControl.parse(cmd) ?: return
+            wakeScreen()
+            runCatching { Actions.execute(this@MainActivity, action) }
         }
         override fun onFailure(kind: String, reason: String) {
             Log.w("Face", "El WebView de la carátula falló ($reason): vuelvo a la carátula nativa")
@@ -667,17 +674,7 @@ class MainActivity : Activity() {
                     runOnUiThread { if (bmp != null) iv.setImageBitmap(bmp) }
                 }
             }
-            else -> {
-                val tv = TextView(this).apply {
-                    text = e.content
-                    setTextColor(Color.WHITE)
-                    gravity = Gravity.CENTER
-                    setPadding(Ui.dp(this@MainActivity, 24), Ui.dp(this@MainActivity, 24), Ui.dp(this@MainActivity, 24), Ui.dp(this@MainActivity, 24))
-                    setAutoSizeTextTypeUniformWithConfiguration(16, 96, 2, TypedValue.COMPLEX_UNIT_SP)
-                    setOnClickListener { hideDisplay() }
-                }
-                layer.addView(tv, FrameLayout.LayoutParams(-1, -1))
-            }
+            else -> layer.addView(DisplayView.build(this, e.title, e.content) { hideDisplay() }, FrameLayout.LayoutParams(-1, -1))
         }
         layer.visibility = View.VISIBLE
         handler.removeCallbacks(hideDisplayRunnable)

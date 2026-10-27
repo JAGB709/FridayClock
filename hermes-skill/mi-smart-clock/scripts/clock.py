@@ -81,14 +81,24 @@ def main():
     t.add_argument("--minutes", type=int, default=0)
     t.add_argument("--hours", type=int, default=0)
     t.add_argument("--label", default="Temporizador")
-    sub.add_parser("timer-cancel")
+    tc = sub.add_parser("timer-cancel", help="cancelar un temporizador (--id/--pid) o todos")
+    tc.add_argument("--id", type=int)
+    tc.add_argument("--pid", type=int, help="uno en pausa")
+    sub.add_parser("timers", help="temporizadores en marcha y en pausa")
+    tp = sub.add_parser("timer-pause")
+    tp.add_argument("id", type=int)
+    tr = sub.add_parser("timer-resume")
+    tr.add_argument("pid", type=int, help="el pid del temporizador en pausa (p7 = 7)")
+    sw = sub.add_parser("stopwatch", help="cronómetro del reloj")
+    sw.add_argument("action", choices=["start", "pause", "reset", "toggle", "status"], nargs="?", default="status")
 
     s = sub.add_parser("say", help="decir un texto por el altavoz")
     s.add_argument("text")
 
     d = sub.add_parser("show", help="mostrar en pantalla")
     d.add_argument("content", help="texto, HTML, URL de imagen o URL web")
-    d.add_argument("--type", choices=["text", "html", "image", "url"], default="text")
+    d.add_argument("--type", choices=["text", "markdown", "html", "image", "url"], default="text")
+    d.add_argument("--title", default="")
     d.add_argument("--seconds", type=int, default=20)
     sub.add_parser("show-clear")
 
@@ -181,11 +191,27 @@ def main():
     if x.cmd == "timer":
         return call("POST", "/timer", {"seconds": x.seconds, "minutes": x.minutes, "hours": x.hours, "label": x.label})
     if x.cmd == "timer-cancel":
-        return call("POST", "/timer", {"action": "cancel"})
+        body = {"action": "cancel"}
+        if x.id is not None:
+            body["id"] = x.id
+        if x.pid is not None:
+            body["pid"] = x.pid
+        return call("POST", "/timer", body)
+    if x.cmd == "timers":
+        return call("GET", "/timers")
+    if x.cmd == "timer-pause":
+        return call("POST", "/timer", {"action": "pause", "id": x.id})
+    if x.cmd == "timer-resume":
+        return call("POST", "/timer", {"action": "resume", "pid": x.pid})
+    if x.cmd == "stopwatch":
+        return call("POST", "/stopwatch", {"action": x.action})
     if x.cmd == "say":
         return call("POST", "/speak", {"text": x.text})
     if x.cmd == "show":
-        return call("POST", "/display", {"type": x.type, "content": x.content, "duration_ms": x.seconds * 1000})
+        body = {"type": x.type, "content": x.content, "duration_ms": x.seconds * 1000}
+        if x.title:
+            body["title"] = x.title
+        return call("POST", "/display", body)
     if x.cmd == "show-clear":
         return call("POST", "/display", {"action": "clear"})
     if x.cmd == "volume":
