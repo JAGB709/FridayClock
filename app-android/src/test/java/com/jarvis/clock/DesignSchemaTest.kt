@@ -380,4 +380,71 @@ class DesignSchemaTest {
         alarma.getJSONObject("alarm_screen").put("elements", JSONArray().put(photos("a", 0, 0)).put(photos("b", 2, 0)))
         assertTrue(invalid(alarma).containsKey("alarm_screen.elements"))
     }
+
+    // ---- 3b: grupos y anclajes entre elementos
+
+    private fun el(d: JSONObject, id: String): JSONObject {
+        val a = elements(d)
+        for (i in 0 until a.length()) if (a.getJSONObject(i).getString("id") == id) return a.getJSONObject(i)
+        throw AssertionError(id)
+    }
+    private fun anchor(to: String, side: String, gap: Int? = null) =
+        JSONObject().put("to", to).put("side", side).also { if (gap != null) it.put("gap", gap) }
+
+    @Test fun `un diseno sin grupos ni anclajes sigue siendo valido`() {
+        val d = base()
+        assertTrue(d.toString().indexOf("\"group\"") < 0 && d.toString().indexOf("\"anchor\"") < 0)
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+    }
+
+    @Test fun `un grupo valido necesita al menos dos elementos`() {
+        val d = base()
+        el(d, "fecha").put("group", "texto"); el(d, "tiempo").put("group", "texto")
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+        val solo = base()
+        el(solo, "fecha").put("group", "texto")
+        assertEquals("un grupo necesita al menos 2 elementos", invalid(solo)["screens.principal.elements.fecha.group"])
+        val mal = base()
+        el(mal, "fecha").put("group", "Mal Id!");
+        assertTrue(invalid(mal).containsKey("screens.principal.elements.fecha.group"))
+    }
+
+    @Test fun `un anclaje coherente es valido`() {
+        val d = base()
+        el(d, "fecha").put("anchor", anchor("hora", "below"))
+        el(d, "tiempo").put("anchor", anchor("fecha", "below", 0))
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+    }
+
+    @Test fun `el anclaje comprueba destino, lado, separacion y posicion con ruta exacta`() {
+        val noExiste = base(); el(noExiste, "fecha").put("anchor", anchor("fantasma", "below"))
+        assertTrue(invalid(noExiste).containsKey("screens.principal.elements.fecha.anchor.to"))
+        val aSiMismo = base(); el(aSiMismo, "fecha").put("anchor", anchor("fecha", "below"))
+        assertTrue(invalid(aSiMismo).containsKey("screens.principal.elements.fecha.anchor.to"))
+        val lado = base(); el(lado, "fecha").put("anchor", anchor("hora", "diagonal"))
+        assertTrue(invalid(lado).containsKey("screens.principal.elements.fecha.anchor.side"))
+        val gap = base(); el(gap, "fecha").put("anchor", anchor("hora", "below", 9))
+        assertTrue(invalid(gap).containsKey("screens.principal.elements.fecha.anchor.gap"))
+        val extra = base(); el(extra, "fecha").put("anchor", anchor("hora", "below").put("otro", 1))
+        assertTrue(invalid(extra).containsKey("screens.principal.elements.fecha.anchor.otro"))
+        val desviado = base(); el(desviado, "fecha").put("anchor", anchor("hora", "below", 1))
+        assertTrue(invalid(desviado)["screens.principal.elements.fecha.anchor"]!!.contains("x=0, y=4"))
+    }
+
+    @Test fun `los anclajes en ciclo se rechazan`() {
+        val d = base()
+        el(d, "hora").put("anchor", anchor("fecha", "above"))
+        el(d, "fecha").put("anchor", anchor("hora", "below"))
+        val e = invalid(d)
+        assertTrue(e.values.any { it.contains("ciclo") })
+    }
+
+    @Test fun `el anclaje tambien vale en la pantalla de alarma y no sale de la rejilla`() {
+        val d = base()
+        val a = d.getJSONObject("alarm_screen").getJSONArray("elements")
+        a.getJSONObject(1).put("anchor", anchor("hora", "below"))
+        assertTrue(DesignSchema.validate(d) is Result.Ok)
+        a.getJSONObject(1).put("y", 4).put("anchor", anchor("hora", "below", 1))
+        assertTrue(invalid(d).isNotEmpty())
+    }
 }

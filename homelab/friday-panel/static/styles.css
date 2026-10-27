@@ -684,7 +684,10 @@ body.kbd-open:has(.design) #savebar { bottom: 0; }
 .layers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
 .layer-btn { flex-direction: column; gap: 2px; min-height: 56px; padding: var(--space-1); font-size: var(--fs-1); }
 .layer-btn .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.grid4, .grid2 { display: grid; gap: var(--space-2); }
+.grid4, .grid2, .grid3 { display: grid; gap: var(--space-2); }
+.grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--space-2); }
+.copy-to { display: grid; gap: var(--space-2); align-content: end; }
+.relations .grid2, .relations > label.field { margin-top: var(--space-2); }
 .grid4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid4 > label.field, .grid2 > label.field { margin: 0; min-width: 0; }

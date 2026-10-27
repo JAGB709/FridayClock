@@ -184,3 +184,27 @@ test("pickUnder: con 3 elementos recorre todos y vuelve al primero", () => {
   for (let i = 0; i < 4; i++) { sel = C.pickUnder(ids, sel); seen.push(sel); }
   assert.deepEqual(seen, ["c", "b", "a", "c"]);
 });
+
+test("anchorPos: derecha, izquierda, debajo y encima con separación", () => {
+  const t = { x: 2, y: 1, w: 3, h: 2 };
+  assert.deepEqual(C.anchorPos(t, { w: 2, h: 1 }, "right", 1), { x: 6, y: 1 });
+  assert.deepEqual(C.anchorPos(t, { w: 2, h: 1 }, "left", 0), { x: 0, y: 1 });
+  assert.deepEqual(C.anchorPos(t, { w: 2, h: 1 }, "below", 0), { x: 2, y: 3 });
+  assert.deepEqual(C.anchorPos(t, { w: 2, h: 1 }, "above", 1), { x: 2, y: -1 });
+});
+
+test("resolveAnchors: cadena, sin anclas intacto, ciclo o fuera de rejilla no rompen", () => {
+  const a = { id: "a", x: 0, y: 0, w: 2, h: 1 };
+  const b = { id: "b", x: 9, y: 9, w: 2, h: 1, anchor: { to: "a", side: "right", gap: 0 } };
+  const c = { id: "c", x: 9, y: 9, w: 2, h: 1, anchor: { to: "b", side: "below", gap: 1 } };
+  const r = C.resolveAnchors([c, b, a], 6);
+  assert.deepEqual([r[0].x, r[0].y], [2, 2]);
+  assert.deepEqual([r[1].x, r[1].y], [2, 0]);
+  assert.equal(b.x, 9); // no muta la entrada
+  assert.deepEqual(C.resolveAnchors([a], 6), [a]);
+  const p = { id: "p", x: 1, y: 1, w: 1, h: 1, anchor: { to: "q", side: "right", gap: 0 } };
+  const q = { id: "q", x: 3, y: 3, w: 1, h: 1, anchor: { to: "p", side: "right", gap: 0 } };
+  assert.equal(C.resolveAnchors([p, q], 6).length, 2);
+  const f = { id: "f", x: 1, y: 1, w: 3, h: 1, anchor: { to: "a", side: "right", gap: 4 } };
+  assert.equal(C.resolveAnchors([a, f], 6)[1].x, 1); // 2+4+3 > 8: se queda
+});

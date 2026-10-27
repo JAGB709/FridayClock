@@ -24,7 +24,8 @@ object DesignSchema {
     private val ALIGNS = setOf("left", "center", "right")
     private val FITS = setOf("cover", "contain", "fill")
     private val PHOTO_FIT_KEYS = listOf("fit", "zoom", "pos_x", "pos_y")
-    private val COMMON = setOf("id", "type", "x", "y", "w", "h", "color", "align")
+    private val SIDES = setOf("right", "left", "below", "above")
+    private val COMMON = setOf("id", "type", "x", "y", "w", "h", "color", "align", "group", "anchor")
     private val ELEMENT_PROPS = mapOf(
         "clock" to setOf("style", "seconds", "hour12"),
         "date" to setOf("format"),
@@ -162,6 +163,8 @@ object DesignSchema {
         if (arr == null) { c.err(path, "falta"); return }
         if (arr.length() > 12) c.err(path, "máximo 12 elementos")
         val ids = HashSet<String>()
+        val byId = LinkedHashMap<String, JSONObject>()
+        val pathOf = HashMap<String, String>()
         var photoCount = 0
         for (i in 0 until arr.length()) {
             val e = arr.optJSONObject(i)
@@ -175,6 +178,8 @@ object DesignSchema {
             val props = ELEMENT_PROPS[type]
             if (type == null || props == null) { c.err("$p.type", "tipo desconocido"); continue }
             if (type == "photos") photoCount++
+            byId[id!!] = e
+            pathOf[id] = p
             unknownKeys(c, e, COMMON + props, p)
             val x = int(c, e, "x", p, 0, COLS - 1)
             val y = int(c, e, "y", p, 0, rows - 1)
@@ -186,7 +191,69 @@ object DesignSchema {
             oneOf(c, e, "align", p, ALIGNS)
             validateProps(c, e, type, p)
         }
+        validateLinks(c, byId, pathOf, rows)
         if (photoCount > maxPhotos) c.err(path, "máximo $maxPhotos elementos de fotos")
+    }
+
+    /** Grupos (`group`, 2 o más miembros) y anclajes (`anchor`): destino existente, sin ciclos y con la
+     *  posición guardada igual a la que dicta el ancla, para que reloj y panel dibujen lo mismo. */
+    private fun validateLinks(c: Ctx, byId: Map<String, JSONObject>, pathOf: Map<String, String>, rows: Int) {
+        val groups = LinkedHashMap<String, MutableList<String>>()
+        for ((id, e) in byId) {
+            val p = pathOf[id]!!
+            if (e.has("group")) {
+                val g = e.opt("group")
+                if (g !is String || !SLUG.matches(g)) c.err("$p.group", "identificador de grupo no válido")
+                else groups.getOrPut(g) { mutableListOf() }.add(id)
+            }
+        }
+        for (members in groups.values) if (members.size < 2) c.err("${pathOf[members[0]]}.group", "un grupo necesita al menos 2 elementos")
+
+        val okAnchor = HashSet<String>()
+        for ((id, e) in byId) {
+            if (!e.has("anchor")) continue
+            val p = "${pathOf[id]}.anchor"
+            val a = e.optJSONObject("anchor")
+            if (a == null) { c.err(p, "debe ser un objeto"); continue }
+            unknownKeys(c, a, setOf("to", "side", "gap"), p)
+            val to = a.opt("to") as? String
+            var valid = true
+            if (to == null || to !in byId) { c.err("$p.to", "el elemento no existe en esta pantalla"); valid = false }
+            else if (to == id) { c.err("$p.to", "no puede anclarse a sí mismo"); valid = false }
+            val side = a.opt("side") as? String
+            if (side == null || side !in SIDES) { c.err("$p.side", "debe ser ${SIDES.joinToString(", ")}"); valid = false }
+            if (a.has("gap") && int(c, a, "gap", p, 0, 3) == null) valid = false
+            if (valid) okAnchor += id
+        }
+        // Ciclos: se sigue la cadena de anclas desde cada elemento.
+        val cyclic = HashSet<String>()
+        for (id in okAnchor) {
+            val seen = HashSet<String>()
+            var cur: String? = id
+            while (cur != null && cur in okAnchor) {
+                if (!seen.add(cur)) { cyclic += id; break }
+                cur = byId[cur]!!.getJSONObject("anchor").getString("to")
+            }
+            if (id in cyclic) c.err("${pathOf[id]}.anchor", "ciclo de anclajes")
+        }
+        for (id in okAnchor) {
+            if (id in cyclic) continue
+            val e = byId[id]!!
+            val a = e.getJSONObject("anchor")
+            val t = byId[a.getString("to")]!!
+            val ex = e.optInt("x", -1); val ey = e.optInt("y", -1); val ew = e.optInt("w", 1); val eh = e.optInt("h", 1)
+            val tx = t.optInt("x", 0); val ty = t.optInt("y", 0); val tw = t.optInt("w", 1); val th = t.optInt("h", 1)
+            val gap = a.optInt("gap", 0)
+            val (px, py) = when (a.getString("side")) {
+                "right" -> Pair(tx + tw + gap, ty)
+                "left" -> Pair(tx - gap - ew, ty)
+                "below" -> Pair(tx, ty + th + gap)
+                else -> Pair(tx, ty - gap - eh)
+            }
+            val p = "${pathOf[id]}.anchor"
+            if (px < 0 || py < 0 || px + ew > COLS || py + eh > rows) c.err(p, "el anclaje sacaría el elemento de la rejilla")
+            else if (px != ex || py != ey) c.err(p, "la posición no coincide con el anclaje (esperado x=$px, y=$py)")
+        }
     }
 
     private fun validateProps(c: Ctx, e: JSONObject, type: String, p: String) {

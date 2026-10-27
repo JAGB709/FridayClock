@@ -33,6 +33,19 @@ texto) y `color` (color de reserva bajo las fotos). Cada carrusel, de fondo o
 elemento `photos`, mantiene en reposo una sola foto decodificada en memoria; durante el fundido de 0,6 s
 sujeta dos, y libera la saliente justo después, para cuidar el reloj (1 GB de RAM).
 
+**Grupos y anclajes.** Cualquier elemento admite dos campos opcionales (un diseño sin ellos se
+comporta igual que antes). `group` (identificador) reúne 2 o más elementos que se mueven juntos en
+el editor. `anchor` es `{"to": id, "side": "right|left|below|above", "gap": 0 a 3}`: deja el
+elemento a `gap` casillas del destino, alineado con su borde. El `x` e `y` guardados deben coincidir
+con lo que dicta el ancla; si no, o si hay un ciclo, un destino inexistente o una salida de la
+rejilla, el diseño se rechaza con la ruta exacta (por ejemplo `screens.principal.elements.fecha.anchor`).
+En el editor, las opciones del elemento tienen **Grupo** (agrupar, desagrupar, alinear el grupo a la
+izquierda, centro, derecha, arriba, medio o abajo, y repartir en horizontal o vertical con 3 o más),
+**Anclaje** (destino, lado y separación; los anclados siguen a su destino al moverlo o cambiarlo de
+tamaño, y mover a mano un elemento anclado lo suelta) y **Duplicar y copiar** (duplica el elemento o
+su grupo, o lo copia a otra pantalla o a la de alarma, respetando el máximo de 12 elementos y de fotos
+y la rejilla de destino).
+
 **Gestos.** En la carátula, deslizar de izquierda a derecha abre Alarmas y de derecha a
 izquierda abre Ajustes; para cambiar de pantalla del perfil se desliza en vertical. En la pantalla de
 alarma sonando, deslizar no hace nada.

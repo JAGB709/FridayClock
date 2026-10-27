@@ -193,7 +193,43 @@
     return out;
   }
 
+  /* Posición de un elemento anclado a `target` (sin salirse de la rejilla se comprueba aparte).
+     side: right|left|below|above; gap: casillas de separación. El otro eje se alinea con el borde del ancla. */
+  function anchorPos(target, el, side, gap) {
+    var g = gap || 0;
+    if (side === "right") return { x: target.x + target.w + g, y: target.y };
+    if (side === "left") return { x: target.x - g - el.w, y: target.y };
+    if (side === "below") return { x: target.x, y: target.y + target.h + g };
+    if (side === "above") return { x: target.x, y: target.y - g - el.h };
+    return { x: el.x, y: el.y };
+  }
+
+  /* Copia de la lista con los elementos anclados puestos donde mandan sus anclas (en cadena).
+     Un ancla que falta, un ciclo o una posición fuera de la rejilla dejan el elemento donde está:
+     el dibujo nunca falla por un anclaje roto. Los elementos sin `anchor` salen intactos. */
+  function resolveAnchors(list, rows) {
+    var out = [], byId = {}, i;
+    for (i = 0; i < (list || []).length; i++) { out.push(Object.assign({}, list[i])); byId[list[i].id] = out[i]; }
+    var state = {};
+    function place(e) {
+      if (!e.anchor) return;
+      if (state[e.id] === 2) return;
+      if (state[e.id] === 1) return; // ciclo
+      state[e.id] = 1;
+      var t = byId[e.anchor.to];
+      if (t && t !== e) {
+        place(t);
+        var p = anchorPos(t, e, e.anchor.side, e.anchor.gap);
+        if (p.x >= 0 && p.y >= 0 && p.x + e.w <= COLS && p.y + e.h <= rows) { e.x = p.x; e.y = p.y; }
+      }
+      state[e.id] = 2;
+    }
+    for (i = 0; i < out.length; i++) place(out[i]);
+    return out;
+  }
+
   return {
+    anchorPos: anchorPos, resolveAnchors: resolveAnchors,
     COLS: COLS, cellRect: cellRect, minutesOf: minutesOf, activeProfile: activeProfile,
     dayOfYear: dayOfYear, dailyQuote: dailyQuote, formatClock: formatClock, formatDate: formatDate,
     analogAngles: analogAngles, fitText: fitText, weatherParts: weatherParts, nextAlarmParts: nextAlarmParts,
