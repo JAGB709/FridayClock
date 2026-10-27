@@ -36,6 +36,17 @@
       label: "Próxima alarma", w: 4, h: 1, defaults: { show_label: true },
       fields: [{ key: "show_label", kind: "bool", label: "Mostrar el nombre de la alarma" }],
     },
+    stopwatch: {
+      label: "Cronómetro", w: 4, h: 3, defaults: { controls: true },
+      fields: [{ key: "controls", kind: "bool", label: "Botones de iniciar, pausar y reiniciar (en el reloj)" }],
+    },
+    timers: {
+      label: "Temporizadores", w: 4, h: 3, defaults: { count: 2, controls: true },
+      fields: [
+        { key: "count", kind: "number", label: "Cuántos mostrar (1–3)", min: 1, max: 3 },
+        { key: "controls", kind: "bool", label: "Botones de pausar y cancelar (en el reloj)" },
+      ],
+    },
     photos: {
       label: "Fotos", w: 4, h: 3,
       defaults: { images: [], interval_s: 10, transition: "fade", order: "sequential", fit: "cover", zoom: 1, pos_x: 50, pos_y: 50 },

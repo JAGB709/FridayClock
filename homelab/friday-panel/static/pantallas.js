@@ -10,12 +10,18 @@ const SAMPLE_DATA = {
     days: [{ d: "mié", min: 12, max: 23, icon: "cloud" }, { d: "jue", min: 10, max: 20, icon: "cloud-rain" }, { d: "vie", min: 10, max: 18, icon: "cloud-rain" }, { d: "sáb", min: 10, max: 20, icon: "cloud-sun" }, { d: "dom", min: 12, max: 21, icon: "sun" }],
   },
   next_alarm: { label: "Despertar", when: "mañana", time: "07:30" },
+  // Ejemplo de cronómetro parado y de temporizadores en pausa (no corren en la vista previa).
+  stopwatch: { running: false, base_ms: 754000, since: 0 },
+  timers: [
+    { id: "p1", label: "Pasta", paused: true, remaining_ms: 372000 },
+    { id: "p2", label: "Horno", paused: true, remaining_ms: 1500000 },
+  ],
 };
 
 // Secciones: [clave (data-sub), etiqueta, icono].
 const SUBS = [["screen", "Elementos", "layers"], ["theme", "Tema", "image"], ["profiles", "Perfiles", "clock"], ["alarm", "Alarma", "bell"]];
 // Icono de cada tipo de elemento en la lista (un tipo desconocido usa "layers").
-const TYPE_ICONS = { clock: "clock", date: "layout-template", weather_now: "cloud-sun", forecast: "cloud-rain", next_alarm: "bell", photos: "image", text: "pencil" };
+const TYPE_ICONS = { clock: "clock", date: "layout-template", weather_now: "cloud-sun", forecast: "cloud-rain", next_alarm: "bell", stopwatch: "play", timers: "bell", photos: "image", text: "pencil" };
 const PREVIEW_LOAD_MS = 8000; // si el motor no carga en este tiempo, se avisa
 const dz = {
   sub: "screen", screenId: null, themeId: null, profileId: null, selected: null,

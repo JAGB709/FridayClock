@@ -55,7 +55,7 @@ test("todos los tipos tienen etiqueta, tamaño y campos", () => {
     const d = E.TYPES[t];
     assert.ok(d.label && d.w >= 1 && d.h >= 1 && Array.isArray(d.fields), t);
   }
-  assert.deepEqual(Object.keys(E.TYPES).sort(), ["clock", "date", "forecast", "next_alarm", "photos", "text", "weather_now"]);
+  assert.deepEqual(Object.keys(E.TYPES).sort(), ["clock", "date", "forecast", "next_alarm", "photos", "stopwatch", "text", "timers", "weather_now"]);
 });
 
 test("downscaleSize: reduce el lado largo y no amplia", () => {
@@ -99,4 +99,11 @@ test("capas: no mutan la entrada y toleran ids desconocidos o un solo elemento",
   assert.equal(ids(E.bringToFront(l, "zz")), "a,b,c");
   assert.equal(ids(E.moveUp([{ id: "solo" }], "solo")), "solo");
   assert.equal(ids(E.moveDown([], "x")), "");
+});
+
+test("stopwatch y timers se crean con sus valores por defecto", () => {
+  const sw = E.newElement("stopwatch", "cr", { x: 0, y: 0 });
+  assert.deepEqual([sw.type, sw.w, sw.h, sw.controls], ["stopwatch", 4, 3, true]);
+  const tm = E.newElement("timers", "tm", { x: 4, y: 0 });
+  assert.deepEqual([tm.type, tm.count, tm.controls], ["timers", 2, true]);
 });
