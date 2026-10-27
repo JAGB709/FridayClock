@@ -715,6 +715,7 @@ PLAN.md                           El plan original por fases
 | [`docs/pantallas-y-temas.md`](docs/pantallas-y-temas.md) | Diseño JSON, fotos, carruseles, capas y gestos |
 | [`docs/sistema-de-diseno.md`](docs/sistema-de-diseno.md) | Tokens, tipografía, iconos y regla de brillo |
 | [`docs/voz-friday.md`](docs/voz-friday.md) | Ponerle voz a Friday: Whisper, Piper, Kokoro y Telegram |
+| [`docs/recordatorios.md`](docs/recordatorios.md) | Recordatorios con aviso hablado en el reloj y mensaje por Telegram: API del puente, variables de entorno y seguridad |
 | [`docs/altavoz-bluetooth.md`](docs/altavoz-bluetooth.md) | Usar el reloj como altavoz del móvil |
 | [`docs/decisions.md`](docs/decisions.md) y [`docs/research-notes.md`](docs/research-notes.md) | Por qué cada decisión y lo investigado |
 | [`hermes-skill/README.md`](hermes-skill/README.md) | La skill y las tools de Hermes |

@@ -62,3 +62,12 @@ def test_exige_cabecera_anti_csrf(rc):
 
     bare = TestClient(rc.app)
     assert bare.post("/api/reminders", json={"text": "x", "at": "2099-01-01T09:00"}).status_code == 403
+
+
+def test_la_web_carga_el_nucleo_y_usa_la_api(client):
+    html = client.get("/").text
+    assert html.index("reminders-core.js") < html.index("app.js")
+    js = client.get("/app.js").text
+    assert "/api/reminders" in js and "RemindersCore" in js
+    # el texto del recordatorio es dato no fiable: nunca se inserta como HTML
+    assert "innerHTML" not in js

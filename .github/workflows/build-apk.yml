@@ -47,13 +47,14 @@ jobs:
       - name: Puente y skill compilan
         run: |
           python -m py_compile homelab/clock-bridge/bridge.py
+          python -m py_compile homelab/clock-bridge/reminders.py
           python -m py_compile hermes-skill/mi-smart-clock/scripts/clock.py
           python -m py_compile homelab/friday-panel/app.py
       - name: Tests del puente (palabra de activación, enrutado y calculadora)
         working-directory: homelab/clock-bridge
         run: |
-          pip install -q pytest
-          pytest -q test_wake.py test_route.py test_calc.py
+          pip install -q pytest fastapi httpx tzdata
+          pytest -q test_wake.py test_route.py test_calc.py test_reminders.py test_notify.py
       - name: Tests de la skill de Hermes
         working-directory: hermes-skill
         run: |
@@ -72,6 +73,7 @@ jobs:
           node --check homelab/friday-panel/static/pantallas.js
           node --check homelab/friday-panel/static/ui.js
           node --check homelab/friday-panel/static/wheel-core.js
+          node --check homelab/friday-panel/static/reminders-core.js
           node --test app-android/face-tests/*.test.js homelab/friday-panel/tests-js/*.test.js
           python tools/gen-tokens.py --check
           python tools/gen-icons.py --check
