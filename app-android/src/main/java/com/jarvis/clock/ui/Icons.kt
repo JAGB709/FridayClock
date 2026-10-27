@@ -16,7 +16,10 @@ object Icons {
         "check" to R.drawable.ic_check, "x" to R.drawable.ic_x, "trash-2" to R.drawable.ic_trash_2,
         "plus" to R.drawable.ic_plus, "play" to R.drawable.ic_play, "pause" to R.drawable.ic_pause,
         "volume-2" to R.drawable.ic_volume_2, "image" to R.drawable.ic_image, "upload" to R.drawable.ic_upload,
-        "chevron-right" to R.drawable.ic_chevron_right,
+        "chevron-right" to R.drawable.ic_chevron_right, "chevron-left" to R.drawable.ic_chevron_left,
+        "pencil" to R.drawable.ic_pencil, "wifi" to R.drawable.ic_wifi, "wifi-off" to R.drawable.ic_wifi_off,
+        "refresh-cw" to R.drawable.ic_refresh_cw, "rotate-ccw" to R.drawable.ic_rotate_ccw,
+        "save" to R.drawable.ic_save, "info" to R.drawable.ic_info, "music" to R.drawable.ic_music,
     )
 
     fun res(name: String): Int = MAP[name] ?: 0

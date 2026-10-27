@@ -693,11 +693,11 @@ PLAN.md                           El plan original por fases
 - Liberación del reloj, app, alarmas a prueba de fallos, asistente de voz local con palabra de activación y conversación continua.
 - Panel web, motor de pantallas, temas, perfiles, fotos, carruseles, capas y gestos.
 - Sistema de diseño Obsidiana, iconos Lucide y rediseño completo del panel.
+- Pantallas nativas del reloj (Alarmas, Ajustes, Bluetooth, alarma sonando y diálogos) con el sistema Obsidiana.
 - Botón físico de silencio del micrófono, brillo con regla propia y altavoz Bluetooth.
 
 **Pendiente**
 
-- **Pantallas nativas del reloj con el sistema Obsidiana:** Alarmas, Ajustes y alarma sonando, hoy con un estilo mixto.
 - **Cronómetro y temporizadores en pantalla, panel de control con tarjetas genéricas y vista de contenido del agente.**
 - **Recordatorios:** aviso hablado en el reloj y mensaje por Telegram a través del bot de Hermes.
 - **Elementos conectados:** datos del agente dentro de las pantallas de la carátula.

@@ -10,6 +10,7 @@ Una sola fuente de verdad para colores, tipografía e iconos, compartida por la 
 - **Contrato de `/face/data`**: el campo `icon` (por ejemplo en `weather`) pasa a ser un nombre de icono (`sun`, `cloud-rain`...) que el motor dibuja con Lucide; antes era un emoji.
 - **Temas**: el diseño trae por defecto dos temas, Obsidiana Día y Obsidiana Noche, basados en los tokens.
 - **Regla de brillo**: por defecto manda el brillo del panel (el del perfil activo). Si se cambia el brillo en el reloj (Ajustes o `POST /brightness`), ese valor manual manda y se conserva hasta que cambie el perfil activo o hasta que el panel cambie el brillo de un perfil. El botón "Volver al brillo del panel" en Ajustes del reloj borra el valor manual. `POST /brightness` aplica exactamente la misma regla que el deslizador. Una vista previa no borra el valor manual: solo lo ignora mientras el perfil previsualizado difiere del programado. Con un perfil de noche, tocar la pantalla la despierta al brillo del primer perfil que no sea de noche, salvo que haya un valor manual vigente para el perfil de noche. La rampa de amanecer de la alarma no cambia.
+- **Pantallas nativas**: `ui/Widgets.kt` y `ui/Dialogs.kt` construyen botones, chips, interruptores, campos y diálogos con los tokens; todos tienen anillo de foco propio y `defaultFocusHighlightEnabled = false`, y un alto táctil mínimo de 48 dp. No se usa `AlertDialog` ni `NumberPicker`.
 
 
 ## Pruebas que protegen el diseño

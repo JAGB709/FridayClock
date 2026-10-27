@@ -25,6 +25,9 @@ import com.jarvis.clock.design.parseHex
 import com.jarvis.clock.design.readableOn
 import com.jarvis.clock.ui.FaceHost
 import com.jarvis.clock.ui.Fonts
+import com.jarvis.clock.ui.Icons
+import com.jarvis.clock.ui.Tokens
+import com.jarvis.clock.ui.Widgets
 import com.jarvis.clock.ui.Ui
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -113,13 +116,12 @@ class AlarmActivity : Activity() {
             setPadding(dp(24), dp(12), dp(24), 0)
         }
         buttons.addView(
-            bigButton(snoozeText, snoozeBg, readableOn(snoozeBg)) { AlarmRingService.snooze(this); finish() },
+            bigButton(snoozeText, snoozeBg, readableOn(snoozeBg), "clock") { AlarmRingService.snooze(this); finish() },
             LinearLayout.LayoutParams(0, dp(96), 1f).apply { marginEnd = dp(12) },
         )
-        buttons.addView(
-            bigButton(dismissText, accent, readableOn(accent)) { AlarmRingService.dismiss(this); finish() },
-            LinearLayout.LayoutParams(0, dp(96), 1f),
-        )
+        val dismiss = bigButton(dismissText, accent, readableOn(accent), "check") { AlarmRingService.dismiss(this); finish() }
+        buttons.addView(dismiss, LinearLayout.LayoutParams(0, dp(96), 1f))
+        dismiss.requestFocus() // el D-pad arranca en Descartar y el anillo se ve desde el primer momento
         root.addView(buttons, LinearLayout.LayoutParams(-1, -2))
         return root
     }
@@ -141,17 +143,28 @@ class AlarmActivity : Activity() {
         addView(TextView(this@AlarmActivity).apply {
             text = label
             setTextColor(Ui.ACCENT)
-            textSize = 30f
+            typeface = Fonts.semibold(this@AlarmActivity)
+            textSize = 28f
             gravity = Gravity.CENTER
         })
     }
 
-    private fun bigButton(text: String, bg: Int, fg: Int, onClick: () -> Unit) = Button(this).apply {
+    /** Botón enorme con esquinas, icono y anillo de foco blanco (visible sobre cualquier acento). */
+    private fun bigButton(text: String, bg: Int, fg: Int, icon: String, onClick: () -> Unit) = Button(this).apply {
         this.text = text
         textSize = 24f
+        typeface = Fonts.semibold(this@AlarmActivity)
         setTextColor(fg)
-        setBackgroundColor(bg)
         isAllCaps = false
+        stateListAnimator = null
+        defaultFocusHighlightEnabled = false
+        background = Widgets.stateBg(this@AlarmActivity, bg, Color.TRANSPARENT, Tokens.Color.TEXT, darken(bg, 0.75f), Tokens.RADIUS_LG)
+        Icons.tinted(this@AlarmActivity, icon, fg)?.let {
+            val s = Ui.dp(this@AlarmActivity, 28)
+            it.setBounds(0, 0, s, s)
+            setCompoundDrawablesRelative(it, null, null, null)
+            compoundDrawablePadding = Ui.dp(this@AlarmActivity, 12)
+        }
         setOnClickListener { onClick() }
     }
 
