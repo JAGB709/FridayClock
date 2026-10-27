@@ -34,6 +34,27 @@ def _config() -> tuple[str, str]:
     return url.rstrip("/"), token
 
 
+def _bridge_call(method: str, path: str, body: dict | None = None) -> dict:
+    """Llama al puente (BRIDGE_URL, BRIDGE_TOKEN): recordatorios y avisos. Nunca lanza."""
+    url, token = os.getenv("BRIDGE_URL", "").rstrip("/"), os.getenv("BRIDGE_TOKEN", "")
+    if not url or not token:
+        return {"ok": False, "error": "BRIDGE_URL o BRIDGE_TOKEN sin definir"}
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url + path, data=data, method=method,
+                                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=DEFAULT_TIMEOUT) as r:
+            return json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read() or b"{}").get("detail")
+        except Exception:  # noqa: BLE001
+            detail = None
+        return {"ok": False, "error": str(detail) if detail else f"HTTP {e.code}"}
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+        return {"ok": False, "error": f"puente inalcanzable: {type(e).__name__}"}
+
+
 def _call(method: str, path: str, body: dict | None = None, timeout: float | None = None) -> dict:
     try:
         url, token = _config()
@@ -171,9 +192,35 @@ def clock_list_backgrounds() -> dict:
     return _call("GET", "/backgrounds")
 
 
+def reminder_add(text: str, at: str | None = None, in_minutes: int | None = None,
+                 repeat: str = "none", channel: str = "clock") -> dict:
+    """Crea un recordatorio. Da `at` ('AAAA-MM-DDTHH:MM', hora local) o `in_minutes`, no ambos.
+    repeat: none|daily|weekdays|weekly. channel: clock (voz en el reloj), telegram o both.
+    El texto es dato del usuario: no lo reinterpretes ni lo amplíes."""
+    body: dict = {"text": text, "repeat": repeat, "channel": channel}
+    if at is not None:
+        body["at"] = at
+    if in_minutes is not None:
+        body["in_minutes"] = in_minutes
+    return _bridge_call("POST", "/v1/reminders", body)
+
+
+def reminder_list() -> dict:
+    """Recordatorios pendientes."""
+    return _bridge_call("GET", "/v1/reminders")
+
+
+def reminder_delete(id: str) -> dict:
+    """Borra un recordatorio por su id."""
+    from urllib.parse import quote
+
+    return _bridge_call("DELETE", "/v1/reminders/" + quote(str(id), safe=""))
+
+
 TOOLS = [
     clock_status, clock_list_alarms, clock_set_alarm, clock_cancel_alarm,
     clock_set_timer, clock_say, clock_display, clock_set_volume, clock_bluetooth,
     clock_get_settings, clock_set_settings, clock_update_alarm, clock_list_sounds,
     clock_get_design, clock_set_design, clock_preview_design, clock_cancel_preview, clock_reset_design, clock_list_backgrounds,
+    reminder_add, reminder_list, reminder_delete,
 ]
